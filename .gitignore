@@ -1,0 +1,47 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+backend/bin/
+backend/vendor/
+backend/mob-server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/android/
+frontend/ios/
+
+# Android / Watch
+watch/.gradle/
+watch/build/
+watch/local.properties
+watch/*.apk
+watch/*.aab
+watch/libs/
+
+# IDEs
+.idea/
+*.iml
+*.iws
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Docker volumes
+postgres_data/

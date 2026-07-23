@@ -1,0 +1,79 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'k8s/**'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  build-deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build and push image
+        run: |
+          APP=mob
+          SHA=${GITHUB_SHA::7}
+
+          buildctl --addr unix:///run/buildkit/buildkitd.sock build \
+            --frontend dockerfile.v0 \
+            --local context=backend \
+            --local dockerfile=backend \
+            --output type=image,name=localhost:5000/${APP}:latest,push=true
+          buildctl --addr unix:///run/buildkit/buildkitd.sock build \
+            --frontend dockerfile.v0 \
+            --local context=backend \
+            --local dockerfile=backend \
+            --output type=image,name=localhost:5000/${APP}:${SHA},push=true
+
+      - name: Apply k8s manifests
+        run: |
+          kubectl apply -f k8s/configmap.yml
+          kubectl apply -f k8s/service.yml
+          kubectl apply -f k8s/ingress.yml
+          kubectl apply -f k8s/deployment.yml
+
+      - name: Deploy
+        run: |
+          APP=mob
+          SHA=${GITHUB_SHA::7}
+          IMAGE=localhost:5000/${APP}:${SHA}
+
+          kubectl set image deployment/${APP} ${APP}=${IMAGE} -n brimes
+          kubectl rollout status deployment/${APP} -n brimes --timeout=120s
+
+      - name: Cleanup old images
+        run: |
+          APP=mob
+          CUTOFF=$(date -d '3 days ago' +%s)
+
+          TAGS=$(curl -sf http://localhost:5000/v2/${APP}/tags/list | jq -r '.tags[]' | grep -v '^latest$' || true)
+
+          for TAG in ${TAGS}; do
+            DIGEST=$(curl -sf -I \
+              -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+              http://localhost:5000/v2/${APP}/manifests/${TAG} \
+              | grep -i "docker-content-digest" | awk '{print $2}' | tr -d '\r')
+
+            CONFIG_DIGEST=$(curl -sf \
+              -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+              http://localhost:5000/v2/${APP}/manifests/${TAG} \
+              | jq -r '.config.digest')
+
+            CREATED=$(curl -sf http://localhost:5000/v2/${APP}/blobs/${CONFIG_DIGEST} | jq -r '.created')
+            CREATED_TS=$(date -d "${CREATED}" +%s 2>/dev/null || echo 0)
+
+            if [ "${CREATED_TS}" -lt "${CUTOFF}" ]; then
+              echo "Removendo ${APP}:${TAG} (criado em ${CREATED})"
+              curl -sf -X DELETE http://localhost:5000/v2/${APP}/manifests/${DIGEST} || true
+            fi
+          done
+
+          kubectl exec -n brimes deployment/registry -- \
+            registry garbage-collect /etc/docker/registry/config.yml --delete-untagged 2>/dev/null || true

@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mob-config
+  namespace: brimes
+data:
+  PORT: "8080"
+  ENVIRONMENT: "production"
+  ALLOWED_ORIGINS: "https://mob.zel.care"
