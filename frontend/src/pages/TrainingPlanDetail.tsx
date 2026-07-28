@@ -2,8 +2,21 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { trainingPlansApi } from '../api/trainingPlans';
+import { getErrorMessage } from '../api/client';
 import type { TrainingPlan } from '../types';
+
+const ADJUST_POLL_MS = 2000;
+const ADJUST_DEADLINE_MS = 15 * 60 * 1000;
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const EXAMPLES = [
+  'Troque o agachamento livre por leg press, meu joelho incomoda',
+  'Renomeie o plano para "Verão 2027"',
+  'Adicione um exercício de abdômen no fim de cada treino',
+  'O Treino A está muito longo, tire um exercício',
+];
 
 export function TrainingPlanDetailPage() {
   const { id } = useParams();
@@ -13,6 +26,10 @@ export function TrainingPlanDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [instructions, setInstructions] = useState('');
+  const [isAdjusting, setIsAdjusting] = useState(false);
+  const [adjustError, setAdjustError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -34,9 +51,36 @@ export function TrainingPlanDetailPage() {
     }
   };
 
+  // O ajuste roda em background como a criação: enfileira o job e acompanha.
+  const submitAdjust = async () => {
+    if (!instructions.trim() || isAdjusting) return;
+    setIsAdjusting(true);
+    setAdjustError(null);
+    try {
+      const job = await trainingPlansApi.adjust(plan.id, instructions.trim());
+      const deadline = Date.now() + ADJUST_DEADLINE_MS;
+      while (Date.now() < deadline) {
+        await wait(ADJUST_POLL_MS);
+        const status = await trainingPlansApi.getJob(job.id);
+        if (status.status === 'done') {
+          setPlan(await trainingPlansApi.get(plan.id));
+          setShowAdjust(false);
+          setInstructions('');
+          setIsAdjusting(false);
+          return;
+        }
+        if (status.status === 'failed') throw new Error(status.error || 'Não foi possível ajustar o plano');
+      }
+      throw new Error('O ajuste está demorando mais que o esperado. Tente novamente.');
+    } catch (requestError) {
+      setAdjustError(getErrorMessage(requestError));
+      setIsAdjusting(false);
+    }
+  };
+
   return (
     <>
-      <Header title={plan.name} showBack rightAction={<div className="relative"><button aria-label="Opções do plano" onClick={() => setMenuOpen((value) => !value)} className="rounded-lg px-3 py-1 text-xl text-zinc-400 hover:bg-zinc-800">⋮</button>{menuOpen && <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-2xl"><button onClick={() => { setShowDetails((value) => !value); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">{showDetails ? 'Ocultar detalhes' : 'Detalhes do plano'}</button><button onClick={() => navigate('/workouts/history')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Histórico de treinos</button><button onClick={() => navigate('/workouts/new')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Registrar treino livre</button><div className="my-1 border-t border-zinc-800" /><button disabled={isDeleting} onClick={deletePlan} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-red-950/40 disabled:opacity-50">{isDeleting ? 'Excluindo...' : 'Excluir plano'}</button></div>}</div>} />
+      <Header title={plan.name} showBack rightAction={<div className="relative"><button aria-label="Opções do plano" onClick={() => setMenuOpen((value) => !value)} className="rounded-lg px-3 py-1 text-xl text-zinc-400 hover:bg-zinc-800">⋮</button>{menuOpen && <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-2xl"><button onClick={() => { setShowDetails((value) => !value); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">{showDetails ? 'Ocultar detalhes' : 'Detalhes do plano'}</button><button onClick={() => { setShowAdjust(true); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-primary-300 hover:bg-zinc-800">Ajustar plano com IA</button><button onClick={() => navigate('/workouts/history')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Histórico de treinos</button><button onClick={() => navigate('/workouts/new')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Registrar treino livre</button><div className="my-1 border-t border-zinc-800" /><button disabled={isDeleting} onClick={deletePlan} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-red-950/40 disabled:opacity-50">{isDeleting ? 'Excluindo...' : 'Excluir plano'}</button></div>}</div>} />
       <div className="space-y-5 px-4 py-5 pb-24">
         <Card className="border-primary-900 bg-primary-950/30">
           <div className="flex items-start justify-between gap-3"><p className="text-xs uppercase tracking-wide text-primary-400">{plan.creation_method === 'automatic' ? 'Criado pelo assistente' : 'Plano manual'}</p>{plan.adaptation_phase && <span className="rounded-full bg-amber-950 px-2 py-1 text-[10px] text-amber-300">Adaptação</span>}</div>
@@ -49,6 +93,52 @@ export function TrainingPlanDetailPage() {
           {plan.days?.map((day) => <Card key={day.id} onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)}><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase text-primary-400">Treino {day.day_number}</p><h2 className="mt-0.5 text-lg font-bold text-white">{day.name}</h2><p className="mt-1 text-xs text-zinc-500">Última vez: {day.last_done_at ? new Date(day.last_done_at).toLocaleDateString('pt-BR') : 'ainda não feito'}</p></div><span className="text-2xl text-zinc-600">›</span></div></Card>)}
         </div>
       </div>
+
+      {showAdjust && (
+        <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={() => !isAdjusting && setShowAdjust(false)}>
+          <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white">Ajustar plano</h3>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              Escreva o que quer mudar. O assistente reescreve só o que você pediu e mantém o resto
+              como está — pode trocar exercícios, renomear o plano ou os treinos, e mudar o foco.
+            </p>
+
+            {adjustError && <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{adjustError}</div>}
+
+            <textarea
+              value={instructions}
+              onChange={(event) => setInstructions(event.target.value)}
+              rows={4}
+              maxLength={2000}
+              disabled={isAdjusting}
+              placeholder="Ex: troque o supino reto por supino com halteres e deixe o Treino B mais curto"
+              className="mt-4 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none disabled:opacity-50"
+            />
+
+            {!isAdjusting && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-600">Exemplos</p>
+                {EXAMPLES.map((example) => (
+                  <button key={example} type="button" onClick={() => setInstructions(example)}
+                    className="block w-full rounded-lg bg-zinc-950 px-3 py-2 text-left text-xs text-zinc-400">
+                    {example}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-5 space-y-2">
+              <Button fullWidth size="lg" onClick={submitAdjust} isLoading={isAdjusting} disabled={!instructions.trim()}>
+                {isAdjusting ? 'Ajustando o plano...' : 'Aplicar ajuste'}
+              </Button>
+              <button type="button" disabled={isAdjusting} onClick={() => setShowAdjust(false)}
+                className="w-full py-3 text-sm text-zinc-500 disabled:opacity-40">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

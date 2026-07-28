@@ -10,6 +10,10 @@ export const trainingPlansApi = {
     await apiClient.post<TrainingPlanJob>('/training-plans/automatic', input)
   ).data,
   getJob: async (id: number) => (await apiClient.get<TrainingPlanJob>(`/training-plans/jobs/${id}`)).data,
+  // Ajuste por texto livre: também assíncrono, com o mesmo polling de job.
+  adjust: async (id: number, instructions: string) => (
+    await apiClient.post<TrainingPlanJob>(`/training-plans/${id}/adjust`, { instructions })
+  ).data,
   delete: async (id: number) => {
     await apiClient.delete(`/training-plans/${id}`);
   },

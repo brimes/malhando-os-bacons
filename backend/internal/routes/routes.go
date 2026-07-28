@@ -67,6 +67,7 @@ func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant 
 	mux.HandleFunc("POST /api/training-plans/automatic", chain(trainingPlanHandler.CreateAutomatic, auth))
 	mux.HandleFunc("GET /api/training-plans/jobs/{id}", chain(trainingPlanHandler.GetJob, auth))
 	mux.HandleFunc("GET /api/training-plans/{id}", chain(trainingPlanHandler.Get, auth))
+	mux.HandleFunc("POST /api/training-plans/{id}/adjust", chain(trainingPlanHandler.Adjust, auth))
 	mux.HandleFunc("DELETE /api/training-plans/{id}", chain(trainingPlanHandler.Delete, auth))
 
 	// Nutrition routes
