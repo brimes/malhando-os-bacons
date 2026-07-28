@@ -8,7 +8,7 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
-    - host: mob.zel.care
+    - host: mob-api.brimes.net
       http:
         paths:
           - path: /

@@ -6,7 +6,10 @@ metadata:
 data:
   PORT: "8080"
   ENVIRONMENT: "production"
-  ALLOWED_ORIGINS: "https://mob.zel.care"
+  # Origens exatas do app Capacitor. O CORS compara string a string.
+  # Android usa https://localhost por causa de androidScheme: 'https' no
+  # capacitor.config.ts; iOS usa capacitor://localhost.
+  ALLOWED_ORIGINS: "capacitor://localhost,https://localhost"
   # Without these the process exits on boot: the assistant provider is required
   # and defaults to gemini. GEMINI_API_KEY lives in the secret.
   ASSISTANT_PROVIDER: "gemini"
