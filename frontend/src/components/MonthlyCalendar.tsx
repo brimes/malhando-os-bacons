@@ -7,6 +7,9 @@ interface MonthlyCalendarProps {
   month: Date;
   values: Record<string, CalendarValue>;
   onMonthChange: (month: Date) => void;
+  /** Quando informado, os dias com registro viram botões. */
+  onDayClick?: (date: string) => void;
+  selectedDate?: string | null;
 }
 
 const weekDays = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -15,7 +18,7 @@ function dateKey(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-export function MonthlyCalendar({ month, values, onMonthChange }: MonthlyCalendarProps) {
+export function MonthlyCalendar({ month, values, onMonthChange, onDayClick, selectedDate }: MonthlyCalendarProps) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
   const firstWeekDay = new Date(year, monthIndex, 1).getDay();
@@ -39,12 +42,28 @@ export function MonthlyCalendar({ month, values, onMonthChange }: MonthlyCalenda
           const key = dateKey(year, monthIndex, day);
           const value = values[key];
           const intensity = Math.min(Math.max(value?.intensity ?? 0, 0), 1);
-          return (
-            <div key={key} className={`relative flex min-h-14 flex-col items-center justify-center rounded-xl border ${key === todayKey ? 'border-primary-500' : value ? 'border-primary-800' : 'border-transparent'} ${value ? 'bg-primary-950' : 'bg-zinc-950/40'}`} style={value ? { backgroundColor: `rgb(58 18 14 / ${0.45 + intensity * 0.45})` } : undefined}>
+          const isSelected = selectedDate === key;
+          const border = isSelected ? 'border-primary-400 ring-1 ring-primary-400'
+            : key === todayKey ? 'border-primary-500'
+            : value ? 'border-primary-800' : 'border-transparent';
+          const className = `relative flex min-h-14 w-full flex-col items-center justify-center rounded-xl border ${border} ${value ? 'bg-primary-950' : 'bg-zinc-950/40'}`;
+          const style = value ? { backgroundColor: `rgb(58 18 14 / ${0.45 + intensity * 0.45})` } : undefined;
+          const content = (
+            <>
               <span className={`text-xs ${value ? 'font-bold text-primary-200' : 'text-zinc-500'}`}>{day}</span>
               {value && <span className="mt-1 max-w-full truncate px-0.5 text-[9px] font-semibold text-primary-400">{value.label}</span>}
-            </div>
+            </>
           );
+          // Só dias com registro são clicáveis — abrir um dia vazio não mostraria nada.
+          if (onDayClick && value) {
+            return (
+              <button key={key} type="button" aria-pressed={isSelected} onClick={() => onDayClick(key)}
+                className={`${className} transition-transform active:scale-95`} style={style}>
+                {content}
+              </button>
+            );
+          }
+          return <div key={key} className={className} style={style}>{content}</div>;
         })}
       </div>
     </div>

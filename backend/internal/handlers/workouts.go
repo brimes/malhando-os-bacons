@@ -27,11 +27,28 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ?date=YYYY-MM-DD narrows to a single day, used when a day is opened in the
+	// history calendar. Without it the query keeps the recent-workouts behaviour.
+	var day *time.Time
+	if raw := strings.TrimSpace(r.URL.Query().Get("date")); raw != "" {
+		parsed, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "date must be YYYY-MM-DD"})
+			return
+		}
+		day = &parsed
+	}
+
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
-		 status, started_at, finished_at, created_at
-		 FROM workouts WHERE user_id = $1 AND status = 'completed' ORDER BY date DESC LIMIT 50`,
-		userID,
+		`SELECT w.id, w.user_id, w.name, w.date, w.notes, w.training_plan_day_id, w.duration_minutes,
+		 w.status, w.started_at, w.finished_at, w.created_at,
+		 (SELECT COUNT(*) FROM workout_sets ws WHERE ws.workout_id = w.id) AS set_count
+		 FROM workouts w
+		 WHERE w.user_id = $1 AND w.status = 'completed'
+		   AND ($2::date IS NULL OR w.date::date = $2::date)
+		 ORDER BY w.date DESC
+		 LIMIT CASE WHEN $2::date IS NULL THEN 50 ELSE 100 END`,
+		userID, day,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch workouts"})
@@ -43,7 +60,7 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var w models.Workout
 		if err := rows.Scan(&w.ID, &w.UserID, &w.Name, &w.Date, &w.Notes, &w.TrainingPlanDayID, &w.DurationMinutes,
-			&w.Status, &w.StartedAt, &w.FinishedAt, &w.CreatedAt); err != nil {
+			&w.Status, &w.StartedAt, &w.FinishedAt, &w.CreatedAt, &w.SetCount); err != nil {
 			continue
 		}
 		workouts = append(workouts, w)

@@ -34,6 +34,7 @@ export interface Workout {
   started_at?: string;
   finished_at?: string;
   sets?: WorkoutSet[];
+  set_count?: number;
   created_at: string;
 }
 

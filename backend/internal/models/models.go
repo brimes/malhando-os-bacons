@@ -23,7 +23,10 @@ type Workout struct {
 	StartedAt         *time.Time   `json:"started_at,omitempty"`
 	FinishedAt        *time.Time   `json:"finished_at,omitempty"`
 	Sets              []WorkoutSet `json:"sets,omitempty"`
-	CreatedAt         time.Time    `json:"created_at"`
+	// SetCount is filled by the list query so the history can show how much was
+	// done without loading every set.
+	SetCount  int       `json:"set_count,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type WorkoutSet struct {

@@ -5,8 +5,9 @@ import type {
 } from '../types';
 
 export const workoutsApi = {
-  list: async (): Promise<Workout[]> => {
-    const { data } = await apiClient.get<Workout[]>('/workouts');
+  // Sem date traz os treinos recentes; com date (YYYY-MM-DD) traz só aquele dia.
+  list: async (date?: string): Promise<Workout[]> => {
+    const { data } = await apiClient.get<Workout[]>('/workouts', date ? { params: { date } } : undefined);
     return data;
   },
 
