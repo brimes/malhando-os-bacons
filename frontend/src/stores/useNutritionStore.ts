@@ -20,7 +20,7 @@ interface NutritionState {
   clearError: () => void;
 }
 
-export const useNutritionStore = create<NutritionState>((set, get) => ({
+export const useNutritionStore = create<NutritionState>((set) => ({
   plans: [],
   activePlan: null,
   todayLogs: [],

@@ -38,7 +38,7 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var workout models.Workout
 	err := h.db.Pool.QueryRow(ctx,
 		`SELECT id, user_id, name, date, notes, created_at FROM workouts
-		 WHERE user_id = $1 AND date::date = $2::date ORDER BY created_at DESC LIMIT 1`,
+		 WHERE user_id = $1 AND status = 'completed' AND date::date = $2::date ORDER BY created_at DESC LIMIT 1`,
 		userID, today,
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes, &workout.CreatedAt)
 	if err == nil {
@@ -47,11 +47,11 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Workout stats
 	h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed'`, userID,
 	).Scan(&resp.WorkoutStats.TotalWorkouts)
 
 	h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND date >= date_trunc('week', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE)`, userID,
 	).Scan(&resp.WorkoutStats.WorkoutsThisWeek)
 
 	h.db.Pool.QueryRow(ctx,
@@ -62,7 +62,7 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// Weekly workouts
 	wRows, err := h.db.Pool.Query(ctx,
 		`SELECT id, user_id, name, date, notes, created_at FROM workouts
-		 WHERE user_id = $1 AND date >= date_trunc('week', CURRENT_DATE) ORDER BY date DESC`,
+		 WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE) ORDER BY date DESC`,
 		userID,
 	)
 	if err == nil {

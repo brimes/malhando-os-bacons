@@ -1,8 +1,8 @@
-version: "3.9"
-
 services:
   postgres:
-    image: postgres:16-alpine
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.postgres
     container_name: mob-postgres
     environment:
       POSTGRES_USER: mob_user
@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mob_user -d mob_db"]
       interval: 10s
@@ -33,6 +32,11 @@ services:
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-placeholder}"
       ENVIRONMENT: "development"
       ALLOWED_ORIGINS: "http://localhost:5173,capacitor://localhost"
+      ASSISTANT_PROVIDER: "${ASSISTANT_PROVIDER:-gemini}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.6-flash}"
+      OPENCODE_URL: "${OPENCODE_URL:-http://192.168.252.1:4096}"
+      OPENCODE_MODEL: "${OPENCODE_MODEL:-openai/gpt-5.6-sol}"
     ports:
       - "8080:8080"
     depends_on:
@@ -44,6 +48,32 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mob-frontend
+    environment:
+      VITE_PROXY_TARGET: "http://backend:8080"
+      VITE_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - dist/
+            - package.json
+        - action: rebuild
+          path: ./frontend/package.json
 
 volumes:
   postgres_data:

@@ -1,0 +1,141 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Header } from '../components/Header';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
+import { trainingPlansApi } from '../api/trainingPlans';
+import { workoutsApi } from '../api/workouts';
+import { getErrorMessage } from '../api/client';
+import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
+
+export function TrainingPlanDayPage() {
+  const { planId, dayId } = useParams();
+  const navigate = useNavigate();
+  const [plan, setPlan] = useState<TrainingPlan | null>(null);
+  const [day, setDay] = useState<TrainingPlanDay | null>(null);
+  const [session, setSession] = useState<ActiveWorkout | null>(null);
+  const [checklist, setChecklist] = useState<ChecklistState>({});
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!planId || !dayId) return;
+    const numericDayId = Number(dayId);
+    Promise.all([
+      trainingPlansApi.get(Number(planId)),
+      // An open session for this same day pre-fills the checklist, so coming
+      // back here mid-workout shows what is already done instead of a blank list.
+      workoutsApi.active().catch(() => null),
+    ]).then(([result, active]) => {
+      setPlan(result);
+      const found = result.days?.find((item) => item.id === numericDayId) ?? null;
+      setDay(found);
+
+      const openHere = active && active.workout.training_plan_day_id === numericDayId ? active : null;
+      setSession(openHere);
+      if (openHere && found) {
+        setChecklist(Object.fromEntries(
+          found.exercises.filter((exercise) => exercise.id).map((exercise) => {
+            const done = openHere.workout.sets?.filter((set) => set.training_plan_exercise_id === exercise.id).length ?? 0;
+            return [exercise.id as number, { setsDone: done, weight: exercise.last_weight_kg ? String(exercise.last_weight_kg) : '' }];
+          }),
+        ));
+      }
+    });
+  }, [planId, dayId]);
+
+  if (!plan || !day) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
+
+  const exercises = day.exercises.filter((exercise) => exercise.id);
+  const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+  const markedSets = exercises.reduce((sum, exercise) => sum + (checklist[exercise.id as number]?.setsDone ?? 0), 0);
+  const lockedFor = (exerciseId: number) =>
+    session?.workout.sets?.filter((set) => set.training_plan_exercise_id === exerciseId).length ?? 0;
+
+  const payload = () => Object.entries(checklist)
+    .filter(([, entry]) => entry.setsDone > 0)
+    .map(([id, entry]) => ({
+      training_plan_exercise_id: Number(id),
+      sets_done: entry.setsDone,
+      weight_kg: Number((entry.weight || '0').replace(',', '.')) || 0,
+    }));
+
+  // One button, three meanings, driven by how much is ticked:
+  // nothing -> start guided; some -> log those and continue guided; all -> close it.
+  const mode = markedSets === 0 ? 'start' : markedSets >= totalSets ? 'finish' : 'continue';
+  const label = mode === 'start' ? 'Iniciar treino' : mode === 'continue' ? 'Continuar o treino' : 'Finalizar o treino';
+
+  const submit = async () => {
+    if (!day.id || isBusy) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      const active = session ?? await workoutsApi.start(day.id);
+      if (mode === 'start') {
+        navigate('/workouts/session');
+        return;
+      }
+      if (mode === 'finish') {
+        await workoutsApi.complete(active.workout.id, { exercises: payload() });
+        navigate(`/training-plans/${plan.id}`);
+        return;
+      }
+      await workoutsApi.progress(active.workout.id, { exercises: payload() });
+      navigate('/workouts/session');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Header title={day.name} showBack />
+      <div className="space-y-4 px-4 py-5 pb-28">
+        <div>
+          <p className="text-sm text-zinc-500">{day.focus}</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            Última vez: {day.last_done_at ? new Date(day.last_done_at).toLocaleDateString('pt-BR') : 'ainda não realizado'}
+          </p>
+        </div>
+
+        {session && (
+          <Card className="border-primary-800 bg-primary-950/40 text-sm text-primary-100">
+            Treino em andamento — marque o que já fez ou volte para o acompanhamento.
+          </Card>
+        )}
+
+        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {day.instructions && <Card className="text-sm leading-relaxed text-zinc-400">{day.instructions}</Card>}
+
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-zinc-500">{markedSets} de {totalSets} séries marcadas</p>
+          <button
+            type="button"
+            onClick={() => setChecklist(Object.fromEntries(
+              exercises.map((exercise) => [
+                exercise.id as number,
+                markedSets >= totalSets
+                  ? { setsDone: lockedFor(exercise.id as number), weight: checklist[exercise.id as number]?.weight ?? '' }
+                  : { setsDone: exercise.sets, weight: checklist[exercise.id as number]?.weight || (exercise.last_weight_kg ? String(exercise.last_weight_kg) : '') },
+              ]),
+            ))}
+            className="text-xs font-semibold text-primary-400"
+          >
+            {markedSets >= totalSets ? 'Limpar marcações' : 'Marcar todos'}
+          </button>
+        </div>
+
+        <WorkoutChecklist
+          exercises={day.exercises}
+          state={checklist}
+          onChange={(exerciseId, entry) => setChecklist((current) => ({ ...current, [exerciseId]: entry }))}
+          lockedFor={lockedFor}
+        />
+
+        <Button fullWidth size="lg" onClick={submit} isLoading={isBusy}>{label}</Button>
+      </div>
+    </>
+  );
+}

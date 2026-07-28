@@ -18,7 +18,7 @@ interface WorkoutState {
   clearError: () => void;
 }
 
-export const useWorkoutStore = create<WorkoutState>((set, get) => ({
+export const useWorkoutStore = create<WorkoutState>((set) => ({
   workouts: [],
   selectedWorkout: null,
   stats: null,

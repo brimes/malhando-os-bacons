@@ -46,6 +46,10 @@ export function NutritionPage() {
         }
       />
       <div className="px-4 py-4 pb-24 space-y-4">
+        <button onClick={() => navigate('/nutrition/history')} className="flex w-full items-center justify-between rounded-2xl border border-primary-900 bg-primary-950/50 px-4 py-3 text-left">
+          <div><p className="text-sm font-semibold text-primary-300">Calendário de calorias</p><p className="text-xs text-zinc-500">Acompanhe o consumo de cada dia</p></div>
+          <span className="text-xl text-primary-400">›</span>
+        </button>
         {/* Macro summary */}
         {activePlan ? (
           <Card>

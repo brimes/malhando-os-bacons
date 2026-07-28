@@ -17,6 +17,12 @@
   body {
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
+    accent-color: #d95c2b;
+  }
+
+  ::selection {
+    background: #9f321f;
+    color: #fff7ed;
   }
 }
 

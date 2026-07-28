@@ -9,13 +9,19 @@ import (
 )
 
 type Config struct {
-	Port            string
-	DatabaseURL     string
-	JWTSecret       string
-	GoogleClientID  string
+	Port               string
+	DatabaseURL        string
+	JWTSecret          string
+	GoogleClientID     string
 	GoogleClientSecret string
-	Environment     string
-	AllowedOrigins  string
+	Environment        string
+	AllowedOrigins     string
+	AssistantProvider  string
+	OpenCodeURL        string
+	OpenCodeModel      string
+	GeminiAPIKey       string
+	GeminiModel        string
+	MigrationsDir      string
 }
 
 func Load() (*Config, error) {
@@ -30,6 +36,12 @@ func Load() (*Config, error) {
 		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
 		Environment:        getEnv("ENVIRONMENT", "development"),
 		AllowedOrigins:     getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
+		AssistantProvider:  getEnv("ASSISTANT_PROVIDER", "gemini"),
+		OpenCodeURL:        getEnv("OPENCODE_URL", "http://localhost:4096"),
+		OpenCodeModel:      getEnv("OPENCODE_MODEL", "openai/gpt-5.6-sol"),
+		GeminiAPIKey:       getEnv("GEMINI_API_KEY", ""),
+		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
+		MigrationsDir:      getEnv("MIGRATIONS_DIR", "/app/migrations"),
 	}
 
 	return cfg, nil

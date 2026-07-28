@@ -1,0 +1,745 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Header } from '../components/Header';
+import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { workoutsApi } from '../api/workouts';
+import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
+import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
+import { getErrorMessage } from '../api/client';
+import type { ActiveWorkout, TrainingPlanExercise, TrainingSettings, WorkoutSet } from '../types';
+
+type Phase = 'countdown' | 'executing' | 'resting' | 'rest_done' | 'exercise_done' | 'done';
+
+// One colour per phase so a glance mid-set tells you whether you are working or
+// resting. Rest is blue against the orange brand — the two never read alike,
+// including for the common red/green colour blindness.
+const timerPanel = {
+  countdown: { box: 'bg-amber-950/40 ring-1 ring-amber-800', label: 'text-amber-400', value: 'text-amber-300' },
+  executing: { box: 'bg-primary-950/60 ring-1 ring-primary-700', label: 'text-primary-400', value: 'text-primary-200' },
+  resting: { box: 'bg-sky-950/50 ring-1 ring-sky-800', label: 'text-sky-400', value: 'text-sky-300' },
+  rest_done: { box: 'bg-sky-900/60 ring-2 ring-sky-500 animate-pulse', label: 'text-sky-300', value: 'text-sky-100' },
+} as const;
+
+function formatClock(totalSeconds: number) {
+  const safe = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function parseWeight(text: string | undefined) {
+  const value = Number((text ?? '').replace(',', '.'));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function vibrate(pattern: number | number[], enabled: boolean) {
+  if (!enabled) return;
+  // Not available on desktop or iOS Safari; the visual cue carries it there.
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(pattern);
+  }
+}
+
+function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: {
+  exercises: TrainingPlanExercise[];
+  remainingFor: (exercise: TrainingPlanExercise) => number;
+  currentId?: number;
+  onPick: (exerciseId: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[80vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-lg font-bold text-white">Escolher outro exercício</h3>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          O exercício atual continua pendente e volta a aparecer depois.
+        </p>
+        <div className="mt-4 space-y-2">
+          {exercises.map((exercise) => (
+            <button
+              key={exercise.id}
+              type="button"
+              onClick={() => exercise.id && onPick(exercise.id)}
+              className={`w-full rounded-2xl p-4 text-left ${exercise.id === currentId ? 'bg-primary-950 ring-1 ring-primary-700' : 'bg-zinc-950'}`}
+            >
+              <p className="font-semibold text-white">{exercise.exercise_name}</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {remainingFor(exercise)} de {exercise.sets} séries restantes
+                {exercise.id === currentId && ' · atual'}
+              </p>
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={onClose} className="mt-4 w-full py-3 text-sm text-zinc-500">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function WorkoutSessionPage() {
+  const navigate = useNavigate();
+  const [active, setActive] = useState<ActiveWorkout | null>(null);
+  const [settings, setSettings] = useState<TrainingSettings>(DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [currentExerciseId, setCurrentExerciseId] = useState<number | null>(null);
+  const [phase, setPhase] = useState<Phase>('countdown');
+  // Phases are anchored to a timestamp instead of a counter, so a locked screen
+  // or a throttled tab still shows the correct time when it comes back.
+  const [phaseStart, setPhaseStart] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  // Kept as raw text so the field can be empty while typing. Holding a number
+  // here forces a "0" that new digits get appended to ("30" typed over 0 => "030").
+  const [weights, setWeights] = useState<Record<number, string>>({});
+  const [showPostpone, setShowPostpone] = useState(false);
+  const [finishSheet, setFinishSheet] = useState<ChecklistState | null>(null);
+  // Set when the last series of an exercise lands, so the handover screen can
+  // still show what was just finished after the current exercise moves on.
+  const [finishedExerciseId, setFinishedExerciseId] = useState<number | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const transitionGuard = useRef('');
+  // setIsBusy only takes effect on the next render, which is too late to stop a
+  // second tap that lands in the same frame. A ref blocks it synchronously.
+  const isRecording = useRef(false);
+
+  const completedSets: WorkoutSet[] = useMemo(() => active?.workout.sets ?? [], [active]);
+
+  const doneCountFor = useCallback(
+    (exerciseId?: number) => completedSets.filter((set) => set.training_plan_exercise_id === exerciseId).length,
+    [completedSets],
+  );
+
+  const exercises = active?.exercises ?? [];
+  const pendingExercises = exercises.filter((exercise) => doneCountFor(exercise.id) < exercise.sets);
+  // A manually picked exercise is only honoured while it still has series left,
+  // otherwise the session would stay parked on a finished exercise.
+  const selectedExercise = exercises.find((exercise) => exercise.id === currentExerciseId);
+  const currentExercise: TrainingPlanExercise | undefined =
+    selectedExercise && doneCountFor(selectedExercise.id) < selectedExercise.sets
+      ? selectedExercise
+      : pendingExercises[0];
+  const currentSetNumber = currentExercise ? doneCountFor(currentExercise.id) + 1 : 1;
+  const allDone = exercises.length > 0 && pendingExercises.length === 0;
+
+  const startPhase = useCallback((next: Phase) => {
+    setPhase(next);
+    setPhaseStart(Date.now());
+    setNow(Date.now());
+  }, []);
+
+  // Load the open session plus the user's timing preferences.
+  useEffect(() => {
+    Promise.all([workoutsApi.active(), settingsApi.get().catch(() => DEFAULT_SETTINGS)])
+      .then(([session, loadedSettings]) => {
+        if (!session) {
+          setError('Nenhum treino em andamento.');
+          return;
+        }
+        setActive(session);
+        setSettings(loadedSettings);
+        // Starts blank when there is no previous weight, so the field is ready to type into.
+        setWeights(Object.fromEntries(
+          session.exercises
+            .filter((exercise) => exercise.id)
+            .map((exercise) => [exercise.id as number, exercise.last_weight_kg ? String(exercise.last_weight_kg) : '']),
+        ));
+        startPhase(loadedSettings.countdown_seconds > 0 ? 'countdown' : 'executing');
+      })
+      .catch((requestError) => setError(getErrorMessage(requestError)))
+      .finally(() => setIsLoading(false));
+  }, [startPhase]);
+
+  // Single ticker drives every phase.
+  useEffect(() => {
+    if (phase === 'done' || phase === 'rest_done') return;
+    const interval = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(interval);
+  }, [phase]);
+
+  const elapsed = Math.floor((now - phaseStart) / 1000);
+  const restSeconds = currentExercise?.rest_seconds ?? 0;
+  const plannedDuration = currentExercise?.duration_seconds ?? 0;
+  const isTimed = currentExercise?.tracking_type === 'time';
+
+  const refresh = useCallback(async () => {
+    const session = await workoutsApi.active();
+    if (session) setActive(session);
+    return session;
+  }, []);
+
+  // Single place that decides what follows a series, so every path out of the
+  // rest phase — timer expiry, "pular descanso", "continuar" — goes through the
+  // exercise handover instead of skipping straight into the next exercise.
+  const advanceAfterRest = useCallback(() => {
+    if (finishedExerciseId !== null) {
+      startPhase('exercise_done');
+      return;
+    }
+    startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
+  }, [finishedExerciseId, settings.countdown_seconds, startPhase]);
+
+  const recordSet = useCallback(async (secondsSpent: number) => {
+    if (!active || !currentExercise) return;
+    if (isRecording.current) return;
+    // Never send a series past the planned count; the server rejects it anyway.
+    if (currentSetNumber > currentExercise.sets) return;
+    isRecording.current = true;
+    setIsBusy(true);
+    try {
+      await workoutsApi.completeSet(active.workout.id, {
+        training_plan_exercise_id: currentExercise.id,
+        exercise_name: currentExercise.exercise_name,
+        set_number: currentSetNumber,
+        reps: isTimed ? 1 : currentExercise.reps,
+        weight_kg: currentExercise.id ? parseWeight(weights[currentExercise.id]) : 0,
+        tracking_type: currentExercise.tracking_type,
+        duration_seconds: secondsSpent > 0 ? secondsSpent : undefined,
+      });
+      await refresh();
+      const wasLastSet = currentSetNumber >= currentExercise.sets;
+      if (wasLastSet) {
+        // Straight to the handover. Staying in the plain rest phase would show
+        // the next exercise's name while resting, since the finished one has
+        // just dropped out of the pending list — the change would slip by
+        // unannounced. The rest countdown runs on the handover screen instead.
+        if (currentExercise.id) setFinishedExerciseId(currentExercise.id);
+        startPhase('exercise_done');
+      } else if (restSeconds > 0) {
+        startPhase('resting');
+      } else {
+        vibrate(200, settings.vibration_enabled);
+        startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
+      }
+    } catch (requestError) {
+      // A rejected extra series means the screen was behind — resync and move on.
+      await refresh().catch(() => undefined);
+      setError(getErrorMessage(requestError));
+    } finally {
+      isRecording.current = false;
+      setIsBusy(false);
+    }
+  }, [active, currentExercise, currentSetNumber, isTimed, weights, refresh, restSeconds, startPhase, settings]);
+
+  // Automatic transitions: end of the preparation countdown, end of a timed
+  // execution, and end of the rest period.
+  useEffect(() => {
+    if (!currentExercise || isBusy) return;
+    const key = `${phase}-${currentExercise.id}-${currentSetNumber}-${phaseStart}`;
+
+    if (phase === 'countdown' && elapsed >= settings.countdown_seconds) {
+      if (transitionGuard.current === key) return;
+      transitionGuard.current = key;
+      startPhase('executing');
+      return;
+    }
+    if (phase === 'executing' && isTimed && plannedDuration > 0 && elapsed >= plannedDuration) {
+      if (transitionGuard.current === key) return;
+      transitionGuard.current = key;
+      vibrate(200, settings.vibration_enabled);
+      void recordSet(plannedDuration);
+      return;
+    }
+    if (phase === 'resting' && elapsed >= restSeconds) {
+      if (transitionGuard.current === key) return;
+      transitionGuard.current = key;
+      vibrate([300, 150, 300], settings.vibration_enabled);
+      // Changing exercise always waits for a tap — that handover is the whole
+      // point of this screen, so auto-advance only applies between series.
+      if (finishedExerciseId !== null || settings.auto_advance) {
+        advanceAfterRest();
+      } else {
+        setPhase('rest_done');
+      }
+      return;
+    }
+    // Rest shown on the handover screen: buzz when it ends, but never advance —
+    // moving to the next exercise stays a deliberate tap.
+    if (phase === 'exercise_done' && finishedExerciseId !== null) {
+      const handoverRest = exercises.find((exercise) => exercise.id === finishedExerciseId)?.rest_seconds ?? 0;
+      if (handoverRest > 0 && elapsed >= handoverRest) {
+        if (transitionGuard.current === key) return;
+        transitionGuard.current = key;
+        vibrate([300, 150, 300], settings.vibration_enabled);
+      }
+    }
+  }, [phase, elapsed, settings, isTimed, plannedDuration, restSeconds, currentExercise, currentSetNumber, phaseStart, isBusy, recordSet, startPhase, finishedExerciseId, advanceAfterRest, exercises]);
+
+  // Once every exercise is complete the session moves to the summary.
+  useEffect(() => {
+    if (allDone && phase !== 'done') setPhase('done');
+  }, [allDone, phase]);
+
+  // Moving to a different exercise always restarts the preparation countdown.
+  const goToExercise = (exerciseId: number) => {
+    setCurrentExerciseId(exerciseId);
+    setFinishedExerciseId(null);
+    setShowPostpone(false);
+    startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
+  };
+
+  // "Voltar" undoes the most recent series so it can be redone.
+  const goBack = async () => {
+    if (!active || completedSets.length === 0) return;
+    const last = [...completedSets].sort((a, b) => a.id - b.id).pop();
+    if (!last) return;
+    setIsBusy(true);
+    try {
+      await workoutsApi.deleteSet(active.workout.id, last.id);
+      await refresh();
+      if (last.training_plan_exercise_id) setCurrentExerciseId(last.training_plan_exercise_id);
+      setFinishedExerciseId(null);
+      startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  // Pre-ticks whatever the session already recorded, so finishing early is a
+  // confirmation rather than re-entering the whole workout.
+  const openFinishSheet = () => {
+    setFinishSheet(Object.fromEntries(
+      exercises.filter((exercise) => exercise.id).map((exercise) => {
+        const done = doneCountFor(exercise.id);
+        const lastLogged = [...completedSets].reverse().find((set) => set.training_plan_exercise_id === exercise.id);
+        const weight = lastLogged?.weight_kg || exercise.last_weight_kg || 0;
+        return [exercise.id as number, { setsDone: done, weight: weight ? String(weight) : '' }];
+      }),
+    ));
+  };
+
+  const confirmFinishSheet = async () => {
+    if (!active || !finishSheet) return;
+    setIsBusy(true);
+    try {
+      await workoutsApi.complete(active.workout.id, {
+        exercises: Object.entries(finishSheet)
+          .filter(([, entry]) => entry.setsDone > 0)
+          .map(([id, entry]) => ({
+            training_plan_exercise_id: Number(id),
+            sets_done: entry.setsDone,
+            weight_kg: Number((entry.weight || '0').replace(',', '.')) || 0,
+          })),
+      });
+      navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+      setIsBusy(false);
+    }
+  };
+
+  const finish = async () => {
+    if (!active) return;
+    setIsBusy(true);
+    try {
+      await workoutsApi.finish(active.workout.id);
+      navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+      setIsBusy(false);
+    }
+  };
+
+  const cancel = async () => {
+    if (!active) return;
+    if (!window.confirm('Descartar este treino? As séries já registradas serão perdidas.')) return;
+    setIsBusy(true);
+    try {
+      await workoutsApi.cancel(active.workout.id);
+      navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+      setIsBusy(false);
+    }
+  };
+
+  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
+  if (error && !active) {
+    return (
+      <>
+        <Header title="Treino" showBack />
+        <div className="space-y-4 px-4 py-10 text-center">
+          <p className="text-zinc-400">{error}</p>
+          <Button fullWidth onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
+        </div>
+      </>
+    );
+  }
+  if (!active) return null;
+
+  const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+  const doneSets = completedSets.length;
+
+  // Rendered by both the main screen and the handover, so finishing early is
+  // always one tap away wherever the session happens to be.
+  const finishSheetNode = finishSheet && (
+    <div className="fixed inset-0 z-[110] flex items-end bg-black/85 backdrop-blur-sm" onClick={() => setFinishSheet(null)}>
+      <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-lg font-bold text-white">Finalizar treino agora</h3>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          Já vem marcado o que você concluiu. Ajuste o que fez fora do acompanhamento e finalize.
+        </p>
+        <div className="mt-4">
+          <WorkoutChecklist
+            exercises={exercises}
+            state={finishSheet}
+            onChange={(exerciseId, entry) => setFinishSheet((current) => ({ ...(current ?? {}), [exerciseId]: entry }))}
+            lockedFor={(exerciseId) => doneCountFor(exerciseId)}
+          />
+        </div>
+        <div className="mt-5 space-y-2">
+          <Button fullWidth size="lg" onClick={confirmFinishSheet} isLoading={isBusy}>Finalizar treino</Button>
+          <button type="button" onClick={() => setFinishSheet(null)} className="w-full py-3 text-sm text-zinc-500">
+            Voltar ao treino
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (phase === 'done') {
+    const volume = completedSets.reduce((sum, set) => sum + set.weight_kg * set.reps, 0);
+    return (
+      <>
+        <Header title="Treino concluído" />
+        <div className="space-y-5 px-4 py-6 pb-24">
+          <Card className="text-center">
+            <p className="text-5xl">🎉</p>
+            <h2 className="mt-3 text-xl font-black text-white">{active.day_name || active.workout.name}</h2>
+            <p className="mt-1 text-sm text-zinc-500">{doneSets} séries concluídas</p>
+            {volume > 0 && <p className="mt-1 text-sm text-primary-300">{volume.toLocaleString('pt-BR')} kg de volume total</p>}
+          </Card>
+          <div className="space-y-2">
+            {exercises.map((exercise) => (
+              <Card key={exercise.id} className="flex items-center justify-between py-3">
+                <span className="text-sm text-white">{exercise.exercise_name}</span>
+                <span className="text-xs text-zinc-500">{doneCountFor(exercise.id)}/{exercise.sets}</span>
+              </Card>
+            ))}
+          </div>
+          {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+          <Button fullWidth size="lg" onClick={finish} isLoading={isBusy}>Finalizar treino</Button>
+        </div>
+      </>
+    );
+  }
+
+  if (!currentExercise) return null;
+
+  // Handover screen: what was just finished, then what comes next, behind a tap
+  // so the change of exercise is never something you discover mid-set.
+  if (phase === 'exercise_done') {
+    const finished = exercises.find((exercise) => exercise.id === finishedExerciseId);
+    const finishedSets = completedSets.filter((set) => set.training_plan_exercise_id === finishedExerciseId);
+    const finishedVolume = finishedSets.reduce((sum, set) => sum + set.weight_kg * set.reps, 0);
+    // The rest that belongs to the exercise just finished runs here, so the
+    // handover is visible from the first second instead of after the countdown.
+    const handoverRest = finished?.rest_seconds ?? 0;
+    const handoverRestLeft = handoverRest - elapsed;
+    const startNext = () => {
+      setFinishedExerciseId(null);
+      setCurrentExerciseId(currentExercise.id ?? null);
+      startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
+    };
+
+    return (
+      <>
+        <Header title={active.day_name || active.workout.name} />
+        <div className="space-y-4 px-4 py-5 pb-32">
+          {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${totalSets ? (doneSets / totalSets) * 100 : 0}%` }} />
+          </div>
+
+          {finished && (
+            <Card className="border-emerald-900 bg-emerald-950/20">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✓</span>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">Exercício concluído</p>
+              </div>
+              <h2 className="mt-1 text-xl font-black leading-tight text-white">{finished.exercise_name}</h2>
+              <div className="mt-3 space-y-1.5">
+                {finishedSets.map((set, index) => (
+                  <div key={set.id} className="flex items-center justify-between rounded-lg bg-black/30 px-3 py-2 text-sm">
+                    <span className="text-zinc-500">{index + 1}ª série</span>
+                    <span className="font-medium text-zinc-200">
+                      {set.tracking_type === 'time'
+                        ? formatClock(set.duration_seconds ?? 0)
+                        : `${set.reps} reps${set.weight_kg > 0 ? ` · ${set.weight_kg} kg` : ''}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {finishedVolume > 0 && (
+                <p className="mt-3 text-xs text-emerald-300">Volume: {finishedVolume.toLocaleString('pt-BR')} kg</p>
+              )}
+            </Card>
+          )}
+
+          {handoverRest > 0 && (
+            <div className={`rounded-2xl px-4 py-4 text-center ${handoverRestLeft > 0 ? timerPanel.resting.box : timerPanel.rest_done.box}`}>
+              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
+              <p className={`mt-1 text-5xl font-black tabular-nums ${handoverRestLeft > 0 ? timerPanel.resting.value : timerPanel.rest_done.value}`}>
+                {formatClock(Math.max(0, handoverRestLeft))}
+              </p>
+              {handoverRestLeft <= 0 && <p className="mt-1 text-sm font-semibold text-sky-200">Pronto para o próximo exercício</p>}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 px-1">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600">A seguir</span>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+
+          <Card className="border-primary-800 bg-primary-950/40 text-center">
+            <p className="text-xs uppercase tracking-wide text-primary-400">
+              Exercício {exercises.length - pendingExercises.length + 1} de {exercises.length}
+            </p>
+            <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+            <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
+              {currentExercise.tracking_type === 'time' ? (
+                <>
+                  <span className="text-3xl font-black tabular-nums text-primary-200">{formatClock(currentExercise.duration_seconds ?? 0)}</span>
+                  <span className="text-sm font-semibold text-primary-400">de execução</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-4xl font-black tabular-nums text-primary-200">{currentExercise.reps}</span>
+                  <span className="text-sm font-semibold uppercase tracking-wide text-primary-400">repetições</span>
+                </>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
+              <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-300">{currentExercise.sets} séries</span>
+              {currentExercise.rest_seconds > 0 && (
+                <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-400">{currentExercise.rest_seconds}s descanso</span>
+              )}
+              {currentExercise.last_weight_kg ? (
+                <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-300">última vez: {currentExercise.last_weight_kg} kg</span>
+              ) : null}
+            </div>
+            {currentExercise.notes && (
+              <p className="mt-3 text-xs leading-relaxed text-zinc-500">{currentExercise.notes}</p>
+            )}
+          </Card>
+
+          <div className="space-y-2">
+            <Button fullWidth size="lg" onClick={startNext}>Iniciar {currentExercise.exercise_name}</Button>
+            <button
+              type="button"
+              onClick={() => setShowPostpone(true)}
+              disabled={pendingExercises.length < 2}
+              className="w-full rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+            >
+              Escolher outro exercício
+            </button>
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={isBusy || completedSets.length === 0}
+              className="w-full py-3 text-xs text-zinc-500 disabled:opacity-40"
+            >
+              ← Refazer a última série
+            </button>
+            <button type="button" onClick={openFinishSheet} className="w-full py-2 text-xs font-semibold text-primary-400">
+              Finalizar treino agora
+            </button>
+          </div>
+        </div>
+
+        {showPostpone && (
+          <PostponeSheet
+            exercises={pendingExercises}
+            remainingFor={(exercise) => exercise.sets - doneCountFor(exercise.id)}
+            onPick={goToExercise}
+            onClose={() => setShowPostpone(false)}
+          />
+        )}
+        {finishSheetNode}
+      </>
+    );
+  }
+
+  const weightText = currentExercise.id ? weights[currentExercise.id] ?? '' : '';
+  const setWeightText = (value: string) => {
+    if (currentExercise.id) setWeights((current) => ({ ...current, [currentExercise.id as number]: value }));
+  };
+  const stepWeight = (delta: number) => {
+    const next = Math.max(0, parseWeight(weightText) + delta);
+    setWeightText(next ? String(Number(next.toFixed(2))) : '');
+  };
+  const countdownLeft = settings.countdown_seconds - elapsed;
+  const executionLeft = plannedDuration - elapsed;
+  const restLeft = restSeconds - elapsed;
+
+  return (
+    <>
+      <Header title={active.day_name || active.workout.name} />
+      <div className="space-y-4 px-4 py-5 pb-32">
+        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+
+        <div>
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <span>{doneSets} de {totalSets} séries</span>
+            <span>{pendingExercises.length} exercício{pendingExercises.length === 1 ? '' : 's'} restante{pendingExercises.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${totalSets ? (doneSets / totalSets) * 100 : 0}%` }} />
+          </div>
+        </div>
+
+        <Card className="text-center">
+          <p className="text-xs uppercase tracking-wide text-primary-400">
+            Série {currentSetNumber} de {currentExercise.sets}
+          </p>
+          <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+          {/* The rep target is what you check mid-set, so it gets its own block. */}
+          <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
+            {isTimed ? (
+              <>
+                <span className="text-3xl font-black tabular-nums text-primary-200">{formatClock(plannedDuration)}</span>
+                <span className="text-sm font-semibold text-primary-400">de execução</span>
+              </>
+            ) : (
+              <>
+                <span className="text-4xl font-black tabular-nums text-primary-200">{currentExercise.reps}</span>
+                <span className="text-sm font-semibold uppercase tracking-wide text-primary-400">repetições</span>
+              </>
+            )}
+          </div>
+
+          {phase === 'countdown' && (
+            <div className={`mt-5 rounded-2xl px-4 py-5 ${timerPanel.countdown.box}`}>
+              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.countdown.label}`}>Prepare-se</p>
+              <p className={`mt-1 text-7xl font-black tabular-nums ${timerPanel.countdown.value}`}>{Math.max(0, countdownLeft)}</p>
+            </div>
+          )}
+
+          {phase === 'executing' && (
+            <div className={`mt-5 rounded-2xl px-4 py-5 ${timerPanel.executing.box}`}>
+              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.executing.label}`}>Executando</p>
+              <p className={`mt-1 text-6xl font-black tabular-nums ${timerPanel.executing.value}`}>
+                {isTimed && plannedDuration > 0 ? formatClock(executionLeft) : formatClock(elapsed)}
+              </p>
+            </div>
+          )}
+
+          {(phase === 'resting' || phase === 'rest_done') && (
+            <div className={`mt-5 rounded-2xl px-4 py-5 ${phase === 'rest_done' ? timerPanel.rest_done.box : timerPanel.resting.box}`}>
+              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
+              <p className={`mt-1 text-6xl font-black tabular-nums ${phase === 'rest_done' ? timerPanel.rest_done.value : timerPanel.resting.value}`}>
+                {phase === 'rest_done' ? '0:00' : formatClock(restLeft)}
+              </p>
+              {phase === 'rest_done' && <p className="mt-2 text-sm font-semibold text-sky-200">Pronto para a próxima série</p>}
+            </div>
+          )}
+
+          {!isTimed && (
+            <div className="mt-6 border-t border-zinc-800 pt-4">
+              <label className="block text-xs uppercase tracking-wide text-zinc-500">Peso usado (kg)</label>
+              <div className="mt-2 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => stepWeight(-2.5)}
+                  className="h-11 w-11 rounded-xl bg-zinc-800 text-xl font-bold text-white"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={0.5}
+                  placeholder="0"
+                  value={weightText}
+                  // Selecting on focus makes the first digit replace the old value
+                  // instead of being appended to it.
+                  onFocus={(event) => event.target.select()}
+                  onChange={(event) => setWeightText(event.target.value)}
+                  className="w-24 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-center text-lg font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => stepWeight(2.5)}
+                  className="h-11 w-11 rounded-xl bg-zinc-800 text-xl font-bold text-white"
+                >
+                  +
+                </button>
+              </div>
+              {currentExercise.last_weight_kg ? (
+                <p className="mt-2 text-xs text-zinc-600">Última vez: {currentExercise.last_weight_kg} kg</p>
+              ) : null}
+            </div>
+          )}
+        </Card>
+
+        {currentExercise.notes && (
+          <Card className="text-xs leading-relaxed text-zinc-500">{currentExercise.notes}</Card>
+        )}
+
+        <div className="space-y-2">
+          {phase === 'executing' && !isTimed && (
+            <Button fullWidth size="lg" onClick={() => recordSet(elapsed)} isLoading={isBusy}>Próximo</Button>
+          )}
+          {phase === 'executing' && isTimed && (
+            <Button fullWidth size="lg" onClick={() => recordSet(elapsed)} isLoading={isBusy}>Concluir agora</Button>
+          )}
+          {phase === 'countdown' && (
+            <Button fullWidth size="lg" onClick={() => startPhase('executing')}>Começar agora</Button>
+          )}
+          {phase === 'resting' && (
+            <Button fullWidth size="lg" onClick={advanceAfterRest}>
+              Pular descanso
+            </Button>
+          )}
+          {phase === 'rest_done' && (
+            <Button fullWidth size="lg" onClick={advanceAfterRest}>
+              Continuar
+            </Button>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={goBack}
+              disabled={isBusy || completedSets.length === 0}
+              className="rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+            >
+              ← Voltar série
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPostpone(true)}
+              disabled={pendingExercises.length < 2}
+              className="rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+            >
+              Adiar exercício
+            </button>
+          </div>
+          <button type="button" onClick={openFinishSheet} className="w-full rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-primary-300">
+            Finalizar treino agora
+          </button>
+          <button type="button" onClick={cancel} className="w-full py-3 text-xs text-red-400">Descartar treino</button>
+        </div>
+      </div>
+
+      {showPostpone && (
+        <PostponeSheet
+          exercises={pendingExercises}
+          remainingFor={(exercise) => exercise.sets - doneCountFor(exercise.id)}
+          currentId={currentExercise.id}
+          onPick={goToExercise}
+          onClose={() => setShowPostpone(false)}
+        />
+      )}
+      {finishSheetNode}
+    </>
+  );
+}

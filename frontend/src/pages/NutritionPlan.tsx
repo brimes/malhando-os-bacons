@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 
 export function NutritionPlanPage() {
   const navigate = useNavigate();
-  const { plans, activePlan, isLoading, fetchPlans, createPlan } = useNutritionStore();
+  const { plans, isLoading, fetchPlans, createPlan } = useNutritionStore();
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');

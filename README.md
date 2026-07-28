@@ -48,7 +48,7 @@ mob/
 │       ├── ApiClient.kt          # Cliente HTTP para o backend
 │       └── HealthDataCollector.kt # Leitura de sensores
 │
-├── docker-compose.yml       # PostgreSQL + Backend
+├── docker-compose.yml       # PostgreSQL + Backend + Frontend web
 ├── Makefile                 # Comandos principais
 └── README.md
 ```
@@ -57,19 +57,36 @@ mob/
 
 ```
 POST   /api/auth/google              — Login com Google OAuth
+POST   /api/auth/register            — Cadastro com nome, e-mail e senha
+POST   /api/auth/login               — Login com e-mail e senha
 GET    /api/auth/me                  — Usuário atual
+
+GET    /api/onboarding               — Estado atual do onboarding
+PUT    /api/onboarding/profile       — Salvar dados corporais iniciais
+POST   /api/onboarding/objective/messages — Conversar com assistente de objetivo
+POST   /api/onboarding/objective/reset — Apagar objetivo e reiniciar a conversa
+GET    /api/onboarding/fitness-assessments — Histórico de testes de condicionamento
+POST   /api/onboarding/fitness-assessments — Registrar caminhada de 6 minutos
 
 GET    /api/workouts                 — Listar treinos
 POST   /api/workouts                 — Criar treino
 GET    /api/workouts/stats           — Estatísticas (frequência, volume, streak)
+GET    /api/workouts/calendar?month= — Treinos agrupados por dia no mês
 GET    /api/workouts/:id             — Detalhe do treino
 PUT    /api/workouts/:id             — Atualizar treino
 DELETE /api/workouts/:id             — Deletar treino
+
+GET    /api/training-plans           — Listar planos de treino
+POST   /api/training-plans/manual    — Criar plano manual
+POST   /api/training-plans/automatic — Gerar plano personalizado com LLM
+GET    /api/training-plans/:id       — Plano, dias, exercícios e últimas execuções
+DELETE /api/training-plans/:id       — Excluir completamente um plano
 
 GET    /api/nutrition/plans          — Planos alimentares
 POST   /api/nutrition/plans          — Criar plano (ativa automaticamente)
 GET    /api/nutrition/logs?date=     — Log de refeições do dia
 POST   /api/nutrition/logs           — Registrar refeição
+GET    /api/nutrition/calendar?month= — Calorias agrupadas por dia no mês
 GET    /api/nutrition/foods/search?q — Buscar alimentos (TACO/USDA)
 
 GET    /api/steps?date=              — Passos do dia
@@ -93,23 +110,21 @@ cd /home/picoclaw/mob
 
 # Copia o .env de exemplo
 cp backend/.env.example backend/.env
+# Variáveis usadas pelo Docker Compose
+cp .env.example .env
 # Edite backend/.env com suas credenciais Google OAuth
 
-# Instala dependências do frontend
-cd frontend && npm install && cd ..
-
-# Sobe PostgreSQL + Backend via Docker
+# Sobe PostgreSQL, Backend e Frontend web via Docker
 make up
 ```
 
-### Dev local (hot reload)
+### Desenvolvimento web (hot reload no Docker)
 ```bash
-# Terminal 1: Backend Go (com hot reload manual)
-cd backend && make dev
-
-# Terminal 2: Frontend React
-cd frontend && npm run dev
+docker compose up -d --build
+docker compose watch frontend
 ```
+
+O `watch` sincroniza o código de `frontend/` com o container e o Vite recarrega as alterações automaticamente. Em outro terminal, use `docker compose logs -f frontend backend` para acompanhar os logs.
 
 ### Acessar
 - Frontend: http://localhost:5173
@@ -149,6 +164,34 @@ make migrate
 | `GOOGLE_CLIENT_SECRET` | Client Secret do Google OAuth |
 | `ENVIRONMENT` | `development` ou `production` |
 | `ALLOWED_ORIGINS` | Origins permitidas para CORS |
+| `OPENCODE_URL` | URL do servidor iniciado por `opencode serve` |
+| `OPENCODE_MODEL` | Modelo no formato `provider/model` |
+
+## Assistente de objetivo
+
+O onboarding usa o servidor HTTP oficial do CLI OpenCode. Inicie-o antes de conversar com o assistente:
+
+```bash
+opencode serve --hostname 192.168.252.1 --port 4096
+```
+
+Neste ambiente, `192.168.252.1` é a interface do Mac acessível pela VM Docker. O backend usa `OPENCODE_URL` e `OPENCODE_MODEL`, permitindo trocar o modelo sem alterar o código.
+
+## Login com Google
+
+1. Acesse [Google Cloud Console](https://console.cloud.google.com/) e crie ou selecione um projeto.
+2. Abra **Google Auth Platform**, configure **Branding**, **Audience** e adicione seu e-mail como usuário de teste enquanto o app estiver em modo de testes.
+3. Em **Clients**, crie um cliente OAuth do tipo **Web application**.
+4. Em **Authorized JavaScript origins**, adicione `http://localhost:5173`.
+5. Copie o **Client ID** para `GOOGLE_CLIENT_ID` no arquivo `.env` da raiz e reconstrua os serviços:
+
+```bash
+cp .env.example .env
+# Edite GOOGLE_CLIENT_ID no arquivo .env
+docker compose up -d --build backend frontend
+```
+
+O fluxo web atual usa Google Identity Services e precisa apenas do Client ID. Nunca coloque o Client Secret no frontend ou em uma variável `VITE_*`. Android e iOS precisarão de clientes OAuth próprios quando forem compilados.
 
 ## Features
 

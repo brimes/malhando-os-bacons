@@ -90,14 +90,14 @@ export function WorkoutDetailPage() {
                     <p className="font-medium text-white">{set.exercise_name}</p>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-primary-400">
-                        {set.sets}x{set.reps}
+                        {set.tracking_type === 'time' ? `${set.sets} × ${set.duration_seconds ?? 0}s` : `${set.sets}x${set.reps}`}
                       </p>
-                      <p className="text-xs text-zinc-400">{set.weight_kg}kg</p>
+                      {set.tracking_type !== 'time' && <p className="text-xs text-zinc-400">{set.weight_kg}kg</p>}
                     </div>
                   </div>
-                  <p className="text-xs text-zinc-500 mt-1">
+                  {set.tracking_type !== 'time' && <p className="text-xs text-zinc-500 mt-1">
                     Volume: {set.sets * set.reps * set.weight_kg}kg
-                  </p>
+                  </p>}
                 </Card>
               ))}
             </div>

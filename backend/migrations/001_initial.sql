@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     name        TEXT NOT NULL,
     avatar_url  TEXT,
     google_id   TEXT UNIQUE,
+    password_hash TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -238,3 +238,37 @@ func (h *NutritionHandler) SearchFoods(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, foods)
 }
+
+func (h *NutritionHandler) Calendar(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	start, end, err := parseMonth(r.URL.Query().Get("month"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid month format, use YYYY-MM"})
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT fl.date::date, COALESCE(SUM(fi.calories_per_100g * fl.quantity_g / 100.0), 0)
+		 FROM food_logs fl JOIN food_items fi ON fi.id = fl.food_item_id
+		 WHERE fl.user_id = $1 AND fl.date >= $2 AND fl.date < $3
+		 GROUP BY fl.date::date ORDER BY fl.date::date`, userID, start, end)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch nutrition calendar"})
+		return
+	}
+	defer rows.Close()
+	type calendarDay struct {
+		Date     string  `json:"date"`
+		Calories float64 `json:"calories"`
+	}
+	days := []calendarDay{}
+	for rows.Next() {
+		var date time.Time
+		var calories float64
+		if err := rows.Scan(&date, &calories); err != nil {
+			continue
+		}
+		days = append(days, calendarDay{Date: date.Format("2006-01-02"), Calories: calories})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"month": start.Format("2006-01"), "days": days})
+}

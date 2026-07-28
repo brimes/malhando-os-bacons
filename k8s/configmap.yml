@@ -7,3 +7,7 @@ data:
   PORT: "8080"
   ENVIRONMENT: "production"
   ALLOWED_ORIGINS: "https://mob.zel.care"
+  # Without these the process exits on boot: the assistant provider is required
+  # and defaults to gemini. GEMINI_API_KEY lives in the secret.
+  ASSISTANT_PROVIDER: "gemini"
+  GEMINI_MODEL: "gemini-3.6-flash"

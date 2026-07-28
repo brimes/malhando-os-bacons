@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useWorkoutStore } from '../stores/useWorkoutStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import type { WorkoutSetInput } from '../types';
+import type { TrainingPlanDay, WorkoutSetInput } from '../types';
 
 export function NewWorkoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const planState = location.state as { planId?: number; planDay?: TrainingPlanDay; duration?: number } | null;
   const { createWorkout, isLoading } = useWorkoutStore();
 
-  const [name, setName] = useState('');
+  const [name, setName] = useState(planState?.planDay?.name ?? '');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [sets, setSets] = useState<WorkoutSetInput[]>([
-    { exercise_name: '', sets: 3, reps: 10, weight_kg: 0 },
-  ]);
+  const [duration, setDuration] = useState(planState?.duration?.toString() ?? '');
+  const [sets, setSets] = useState<WorkoutSetInput[]>(planState?.planDay?.exercises.map((exercise) => ({
+    exercise_name: exercise.exercise_name, sets: exercise.sets, reps: exercise.reps, weight_kg: 0,
+    tracking_type: exercise.tracking_type, duration_seconds: exercise.duration_seconds,
+  })) ?? [{ exercise_name: '', sets: 3, reps: 10, weight_kg: 0 }]);
 
   const addSet = () => {
-    setSets((prev) => [...prev, { exercise_name: '', sets: 3, reps: 10, weight_kg: 0 }]);
+    setSets((prev) => [...prev, { exercise_name: '', sets: 3, reps: 10, weight_kg: 0, tracking_type: 'reps' }]);
   };
 
   const removeSet = (index: number) => {
@@ -38,9 +42,11 @@ export function NewWorkoutPage() {
       name: name.trim(),
       date: new Date(date).toISOString(),
       notes: notes.trim(),
+      training_plan_day_id: planState?.planDay?.id,
+      duration_minutes: duration ? Number(duration) : undefined,
       sets: validSets,
     });
-    navigate('/workouts');
+    navigate(planState?.planId ? `/training-plans/${planState.planId}` : '/workouts');
   };
 
   return (
@@ -61,6 +67,11 @@ export function NewWorkoutPage() {
               required
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-primary-500 transition-colors"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-1.5">Duração (minutos)</label>
+            <input type="number" min="1" max="600" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Ex: 60" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition-colors" />
           </div>
 
           <div>
@@ -130,17 +141,12 @@ export function NewWorkoutPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Reps</label>
-                    <input
-                      type="number"
-                      value={set.reps}
-                      min={1}
-                      onChange={(e) => updateSet(index, 'reps', Number(e.target.value))}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white text-center focus:outline-none focus:border-primary-500 transition-colors text-sm"
-                    />
+                    <label className="block text-xs text-zinc-500 mb-1">{set.tracking_type === 'time' ? 'Segundos' : 'Reps'}</label>
+                    <input type="number" value={set.tracking_type === 'time' ? (set.duration_seconds ?? 60) : set.reps} min={1} onChange={(e) => updateSet(index, set.tracking_type === 'time' ? 'duration_seconds' : 'reps', Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white text-center focus:outline-none focus:border-primary-500 transition-colors text-sm" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Peso (kg)</label>
+                    <label className="block text-xs text-zinc-500 mb-1">{set.tracking_type === 'time' ? 'Tipo' : 'Peso (kg)'}</label>
+                    {set.tracking_type === 'time' ? <div className="rounded-xl border border-zinc-700 bg-zinc-800 px-2 py-2.5 text-center text-xs text-zinc-400">Tempo</div> :
                     <input
                       type="number"
                       value={set.weight_kg}
@@ -148,7 +154,7 @@ export function NewWorkoutPage() {
                       step={0.5}
                       onChange={(e) => updateSet(index, 'weight_kg', Number(e.target.value))}
                       className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white text-center focus:outline-none focus:border-primary-500 transition-colors text-sm"
-                    />
+                    />}
                   </div>
                 </div>
               </Card>

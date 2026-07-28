@@ -1,0 +1,2 @@
+ALTER TABLE user_goals
+ADD COLUMN IF NOT EXISTS target_date DATE;

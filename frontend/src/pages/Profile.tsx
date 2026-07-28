@@ -1,10 +1,20 @@
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/useAuthStore';
+import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 
 export function ProfilePage() {
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { state, isLoading, resetObjective } = useOnboardingStore();
+
+  const redefineObjective = async () => {
+    if (!window.confirm('Deseja apagar a conversa atual e definir um novo objetivo?')) return;
+    await resetObjective();
+    navigate('/onboarding');
+  };
 
   return (
     <>
@@ -36,23 +46,51 @@ export function ProfilePage() {
           </div>
         </Card>
 
-        {/* App info */}
+        {state?.profile?.training_experience && (
+          <div>
+            <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Perfil de treino</h3>
+            <Card className="space-y-3">
+              <div className="flex items-center justify-between text-sm"><span className="text-zinc-500">Experiência</span><span className="font-medium text-white">{state.profile.training_experience === 'beginner' ? 'Iniciante' : 'Experiente'}</span></div>
+              {state.profile.training_experience === 'beginner' && state.profile.adaptation_ends_at && <div className="flex items-center justify-between text-sm"><span className="text-zinc-500">Adaptação até</span><span className="font-medium text-primary-400">{new Date(`${state.profile.adaptation_ends_at.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>}
+              <div className="border-t border-zinc-800 pt-3"><p className="text-xs uppercase tracking-wide text-zinc-600">Lesões ou limitações</p><p className="mt-1 text-sm leading-relaxed text-zinc-300">{state.profile.injuries_or_limitations || 'Nenhuma informada'}</p></div>
+            </Card>
+          </div>
+        )}
+
+        {state?.goal && (
+          <div>
+            <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Meu objetivo</h3>
+            <Card className="border-primary-900 bg-primary-950/30">
+              <p className="text-sm leading-relaxed text-zinc-200">{state.goal.summary}</p>
+              {state.goal.target_weight_kg && <p className="mt-3 text-xs font-semibold text-primary-400">Peso-alvo: {state.goal.target_weight_kg} kg</p>}
+              {state.goal.target_body_fat_percentage && <p className="mt-1 text-xs font-semibold text-primary-400">Gordura corporal alvo: {state.goal.target_body_fat_percentage}%</p>}
+              {state.goal.target_muscle_mass_kg && <p className="mt-1 text-xs font-semibold text-primary-400">Massa muscular alvo: {state.goal.target_muscle_mass_kg} kg</p>}
+              {state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-primary-400">Caminhada de 6 min: {state.goal.target_six_minute_walk_meters} m</p>}
+              {state.goal.conditioning_focus && !state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-primary-400">Foco em condicionamento físico</p>}
+              {state.goal.target_date && <p className="mt-1 text-xs text-zinc-500">Data-meta: {new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</p>}
+              {state.goal.feasibility_warning && <p className="mt-3 rounded-xl border border-amber-900 bg-amber-950/30 p-3 text-xs leading-relaxed text-amber-200">{state.goal.feasibility_warning}</p>}
+              <Button variant="secondary" fullWidth onClick={redefineObjective} isLoading={isLoading} className="mt-4">
+                Redefinir objetivo
+              </Button>
+              {state.goal.conditioning_focus && <Button variant="ghost" fullWidth onClick={() => navigate('/fitness-assessment')} className="mt-2">Testes de condicionamento</Button>}
+            </Card>
+          </div>
+        )}
+
         <div>
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Sobre o app</h3>
-          <Card className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Versão</span>
-              <span className="text-white">0.1.0</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Stack</span>
-              <span className="text-white">Go + React + Kotlin</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Watch</span>
-              <span className="text-white">Galaxy Watch 7</span>
-            </div>
-          </Card>
+          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Treino</h3>
+          <button type="button" onClick={() => navigate('/settings')} className="w-full text-left">
+            <Card className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">⚙️</span>
+                <div>
+                  <p className="text-sm font-medium text-white">Configurações do treino</p>
+                  <p className="text-xs text-zinc-500">Contagem para iniciar, vibração e avanço automático</p>
+                </div>
+              </div>
+              <span className="text-zinc-600">›</span>
+            </Card>
+          </button>
         </div>
 
         {/* Features */}
@@ -80,6 +118,8 @@ export function ProfilePage() {
         <Button variant="danger" fullWidth onClick={logout} size="lg">
           Sair da conta
         </Button>
+
+        <p className="pt-2 text-center text-xs text-zinc-700">MOB versão 0.1.0</p>
       </div>
     </>
   );

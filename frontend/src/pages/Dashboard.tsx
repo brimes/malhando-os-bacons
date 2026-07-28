@@ -5,19 +5,25 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { Card, StatCard } from '../components/Card';
 import { MacroProgress } from '../components/Chart';
 import { Button } from '../components/Button';
-import type { DashboardData } from '../types';
+import { workoutsApi } from '../api/workouts';
+import type { ActiveWorkout, DashboardData } from '../types';
+import { useOnboardingStore } from '../stores/useOnboardingStore';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { state: onboarding } = useOnboardingStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
 
   useEffect(() => {
     apiClient.get<DashboardData>('/dashboard')
       .then((res) => setData(res.data))
       .catch(console.error)
       .finally(() => setIsLoading(false));
+    // A session left open (screen locked, app closed) can be resumed from here.
+    workoutsApi.active().then(setActiveWorkout).catch(() => setActiveWorkout(null));
   }, []);
 
   if (isLoading) {
@@ -42,12 +48,34 @@ export function DashboardPage() {
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
       {/* Greeting */}
-      <div>
-        <p className="text-zinc-400 text-sm capitalize">{todayDate}</p>
-        <h2 className="text-2xl font-bold text-white">
-          {greeting()}, {user?.name?.split(' ')[0]} 👋
-        </h2>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-zinc-400 text-sm capitalize">{todayDate}</p>
+          <h2 className="text-2xl font-bold text-white">
+            {greeting()}, {user?.name?.split(' ')[0]} 👋
+          </h2>
+        </div>
+        <img src="/mob-icon.png" alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover drop-shadow-xl" />
       </div>
+
+      {activeWorkout && (
+        <button onClick={() => navigate('/workouts/session')} className="flex w-full items-center gap-4 rounded-2xl border border-primary-700 bg-primary-950 p-4 text-left">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-600 text-xl">▶</div>
+          <div className="flex-1">
+            <p className="font-bold text-primary-100">Treino em andamento</p>
+            <p className="mt-0.5 text-xs text-zinc-400">{activeWorkout.day_name || activeWorkout.workout.name} · toque para continuar</p>
+          </div>
+          <span className="text-xl text-primary-400">›</span>
+        </button>
+      )}
+
+      {onboarding?.goal?.conditioning_focus && !onboarding.fitness_assessment && (
+        <button onClick={() => navigate('/fitness-assessment')} className="flex w-full items-center gap-4 rounded-2xl border border-primary-800 bg-primary-950/60 p-4 text-left">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-700 text-xl">♥</div>
+          <div className="flex-1"><p className="font-bold text-primary-200">Fazer teste de condicionamento</p><p className="mt-0.5 text-xs text-zinc-500">Crie sua linha de base com uma caminhada de 6 minutos</p></div>
+          <span className="text-xl text-primary-400">›</span>
+        </button>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 gap-3">

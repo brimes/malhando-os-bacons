@@ -6,26 +6,102 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/middleware"
 	"github.com/mob/backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthHandler struct {
-	db        *db.DB
-	jwtSecret string
+	db             *db.DB
+	jwtSecret      string
+	googleClientID string
 }
 
-func NewAuthHandler(database *db.DB, jwtSecret string) *AuthHandler {
-	return &AuthHandler{db: database, jwtSecret: jwtSecret}
+func NewAuthHandler(database *db.DB, jwtSecret, googleClientID string) *AuthHandler {
+	return &AuthHandler{db: database, jwtSecret: jwtSecret, googleClientID: googleClientID}
 }
 
 type googleTokenInfo struct {
-	Sub     string `json:"sub"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
+	Sub      string `json:"sub"`
+	Email    string `json:"email"`
+	Name     string `json:"name"`
+	Picture  string `json:"picture"`
+	Audience string `json:"aud"`
+}
+
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var req models.RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	req.Name = strings.TrimSpace(req.Name)
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	if req.Name == "" || len(req.Name) > 100 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name must be between 1 and 100 characters"})
+		return
+	}
+	if !validEmail(req.Email) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid email"})
+		return
+	}
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 8 and 72 characters"})
+		return
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to secure password"})
+		return
+	}
+
+	var user models.User
+	err = h.db.Pool.QueryRow(r.Context(),
+		`INSERT INTO users (email, name, password_hash)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (email) DO NOTHING
+		 RETURNING id, email, name, avatar_url, google_id, created_at`,
+		req.Email, req.Name, string(passwordHash),
+	).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.CreatedAt)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "email already registered"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
+		return
+	}
+
+	h.writeAuthResponse(w, http.StatusCreated, &user)
+}
+
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req models.LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	var user models.User
+	var passwordHash *string
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT id, email, name, avatar_url, google_id, password_hash, created_at
+		 FROM users WHERE email = $1`, req.Email,
+	).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &passwordHash, &user.CreatedAt)
+	if err != nil || passwordHash == nil || bcrypt.CompareHashAndPassword([]byte(*passwordHash), []byte(req.Password)) != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid email or password"})
+		return
+	}
+
+	h.writeAuthResponse(w, http.StatusOK, &user)
 }
 
 func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +117,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify token with Google
-	info, err := verifyGoogleToken(r.Context(), req.IDToken)
+	info, err := verifyGoogleToken(r.Context(), req.IDToken, h.googleClientID)
 	if err != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid google token"})
 		return
@@ -54,17 +130,7 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate JWT
-	token, err := middleware.GenerateToken(user.ID, user.Email, h.jwtSecret)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, models.AuthResponse{
-		Token: token,
-		User:  *user,
-	})
+	h.writeAuthResponse(w, http.StatusOK, user)
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +171,24 @@ func (h *AuthHandler) upsertUser(ctx context.Context, info *googleTokenInfo) (*m
 	return &user, nil
 }
 
-func verifyGoogleToken(ctx context.Context, idToken string) (*googleTokenInfo, error) {
+func (h *AuthHandler) writeAuthResponse(w http.ResponseWriter, status int, user *models.User) {
+	token, err := middleware.GenerateToken(user.ID, user.Email, h.jwtSecret)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+		return
+	}
+	writeJSON(w, status, models.AuthResponse{Token: token, User: *user})
+}
+
+func validEmail(email string) bool {
+	address, err := mail.ParseAddress(email)
+	return err == nil && address.Address == email
+}
+
+func verifyGoogleToken(ctx context.Context, idToken, clientID string) (*googleTokenInfo, error) {
+	if clientID == "" || clientID == "placeholder" {
+		return nil, fmt.Errorf("google client ID is not configured")
+	}
 	url := "https://oauth2.googleapis.com/tokeninfo?id_token=" + idToken
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -132,8 +215,8 @@ func verifyGoogleToken(ctx context.Context, idToken string) (*googleTokenInfo, e
 		return nil, err
 	}
 
-	if info.Sub == "" {
-		return nil, fmt.Errorf("invalid token: missing sub claim")
+	if info.Sub == "" || info.Audience != clientID {
+		return nil, fmt.Errorf("invalid token claims")
 	}
 
 	return &info, nil

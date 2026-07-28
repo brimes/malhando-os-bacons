@@ -1,0 +1,83 @@
+package models
+
+import "time"
+
+type TrainingPlan struct {
+	ID                     int64             `json:"id"`
+	Name                   string            `json:"name"`
+	Description            string            `json:"description"`
+	TargetDate             time.Time         `json:"target_date"`
+	DaysPerWeek            int               `json:"days_per_week"`
+	SessionDurationMinutes int               `json:"session_duration_minutes"`
+	CreationMethod         string            `json:"creation_method"`
+	AdaptationPhase        bool              `json:"adaptation_phase"`
+	Active                 bool              `json:"active"`
+	Days                   []TrainingPlanDay `json:"days,omitempty"`
+	CreatedAt              time.Time         `json:"created_at"`
+}
+
+type TrainingPlanDay struct {
+	ID           int64                  `json:"id"`
+	DayNumber    int                    `json:"day_number"`
+	Name         string                 `json:"name"`
+	Focus        string                 `json:"focus"`
+	Instructions string                 `json:"instructions"`
+	LastDoneAt   *time.Time             `json:"last_done_at,omitempty"`
+	Exercises    []TrainingPlanExercise `json:"exercises"`
+}
+
+type TrainingPlanExercise struct {
+	ID              int64    `json:"id"`
+	ExerciseName    string   `json:"exercise_name"`
+	Sets            int      `json:"sets"`
+	Reps            int      `json:"reps"`
+	TrackingType    string   `json:"tracking_type"`
+	DurationSeconds *int     `json:"duration_seconds,omitempty"`
+	RestSeconds     int      `json:"rest_seconds"`
+	Notes           string   `json:"notes"`
+	LastWeightKg    *float64 `json:"last_weight_kg,omitempty"`
+}
+
+type TrainingPlanInput struct {
+	Name                   string                 `json:"name"`
+	Description            string                 `json:"description"`
+	TargetDate             string                 `json:"target_date"`
+	DaysPerWeek            int                    `json:"days_per_week"`
+	SessionDurationMinutes int                    `json:"session_duration_minutes"`
+	Days                   []TrainingPlanDayInput `json:"days"`
+}
+
+type TrainingPlanDayInput struct {
+	Name         string                      `json:"name"`
+	Focus        string                      `json:"focus"`
+	Instructions string                      `json:"instructions"`
+	Exercises    []TrainingPlanExerciseInput `json:"exercises"`
+}
+
+type TrainingPlanExerciseInput struct {
+	ExerciseName    string `json:"exercise_name"`
+	Sets            int    `json:"sets"`
+	Reps            int    `json:"reps"`
+	TrackingType    string `json:"tracking_type"`
+	DurationSeconds *int   `json:"duration_seconds"`
+	RestSeconds     int    `json:"rest_seconds"`
+	Notes           string `json:"notes"`
+}
+
+type AutomaticTrainingPlanRequest struct {
+	Name                   string `json:"name"`
+	TargetDate             string `json:"target_date"`
+	DaysPerWeek            int    `json:"days_per_week"`
+	SessionDurationMinutes int    `json:"session_duration_minutes"`
+	Preferences            string `json:"preferences"`
+}
+
+// TrainingPlanJob tracks an automatic plan generation running in background,
+// since the assistant takes far longer than a request can be held open.
+type TrainingPlanJob struct {
+	ID        int64     `json:"id"`
+	Status    string    `json:"status"`
+	PlanID    *int64    `json:"plan_id,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}

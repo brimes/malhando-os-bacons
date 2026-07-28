@@ -28,8 +28,9 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, user_id, name, date, notes, created_at
-		 FROM workouts WHERE user_id = $1 ORDER BY date DESC LIMIT 50`,
+		`SELECT id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
+		 status, started_at, finished_at, created_at
+		 FROM workouts WHERE user_id = $1 AND status = 'completed' ORDER BY date DESC LIMIT 50`,
 		userID,
 	)
 	if err != nil {
@@ -41,7 +42,8 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 	workouts := []models.Workout{}
 	for rows.Next() {
 		var w models.Workout
-		if err := rows.Scan(&w.ID, &w.UserID, &w.Name, &w.Date, &w.Notes, &w.CreatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.UserID, &w.Name, &w.Date, &w.Notes, &w.TrainingPlanDayID, &w.DurationMinutes,
+			&w.Status, &w.StartedAt, &w.FinishedAt, &w.CreatedAt); err != nil {
 			continue
 		}
 		workouts = append(workouts, w)
@@ -71,6 +73,20 @@ func (h *WorkoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Date.IsZero() {
 		req.Date = time.Now()
 	}
+	if req.DurationMinutes != nil && (*req.DurationMinutes < 1 || *req.DurationMinutes > 600) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "duration_minutes must be between 1 and 600"})
+		return
+	}
+	if req.TrainingPlanDayID != nil {
+		var allowed bool
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT EXISTS(SELECT 1 FROM training_plan_days d JOIN training_plans p ON p.id = d.plan_id
+			 WHERE d.id = $1 AND p.user_id = $2)`, *req.TrainingPlanDayID, userID).Scan(&allowed)
+		if err != nil || !allowed {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid training plan day"})
+			return
+		}
+	}
 
 	tx, err := h.db.Pool.Begin(r.Context())
 	if err != nil {
@@ -81,23 +97,33 @@ func (h *WorkoutHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var workout models.Workout
 	err = tx.QueryRow(r.Context(),
-		`INSERT INTO workouts (user_id, name, date, notes) VALUES ($1, $2, $3, $4)
-		 RETURNING id, user_id, name, date, notes, created_at`,
-		userID, req.Name, req.Date, req.Notes,
-	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes, &workout.CreatedAt)
+		`INSERT INTO workouts (user_id, name, date, notes, training_plan_day_id, duration_minutes)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id, user_id, name, date, notes, training_plan_day_id, duration_minutes, created_at`,
+		userID, req.Name, req.Date, req.Notes, req.TrainingPlanDayID, req.DurationMinutes,
+	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
+		&workout.TrainingPlanDayID, &workout.DurationMinutes, &workout.CreatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create workout"})
 		return
 	}
 
 	for _, s := range req.Sets {
+		if s.TrackingType == "" {
+			s.TrackingType = "reps"
+		}
+		if s.TrackingType != "reps" && s.TrackingType != "time" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid exercise tracking type"})
+			return
+		}
 		var set models.WorkoutSet
 		err = tx.QueryRow(r.Context(),
-			`INSERT INTO workout_sets (workout_id, exercise_name, sets, reps, weight_kg)
-			 VALUES ($1, $2, $3, $4, $5)
-			 RETURNING id, workout_id, exercise_name, sets, reps, weight_kg, created_at`,
-			workout.ID, s.ExerciseName, s.Sets, s.Reps, s.WeightKg,
-		).Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps, &set.WeightKg, &set.CreatedAt)
+			`INSERT INTO workout_sets (workout_id, exercise_name, sets, reps, weight_kg, tracking_type, duration_seconds)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			 RETURNING id, workout_id, exercise_name, sets, reps, weight_kg, tracking_type, duration_seconds, created_at`,
+			workout.ID, s.ExerciseName, s.Sets, s.Reps, s.WeightKg, s.TrackingType, s.DurationSeconds,
+		).Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps, &set.WeightKg,
+			&set.TrackingType, &set.DurationSeconds, &set.CreatedAt)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create workout set"})
 			return
@@ -128,16 +154,20 @@ func (h *WorkoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var workout models.Workout
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, user_id, name, date, notes, created_at FROM workouts WHERE id = $1 AND user_id = $2`,
+		`SELECT id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
+		 status, started_at, finished_at, created_at
+		 FROM workouts WHERE id = $1 AND user_id = $2`,
 		id, userID,
-	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes, &workout.CreatedAt)
+	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
+		&workout.TrainingPlanDayID, &workout.DurationMinutes,
+		&workout.Status, &workout.StartedAt, &workout.FinishedAt, &workout.CreatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workout not found"})
 		return
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, workout_id, exercise_name, sets, reps, weight_kg, created_at
+		`SELECT id, workout_id, exercise_name, sets, reps, weight_kg, tracking_type, duration_seconds, created_at
 		 FROM workout_sets WHERE workout_id = $1 ORDER BY created_at`,
 		workout.ID,
 	)
@@ -145,7 +175,8 @@ func (h *WorkoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			var s models.WorkoutSet
-			if err := rows.Scan(&s.ID, &s.WorkoutID, &s.ExerciseName, &s.Sets, &s.Reps, &s.WeightKg, &s.CreatedAt); err == nil {
+			if err := rows.Scan(&s.ID, &s.WorkoutID, &s.ExerciseName, &s.Sets, &s.Reps, &s.WeightKg,
+				&s.TrackingType, &s.DurationSeconds, &s.CreatedAt); err == nil {
 				workout.Sets = append(workout.Sets, s)
 			}
 		}
@@ -229,17 +260,17 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	// Total workouts
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed'`, userID,
 	).Scan(&stats.TotalWorkouts)
 
 	// This week
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND date >= date_trunc('week', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE)`, userID,
 	).Scan(&stats.WorkoutsThisWeek)
 
 	// This month
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND date >= date_trunc('month', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('month', CURRENT_DATE)`, userID,
 	).Scan(&stats.WorkoutsThisMonth)
 
 	// Total sets and volume
@@ -252,7 +283,7 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	// Current streak
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT DISTINCT date::date FROM workouts WHERE user_id = $1 ORDER BY date::date DESC`,
+		`SELECT DISTINCT date::date FROM workouts WHERE user_id = $1 AND status = 'completed' ORDER BY date::date DESC`,
 		userID,
 	)
 	if err == nil {
@@ -276,6 +307,50 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *WorkoutHandler) Calendar(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	start, end, err := parseMonth(r.URL.Query().Get("month"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid month format, use YYYY-MM"})
+		return
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(),
+		`SELECT date::date, COUNT(*) FROM workouts
+		 WHERE user_id = $1 AND status = 'completed' AND date >= $2 AND date < $3
+		 GROUP BY date::date ORDER BY date::date`, userID, start, end)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch workout calendar"})
+		return
+	}
+	defer rows.Close()
+	type calendarDay struct {
+		Date  string `json:"date"`
+		Count int    `json:"count"`
+	}
+	days := []calendarDay{}
+	for rows.Next() {
+		var date time.Time
+		var count int
+		if err := rows.Scan(&date, &count); err != nil {
+			continue
+		}
+		days = append(days, calendarDay{Date: date.Format("2006-01-02"), Count: count})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"month": start.Format("2006-01"), "days": days})
+}
+
+func parseMonth(value string) (time.Time, time.Time, error) {
+	if value == "" {
+		value = time.Now().Format("2006-01")
+	}
+	start, err := time.Parse("2006-01", value)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return start, start.AddDate(0, 1, 0), nil
 }
 
 func parseIDFromPath(path string) (int64, error) {

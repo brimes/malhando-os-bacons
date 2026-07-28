@@ -13,7 +13,12 @@ export interface WorkoutSet {
   exercise_name: string;
   sets: number;
   reps: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number;
   weight_kg: number;
+  training_plan_exercise_id?: number;
+  set_number?: number;
+  completed_at?: string;
   created_at: string;
 }
 
@@ -23,6 +28,11 @@ export interface Workout {
   name: string;
   date: string;
   notes?: string;
+  training_plan_day_id?: number;
+  duration_minutes?: number;
+  status: 'in_progress' | 'completed';
+  started_at?: string;
+  finished_at?: string;
   sets?: WorkoutSet[];
   created_at: string;
 }
@@ -31,6 +41,8 @@ export interface WorkoutSetInput {
   exercise_name: string;
   sets: number;
   reps: number;
+  tracking_type?: 'reps' | 'time';
+  duration_seconds?: number;
   weight_kg: number;
 }
 
@@ -38,7 +50,70 @@ export interface CreateWorkoutInput {
   name: string;
   date: string;
   notes?: string;
+  training_plan_day_id?: number;
+  duration_minutes?: number;
   sets?: WorkoutSetInput[];
+}
+
+export interface TrainingPlanExercise {
+  id?: number;
+  exercise_name: string;
+  sets: number;
+  reps: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number;
+  rest_seconds: number;
+  notes: string;
+  last_weight_kg?: number;
+}
+
+export interface TrainingPlanDay {
+  id?: number;
+  day_number?: number;
+  name: string;
+  focus: string;
+  instructions: string;
+  last_done_at?: string;
+  exercises: TrainingPlanExercise[];
+}
+
+export interface TrainingPlan {
+  id: number;
+  name: string;
+  description: string;
+  target_date: string;
+  days_per_week: number;
+  session_duration_minutes: number;
+  creation_method: 'manual' | 'automatic';
+  adaptation_phase: boolean;
+  active: boolean;
+  days?: TrainingPlanDay[];
+  created_at: string;
+}
+
+export interface TrainingPlanInput {
+  name: string;
+  description: string;
+  target_date: string;
+  days_per_week: number;
+  session_duration_minutes: number;
+  days: TrainingPlanDay[];
+}
+
+export interface AutomaticTrainingPlanInput {
+  name: string;
+  target_date: string;
+  days_per_week: number;
+  session_duration_minutes: number;
+  preferences: string;
+}
+
+export interface TrainingPlanJob {
+  id: number;
+  status: 'pending' | 'done' | 'failed';
+  plan_id?: number;
+  error?: string;
+  created_at: string;
 }
 
 export interface WorkoutStats {
@@ -48,6 +123,16 @@ export interface WorkoutStats {
   total_sets: number;
   total_volume_kg: number;
   streak_days: number;
+}
+
+export interface WorkoutCalendarDay {
+  date: string;
+  count: number;
+}
+
+export interface WorkoutCalendarData {
+  month: string;
+  days: WorkoutCalendarDay[];
 }
 
 export interface FoodItem {
@@ -105,6 +190,16 @@ export interface NutritionSummary {
   logs?: FoodLog[];
 }
 
+export interface NutritionCalendarDay {
+  date: string;
+  calories: number;
+}
+
+export interface NutritionCalendarData {
+  month: string;
+  days: NutritionCalendarDay[];
+}
+
 export interface DashboardData {
   user: User;
   today_workout?: Workout;
@@ -118,6 +213,78 @@ export interface DashboardData {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export type BiologicalSex = 'female' | 'male';
+export type TrainingExperience = 'beginner' | 'experienced';
+
+export interface UserProfile {
+  birth_date: string;
+  age: number;
+  height_cm: number;
+  current_weight_kg: number;
+  biological_sex?: BiologicalSex;
+  injuries_or_limitations?: string;
+  training_experience?: TrainingExperience;
+  adaptation_ends_at?: string;
+}
+
+export interface OnboardingMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  action?: 'six_minute_walk' | 'confirm_unrealistic_goal';
+  created_at: string;
+}
+
+export interface UserGoal {
+  goal_type: 'lose_weight' | 'gain_muscle' | 'recomposition' | 'maintain' | 'other';
+  target_weight_kg?: number;
+  target_body_fat_percentage?: number;
+  target_muscle_mass_kg?: number;
+  target_six_minute_walk_meters?: number;
+  conditioning_focus: boolean;
+  target_date?: string;
+  feasibility: 'realistic' | 'challenging' | 'unrealistic';
+  feasibility_warning?: string;
+  summary: string;
+}
+
+export interface OnboardingState {
+  profile?: UserProfile;
+  messages: OnboardingMessage[];
+  goal?: UserGoal;
+  fitness_assessment?: FitnessAssessment;
+  completed: boolean;
+}
+
+export interface FitnessAssessment {
+  distance_meters: number;
+  average_heart_rate?: number;
+  post_heart_rate?: number;
+  perceived_exertion: number;
+  performed_at: string;
+}
+
+export interface SaveFitnessAssessmentInput {
+  distance_meters: number;
+  average_heart_rate: number | null;
+  post_heart_rate: number | null;
+  perceived_exertion: number;
+}
+
+export interface SaveProfileInput {
+  birth_date: string;
+  height_cm: number;
+  current_weight_kg: number;
+  biological_sex: BiologicalSex | null;
+  injuries_or_limitations: string | null;
+  training_experience: TrainingExperience;
+}
+
+export interface ObjectiveMessageResponse {
+  message: OnboardingMessage;
+  goal?: UserGoal;
+  completed: boolean;
 }
 
 export interface ApiError {
@@ -152,3 +319,37 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   dinner: 'Jantar',
   snack: 'Lanche',
 };
+
+export interface ActiveWorkout {
+  workout: Workout;
+  plan_id?: number;
+  day_name: string;
+  exercises: TrainingPlanExercise[];
+}
+
+export interface CompleteSetInput {
+  training_plan_exercise_id?: number;
+  exercise_name: string;
+  set_number: number;
+  reps: number;
+  weight_kg: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number;
+}
+
+export interface TrainingSettings {
+  countdown_seconds: number;
+  vibration_enabled: boolean;
+  auto_advance: boolean;
+}
+
+export interface CompleteWorkoutExercise {
+  training_plan_exercise_id: number;
+  sets_done: number;
+  weight_kg: number;
+}
+
+export interface CompleteWorkoutInput {
+  notes?: string;
+  exercises: CompleteWorkoutExercise[];
+}

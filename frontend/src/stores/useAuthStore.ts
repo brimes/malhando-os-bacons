@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { apiClient } from '../api/client';
+import { apiClient, getErrorMessage } from '../api/client';
 import type { User, AuthResponse } from '../types';
 
 interface AuthState {
@@ -8,9 +8,11 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  error: string | null;
+	error: string | null;
 
-  loginWithGoogle: (idToken: string) => Promise<void>;
+	login: (email: string, password: string) => Promise<void>;
+	register: (name: string, email: string, password: string) => Promise<void>;
+	loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
   fetchMe: () => Promise<void>;
@@ -24,6 +26,30 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       error: null,
+
+      login: async (email: string, password: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { data } = await apiClient.post<AuthResponse>('/auth/login', { email, password });
+          localStorage.setItem('mob_token', data.token);
+          set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err) {
+          set({ error: getErrorMessage(err), isLoading: false });
+          throw err;
+        }
+      },
+
+      register: async (name: string, email: string, password: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { data } = await apiClient.post<AuthResponse>('/auth/register', { name, email, password });
+          localStorage.setItem('mob_token', data.token);
+          set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err) {
+          set({ error: getErrorMessage(err), isLoading: false });
+          throw err;
+        }
+      },
 
       loginWithGoogle: async (idToken: string) => {
         set({ isLoading: true, error: null });
@@ -39,8 +65,7 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Falha no login';
-          set({ error: message, isLoading: false });
+          set({ error: getErrorMessage(err), isLoading: false });
           throw err;
         }
       },

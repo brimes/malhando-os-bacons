@@ -5,6 +5,7 @@ import type {
   NutritionPlan,
   CreateNutritionPlanInput,
   CreateFoodLogInput,
+  NutritionCalendarData,
 } from '../types';
 
 export const nutritionApi = {
@@ -33,6 +34,11 @@ export const nutritionApi = {
     const { data } = await apiClient.get<FoodItem[]>('/nutrition/foods/search', {
       params: { q: query },
     });
+    return data;
+  },
+
+  calendar: async (month: string): Promise<NutritionCalendarData> => {
+    const { data } = await apiClient.get<NutritionCalendarData>('/nutrition/calendar', { params: { month } });
     return data;
   },
 };

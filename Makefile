@@ -1,8 +1,9 @@
-.PHONY: up down logs backend frontend watch build-all dev-setup
+.PHONY: up down logs backend frontend frontend-watch watch build-all dev-setup
 
 # Start all services via Docker Compose
 up:
 	docker compose up -d
+	@echo "Frontend: http://localhost:5173"
 	@echo "Backend: http://localhost:8080"
 	@echo "Health:  http://localhost:8080/health"
 
@@ -18,9 +19,13 @@ logs:
 backend:
 	docker compose up -d --build backend
 
-# Run frontend dev server
+# Run frontend dev server in Docker
 frontend:
-	cd frontend && npm run dev
+	docker compose up -d --build frontend
+
+# Watch and sync frontend changes into the Docker container
+frontend-watch:
+	docker compose watch frontend
 
 # Install frontend deps
 frontend-install:
@@ -52,7 +57,7 @@ build-all:
 
 # Database migration (applied via docker-compose initdb, but manual trigger here)
 migrate:
-	docker compose exec postgres psql -U mob_user -d mob_db -f /docker-entrypoint-initdb.d/001_initial.sql
+	docker compose exec postgres psql -U mob_user -d mob_db -f /docker-entrypoint-initdb.d/009_training_plan_jobs.sql
 
 # Watch app — must open in Android Studio
 watch-open:
