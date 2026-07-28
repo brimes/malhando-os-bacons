@@ -21,6 +21,7 @@ import { TrainingPlanDetailPage } from './pages/TrainingPlanDetail';
 import { TrainingPlanDayPage } from './pages/TrainingPlanDay';
 import { WorkoutSessionPage } from './pages/WorkoutSession';
 import { SettingsPage } from './pages/Settings';
+import { ResultsPage } from './pages/Results';
 
 function ProtectedRoute({ children, allowIncomplete = false }: { children: React.ReactNode; allowIncomplete?: boolean }) {
   const { isAuthenticated } = useAuthStore();
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/workouts/history" element={<ProtectedRoute><WorkoutHistoryPage /></ProtectedRoute>} />
         <Route path="/workouts/session" element={<ProtectedRoute><WorkoutSessionPage /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+        <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
         <Route path="/training-plans/new" element={<ProtectedRoute><NewTrainingPlanPage /></ProtectedRoute>} />
         <Route path="/training-plans/:id" element={<ProtectedRoute><TrainingPlanDetailPage /></ProtectedRoute>} />
         <Route path="/training-plans/:planId/days/:dayId" element={<ProtectedRoute><TrainingPlanDayPage /></ProtectedRoute>} />

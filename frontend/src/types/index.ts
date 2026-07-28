@@ -200,6 +200,25 @@ export interface NutritionCalendarData {
   days: NutritionCalendarDay[];
 }
 
+export interface NextWorkout {
+  plan_id: number;
+  plan_name: string;
+  day_id: number;
+  day_name: string;
+  focus: string;
+  last_done_at?: string;
+}
+
+export interface WeeklyPerformance {
+  plan_name: string;
+  target_per_week: number;
+  done_this_week: number;
+  remaining: number;
+  days_left_in_week: number;
+  on_track: boolean;
+  still_possible: boolean;
+}
+
 export interface DashboardData {
   user: User;
   today_workout?: Workout;
@@ -208,6 +227,9 @@ export interface DashboardData {
   active_plan?: NutritionPlan;
   today_steps?: Steps;
   weekly_workouts: Workout[];
+  next_workout?: NextWorkout;
+  days_since_last_workout?: number;
+  weekly_performance?: WeeklyPerformance;
 }
 
 export interface AuthResponse {
@@ -352,4 +374,53 @@ export interface CompleteWorkoutExercise {
 export interface CompleteWorkoutInput {
   notes?: string;
   exercises: CompleteWorkoutExercise[];
+}
+
+export interface BodyMeasurement {
+  id: number;
+  measured_at: string;
+  weight_kg?: number;
+  body_fat_percentage?: number;
+  muscle_mass_kg?: number;
+  waist_cm?: number;
+  hip_cm?: number;
+  arm_cm?: number;
+  thigh_cm?: number;
+  chest_cm?: number;
+  notes: string;
+  created_at: string;
+}
+
+export type MeasurementField = Exclude<keyof BodyMeasurement, 'id' | 'measured_at' | 'notes' | 'created_at'>;
+
+export interface MetricPoint {
+  date: string;
+  value: number;
+}
+
+export interface MetricSeries {
+  key: string;
+  label: string;
+  unit: string;
+  target?: number;
+  points: MetricPoint[];
+}
+
+export interface ResultsData {
+  measurements: BodyMeasurement[];
+  series: MetricSeries[];
+  conditioning: FitnessAssessment[];
+}
+
+export interface SaveBodyMeasurementInput {
+  measured_at: string;
+  weight_kg?: number | null;
+  body_fat_percentage?: number | null;
+  muscle_mass_kg?: number | null;
+  waist_cm?: number | null;
+  hip_cm?: number | null;
+  arm_cm?: number | null;
+  thigh_cm?: number | null;
+  chest_cm?: number | null;
+  notes?: string;
 }

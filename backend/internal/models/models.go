@@ -166,6 +166,12 @@ type DashboardResponse struct {
 	ActivePlan     *NutritionPlan   `json:"active_plan,omitempty"`
 	TodaySteps     *Steps           `json:"today_steps,omitempty"`
 	WeeklyWorkouts []Workout        `json:"weekly_workouts"`
+	// NextWorkout is the plan day due next. It is returned even when today's
+	// workout is already done — the home screen decides what to show.
+	NextWorkout *NextWorkout `json:"next_workout,omitempty"`
+	// DaysSinceLastWorkout is nil when no workout was ever completed.
+	DaysSinceLastWorkout *int               `json:"days_since_last_workout,omitempty"`
+	WeeklyPerformance    *WeeklyPerformance `json:"weekly_performance,omitempty"`
 }
 
 type NutritionSummary struct {

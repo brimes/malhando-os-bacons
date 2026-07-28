@@ -18,6 +18,7 @@ func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant 
 	nutritionHandler := handlers.NewNutritionHandler(database)
 	stepsHandler := handlers.NewStepsHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database)
+	resultsHandler := handlers.NewResultsHandler(database)
 	onboardingHandler := handlers.NewOnboardingHandler(database, goalAssistant)
 	trainingPlanHandler := handlers.NewTrainingPlanHandler(database, planAssistant)
 
@@ -79,6 +80,11 @@ func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant 
 	// Steps routes
 	mux.HandleFunc("GET /api/steps", chain(stepsHandler.GetToday, auth))
 	mux.HandleFunc("POST /api/steps/sync", chain(stepsHandler.Sync, auth))
+
+	// Results (histórico de medições)
+	mux.HandleFunc("GET /api/results", chain(resultsHandler.List, auth))
+	mux.HandleFunc("POST /api/results", chain(resultsHandler.Save, auth))
+	mux.HandleFunc("DELETE /api/results/{id}", chain(resultsHandler.Delete, auth))
 
 	// Dashboard
 	mux.HandleFunc("GET /api/dashboard", chain(dashboardHandler.Get, auth))

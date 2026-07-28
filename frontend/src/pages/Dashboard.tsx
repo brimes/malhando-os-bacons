@@ -69,6 +69,66 @@ export function DashboardPage() {
         </button>
       )}
 
+      {!activeWorkout && data?.today_workout && (
+        <div className="rounded-2xl border border-emerald-800 bg-gradient-to-br from-emerald-950 to-zinc-900 p-5 text-center">
+          <p className="text-4xl">🎉</p>
+          <h3 className="mt-2 text-xl font-black text-emerald-100">Treino de hoje concluído!</h3>
+          <p className="mt-1 text-sm text-emerald-300/80">{data.today_workout.name}</p>
+          <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+            Constância é o que constrói resultado. Nos vemos no próximo treino.
+          </p>
+        </div>
+      )}
+
+      {!activeWorkout && !data?.today_workout && data?.next_workout && (
+        <button
+          onClick={() => navigate(`/training-plans/${data.next_workout!.plan_id}/days/${data.next_workout!.day_id}`)}
+          className="w-full rounded-2xl border border-primary-700 bg-gradient-to-br from-primary-950 to-zinc-900 p-5 text-left"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-400">Seu próximo treino</p>
+          <h3 className="mt-1 text-xl font-black leading-tight text-white">{data.next_workout.day_name}</h3>
+          {data.next_workout.focus && <p className="mt-0.5 text-sm text-zinc-400">{data.next_workout.focus}</p>}
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-zinc-500">
+              {data.days_since_last_workout == null
+                ? 'Seu primeiro treino'
+                : data.days_since_last_workout === 0
+                  ? 'Você treinou hoje mais cedo'
+                  : `Há ${data.days_since_last_workout} ${data.days_since_last_workout === 1 ? 'dia' : 'dias'} sem treinar`}
+            </span>
+            <span className="rounded-xl bg-primary-600 px-4 py-2 text-sm font-bold text-white">Iniciar ›</span>
+          </div>
+        </button>
+      )}
+
+      {data?.weekly_performance && (() => {
+        const perf = data.weekly_performance;
+        const pct = Math.min(100, Math.round((perf.done_this_week / perf.target_per_week) * 100));
+        const tone = perf.on_track
+          ? { border: 'border-emerald-800', bar: 'bg-emerald-500', text: 'text-emerald-300' }
+          : perf.still_possible
+            ? { border: 'border-primary-800', bar: 'bg-primary-500', text: 'text-primary-300' }
+            : { border: 'border-amber-900', bar: 'bg-amber-500', text: 'text-amber-300' };
+        const message = perf.on_track
+          ? 'Meta da semana batida. Excelente!'
+          : perf.still_possible
+            ? `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} e ainda restam ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Dá tempo!`
+            : `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} para ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Recupere o que der e volte firme na próxima semana.`;
+        return (
+          <div className={`rounded-2xl border ${tone.border} bg-zinc-900 p-4`}>
+            <div className="flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Desempenho da semana</p>
+              <p className="text-sm font-black text-white">{perf.done_this_week} de {perf.target_per_week}</p>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800">
+              <div className={`h-full rounded-full ${tone.bar} transition-all`} style={{ width: `${pct}%` }} />
+            </div>
+            <p className={`mt-2 text-sm leading-relaxed ${tone.text}`}>{message}</p>
+            <p className="mt-1 text-xs text-zinc-600">{perf.plan_name}</p>
+          </div>
+        );
+      })()}
+
       {onboarding?.goal?.conditioning_focus && !onboarding.fitness_assessment && (
         <button onClick={() => navigate('/fitness-assessment')} className="flex w-full items-center gap-4 rounded-2xl border border-primary-800 bg-primary-950/60 p-4 text-left">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-700 text-xl">♥</div>
