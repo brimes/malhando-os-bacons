@@ -14,6 +14,11 @@ const MAX_FAILED_MUTATIONS = 20;
 // a permanent entry. Without a ceiling the cache grows until localStorage throws
 // — and the recovery path can take the mutation queue down with it. Oldest
 // entries are dropped first; they are re-fetched from the server on demand.
+//
+// The workout session in progress does NOT live in here — see `activeSession`
+// below. It used to, and that was the bug: a session assembled offline has
+// nowhere else to be re-fetched from, so it cannot share a bounded, prunable
+// cache with things that do.
 const MAX_CACHE_ENTRIES = 60;
 
 interface OfflineStoreState {
@@ -25,6 +30,16 @@ interface OfflineStoreState {
   failed: FailedMutation[];
   /** Ids handed to entities created offline. Negative so they never hit a server id. */
   nextLocalId: number;
+  /**
+   * The one workout session currently running on this device (an `ActiveWorkout`
+   * from `../types`, kept as `unknown` here so this module never has to import
+   * the API types). It is a sibling of `queue`, not an entry of `cache`: a
+   * session opened with no connection exists nowhere but here, so it must
+   * survive `pruneCache`'s eviction and the quota-recovery path's `cache: {}`
+   * exactly like the mutation queue does. See `lib/workoutSession.ts`, the
+   * only module that reads and writes it.
+   */
+  activeSession: unknown;
   isOnline: boolean;
   isSyncing: boolean;
 }
@@ -32,7 +47,7 @@ interface OfflineStoreState {
 /** Everything that is worth writing to localStorage; the rest is per-session. */
 type PersistedOfflineState = Pick<
   OfflineStoreState,
-  'cache' | 'lastSyncAt' | 'queue' | 'failed' | 'nextLocalId'
+  'cache' | 'lastSyncAt' | 'queue' | 'failed' | 'nextLocalId' | 'activeSession'
 >;
 
 const initialState: OfflineStoreState = {
@@ -41,6 +56,7 @@ const initialState: OfflineStoreState = {
   queue: [],
   failed: [],
   nextLocalId: -1,
+  activeSession: null,
   isOnline: isNetworkOnline(),
   isSyncing: false,
 };
@@ -56,13 +72,16 @@ const quotaAwareStorage = createJSONStorage<PersistedOfflineState>(() => ({
       window.localStorage.setItem(name, value);
     } catch {
       // Quota blown. Cached reads can be fetched again from the server, pending
-      // mutations cannot — so the caches go and the queue stays.
+      // mutations cannot — so the caches go and the queue stays. `activeSession`
+      // goes with the queue: a session opened offline is exactly the kind of
+      // unrecoverable state this recovery path must not touch, the same way it
+      // does not touch `queue` or `failed`.
       isEvicting = true;
       try {
-        const { queue, failed, nextLocalId } = useOfflineStore.getState();
+        const { queue, failed, nextLocalId, activeSession } = useOfflineStore.getState();
         window.localStorage.setItem(
           name,
-          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId }, version: 0 }),
+          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession }, version: 0 }),
         );
       } catch {
         window.localStorage.removeItem(name);
@@ -85,6 +104,7 @@ export const useOfflineStore = create<OfflineStoreState>()(
       queue: state.queue,
       failed: state.failed,
       nextLocalId: state.nextLocalId,
+      activeSession: state.activeSession,
     }),
   }),
 );
@@ -175,6 +195,20 @@ export function patchCacheLocally(resourceKey: ResourceKey, data: unknown): void
   }));
 }
 
+/**
+ * The workout session running on this device, or `null` when there is none.
+ * Lives outside `cache` — see the field comment on `OfflineStoreState` — so it
+ * is never pruned and never wiped by the quota-recovery path.
+ */
+export function readLocalActiveSession<T = unknown>(): T | null {
+  return (useOfflineStore.getState().activeSession as T | null) ?? null;
+}
+
+/** Overwrites the session slot. `null` means "no session running right now". */
+export function writeLocalActiveSession(session: unknown): void {
+  useOfflineStore.setState({ activeSession: session ?? null });
+}
+
 export function invalidateCache(resourceKey: ResourceKey): void {
   useOfflineStore.setState((state) => {
     if (state.cache[resourceKey] === undefined) return state;
@@ -251,6 +285,21 @@ export function dropQueuedMutations(predicate: (mutation: PendingMutation) => bo
   return before.length - queue.length;
 }
 
+/**
+ * Rewrites the URL of every queued mutation through `mapper`. Used when a POST
+ * finally reaches the server and hands back the real id for something that was
+ * created offline: everything queued behind it still points at the negative id
+ * and would 404 on replay.
+ */
+export function rewriteQueuedUrls(mapper: (url: string) => string): void {
+  useOfflineStore.setState((state) => ({
+    queue: state.queue.map((mutation) => {
+      const url = mapper(mutation.url);
+      return url === mutation.url ? mutation : { ...mutation, url };
+    }),
+  }));
+}
+
 export function patchQueuedMutation(localId: string, patch: Partial<PendingMutation>): void {
   useOfflineStore.setState((state) => ({
     queue: state.queue.map((mutation) => (mutation.localId === localId ? { ...mutation, ...patch } : mutation)),
@@ -277,15 +326,15 @@ export function setOnline(isOnline: boolean): void {
 }
 
 /**
- * Wipes everything the offline layer holds. Called on logout: the cache belongs
- * to one account and must not leak into the next login on a shared device.
- */
-/**
  * Wipes the cached reads of the signed-out account. Pending writes are kept on
  * purpose: they are work the person really did (series logged in the gym with no
  * signal) and dropping them loses it with no trace. An expired token or a
  * transient 5xx on /auth/me both end up here, so clearing the queue would turn a
  * routine re-login into silent data loss.
+ *
+ * `activeSession` is not part of `cache` and is therefore left alone too, for
+ * the same reason: a workout started offline is exactly the kind of pending
+ * work this function must not discard.
  *
  * Use `discardPendingWrites` when the intent really is to throw the writes away.
  */

@@ -12,8 +12,8 @@ import {
   dropQueuedMutations,
   isLocalId,
   isNetworkOnline,
-  patchCacheLocally,
-  resourceKeyForRequest,
+  onWorkoutIdRemap,
+  storeLocalActiveWorkout,
 } from '../lib/offline';
 import {
   clearWorkoutSessionState,
@@ -31,10 +31,6 @@ type Phase = WorkoutSessionPhase;
 // screen, but buzzing for it is pointless — the alert only means something in
 // the moment it fires. Anything older than this is treated as a late resume.
 const STALE_ALERT_SECONDS = 5;
-
-// Cache slot of the running session. Offline reads of /workouts/active are
-// served from it, so patching it is what keeps a session alive without network.
-const ACTIVE_SESSION_KEY = resourceKeyForRequest('/workouts/active');
 
 // One colour per phase so a glance mid-set tells you whether you are working or
 // resting. Rest is blue against the orange brand — the two never read alike,
@@ -222,6 +218,18 @@ export function WorkoutSessionPage() {
       .finally(() => setIsLoading(false));
   }, [startPhase]);
 
+  // A session started offline runs on a negative id until the queued start
+  // reaches the server. When that happens mid-workout, the id in memory has to
+  // follow: the next series would otherwise be posted to `/workouts/-1/sets`
+  // again, and the effect below would write the stale id back to localStorage.
+  useEffect(() => onWorkoutIdRemap((localId, realId) => {
+    setActive((current) => (
+      current && current.workout.id === localId
+        ? { ...current, workout: { ...current.workout, id: realId } }
+        : current
+    ));
+  }), []);
+
   // Mirrors the phase state to localStorage on every change, so closing the app
   // — or the system killing it in the background — costs nothing.
   useEffect(() => {
@@ -263,7 +271,7 @@ export function WorkoutSessionPage() {
     setActive((current) => {
       if (!current) return current;
       const patched: ActiveWorkout = { ...current, workout: { ...current.workout, sets } };
-      patchCacheLocally(ACTIVE_SESSION_KEY, patched);
+      storeLocalActiveWorkout(patched);
       return patched;
     });
   }, []);
@@ -272,7 +280,7 @@ export function WorkoutSessionPage() {
   // workout that has already been closed.
   const forgetSessionLocally = useCallback(() => {
     clearWorkoutSessionState();
-    patchCacheLocally(ACTIVE_SESSION_KEY, null);
+    storeLocalActiveWorkout(null);
   }, []);
 
   // Single place that decides what follows a series, so every path out of the

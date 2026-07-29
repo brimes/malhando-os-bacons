@@ -15,6 +15,7 @@ import {
   UnsyncedDependencyError,
   writeCache,
 } from '../lib/offline';
+import { dayIdForActiveWorkout, parseCloseRoute } from '../lib/workoutSession';
 import type { MutationMethod } from '../types/offline';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
@@ -39,8 +40,9 @@ const NON_CACHEABLE_GET_PATHS: RegExp[] = [
   /^\/training-plans\/jobs\//,
   /^\/chat(\/|$)/,
   // The chat screen refuses to open offline anyway, so a cached history would
-  // only take up room that the pending queue needs more.
-  /^\/workouts\/\d+\/chat(\/|$)/,
+  // only take up room that the pending queue needs more. `-?` covers a
+  // session still running on its offline-assigned id.
+  /^\/workouts\/-?\d+\/chat(\/|$)/,
 ];
 
 const ONLINE_ONLY_MESSAGE = 'Esta ação precisa de internet. Conecte-se e tente novamente.';
@@ -145,32 +147,50 @@ apiClient.interceptors.response.use(
       // The target only exists in the queue; the server has no id for it yet.
       return Promise.reject(new UnsyncedDependencyError());
     }
-    if (!isQueueableFailure(error)) return Promise.reject(error);
+    const body = parseRequestBody(config.data);
+    if (!isQueueableFailure(error, { url, body })) return Promise.reject(error);
 
+    const optimistic = buildOptimisticPayload(config, method);
+    // The negative id travels with the mutation so the replay can pair it with
+    // the real id the server assigns, and rewrite whatever was queued behind it.
+    const localEntityId = isPlainObject(optimistic) && typeof optimistic.id === 'number' && optimistic.id < 0
+      ? optimistic.id
+      : undefined;
+    // A `finish`/`complete` is tagged with its training plan day right now,
+    // while the local session slot still knows it — by the time anything
+    // reads the queue again the session may already be cleared (the screen
+    // clears it right after queueing the very mutation being built here) or
+    // its start may have synced and left the queue entirely. Either way this
+    // is the only moment the answer is guaranteed available.
+    const closeRoute = parseCloseRoute(url);
+    const trainingPlanDayId = closeRoute ? dayIdForActiveWorkout(closeRoute.workoutId) : undefined;
     enqueueMutation({
       method,
       url,
-      body: parseRequestBody(config.data),
+      body,
       params: config.params as Record<string, unknown> | undefined,
+      localEntityId,
+      trainingPlanDayId,
     });
     // Resolved, not rejected: the write is durable and will reach the server on
     // reconnect, so the screen should carry on instead of showing an error.
-    return Promise.resolve(
-      buildResponse(config, 202, buildOptimisticPayload(config, method), 'Accepted (offline)'),
-    );
+    return Promise.resolve(buildResponse(config, 202, optimistic, 'Accepted (offline)'));
   },
 );
 
 // Lets the queue replay through this very instance (auth header, base URL and
 // the 401 handling included) without offlineSync having to import it.
 registerMutationExecutor(async (mutation) => {
-  await apiClient.request({
+  const response = await apiClient.request({
     method: mutation.method,
     url: mutation.url,
     data: mutation.body,
     params: mutation.params,
     isOfflineReplay: true,
   } as OfflineAwareConfig);
+  // Handed back so the queue can reconcile ids the server just assigned — a
+  // session started offline learns its real workout id from here.
+  return response.data;
 });
 
 export function getErrorMessage(error: unknown): string {

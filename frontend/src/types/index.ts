@@ -33,6 +33,12 @@ export interface Workout {
   status: 'in_progress' | 'completed';
   started_at?: string;
   finished_at?: string;
+  /**
+   * Identity minted by the app when the session was started. The server dedupes
+   * `POST /workouts/start` on it, which is what makes a start queued offline safe
+   * to replay (and safe to retry after a timeout).
+   */
+  client_session_id?: string;
   sets?: WorkoutSet[];
   set_count?: number;
   created_at: string;
@@ -358,6 +364,8 @@ export interface CompleteSetInput {
   weight_kg: number;
   tracking_type: 'reps' | 'time';
   duration_seconds?: number;
+  /** Idempotency key; the API layer fills it in. */
+  client_set_id?: string;
 }
 
 export interface TrainingSettings {

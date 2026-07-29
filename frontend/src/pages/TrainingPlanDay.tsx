@@ -7,6 +7,7 @@ import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChec
 import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
+import { applyChecklistLocally, isNetworkOnline, onWorkoutIdRemap, storeLocalActiveWorkout } from '../lib/offline';
 import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
 
 export function TrainingPlanDayPage() {
@@ -45,6 +46,20 @@ export function TrainingPlanDayPage() {
     });
   }, [planId, dayId]);
 
+  // Same reason WorkoutSession.tsx subscribes: a session opened offline runs
+  // on a negative id until the queued start reaches the server. Without this
+  // the "Continuar"/"Finalizar" button below keeps sending to `/workouts/-1/...`
+  // after the swap, which the server no longer has and answers with a 404 —
+  // this screen holds its own copy of `session` and was the one place that
+  // never learned about the remap.
+  useEffect(() => onWorkoutIdRemap((localId, realId) => {
+    setSession((current) => (
+      current && current.workout.id === localId
+        ? { ...current, workout: { ...current.workout, id: realId } }
+        : current
+    ));
+  }), []);
+
   if (!plan || !day) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
 
   const exercises = day.exercises.filter((exercise) => exercise.id);
@@ -78,10 +93,16 @@ export function TrainingPlanDayPage() {
       }
       if (mode === 'finish') {
         await workoutsApi.complete(active.workout.id, { exercises: payload() });
+        // Offline the server cannot close the session, so the local snapshot has
+        // to — otherwise the next screen reopens a workout that is already done.
+        if (!isNetworkOnline()) storeLocalActiveWorkout(null);
         navigate(`/training-plans/${plan.id}`);
         return;
       }
       await workoutsApi.progress(active.workout.id, { exercises: payload() });
+      // Same reason: queued, the call answers with an echo instead of the updated
+      // session, and the guided screen reads the session back from the cache.
+      if (!isNetworkOnline()) applyChecklistLocally(active.workout.id, payload());
       navigate('/workouts/session');
     } catch (requestError) {
       setError(getErrorMessage(requestError));

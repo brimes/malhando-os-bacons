@@ -41,7 +41,7 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT w.id, w.user_id, w.name, w.date, w.notes, w.training_plan_day_id, w.duration_minutes,
-		 w.status, w.started_at, w.finished_at, w.created_at,
+		 w.status, w.started_at, w.finished_at, w.client_session_id, w.created_at,
 		 (SELECT COUNT(*) FROM workout_sets ws WHERE ws.workout_id = w.id) AS set_count
 		 FROM workouts w
 		 WHERE w.user_id = $1 AND w.status = 'completed'
@@ -60,7 +60,7 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var w models.Workout
 		if err := rows.Scan(&w.ID, &w.UserID, &w.Name, &w.Date, &w.Notes, &w.TrainingPlanDayID, &w.DurationMinutes,
-			&w.Status, &w.StartedAt, &w.FinishedAt, &w.CreatedAt, &w.SetCount); err != nil {
+			&w.Status, &w.StartedAt, &w.FinishedAt, &w.ClientSessionID, &w.CreatedAt, &w.SetCount); err != nil {
 			continue
 		}
 		workouts = append(workouts, w)
@@ -172,19 +172,21 @@ func (h *WorkoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var workout models.Workout
 	err = h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
-		 status, started_at, finished_at, created_at
+		 status, started_at, finished_at, client_session_id, created_at
 		 FROM workouts WHERE id = $1 AND user_id = $2`,
 		id, userID,
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
 		&workout.TrainingPlanDayID, &workout.DurationMinutes,
-		&workout.Status, &workout.StartedAt, &workout.FinishedAt, &workout.CreatedAt)
+		&workout.Status, &workout.StartedAt, &workout.FinishedAt, &workout.ClientSessionID,
+		&workout.CreatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workout not found"})
 		return
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, workout_id, exercise_name, sets, reps, weight_kg, tracking_type, duration_seconds, created_at
+		`SELECT id, workout_id, exercise_name, sets, reps, weight_kg, tracking_type, duration_seconds,
+		 set_number, completed_at, created_at
 		 FROM workout_sets WHERE workout_id = $1 ORDER BY created_at`,
 		workout.ID,
 	)
@@ -193,7 +195,7 @@ func (h *WorkoutHandler) Get(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var s models.WorkoutSet
 			if err := rows.Scan(&s.ID, &s.WorkoutID, &s.ExerciseName, &s.Sets, &s.Reps, &s.WeightKg,
-				&s.TrackingType, &s.DurationSeconds, &s.CreatedAt); err == nil {
+				&s.TrackingType, &s.DurationSeconds, &s.SetNumber, &s.CompletedAt, &s.CreatedAt); err == nil {
 				workout.Sets = append(workout.Sets, s)
 			}
 		}

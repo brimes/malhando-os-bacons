@@ -1,11 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { PlanWeekCard } from '../components/PlanWeekCard';
 import { trainingPlansApi } from '../api/trainingPlans';
+import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
-import type { TrainingPlan } from '../types';
+import { computePlanWeekProgress } from '../lib/planProgress';
+import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
+import type { TrainingPlan, Workout } from '../types';
 
 const ADJUST_POLL_MS = 2000;
 const ADJUST_DEADLINE_MS = 15 * 60 * 1000;
@@ -30,11 +34,25 @@ export function TrainingPlanDetailPage() {
   const [instructions, setInstructions] = useState('');
   const [isAdjusting, setIsAdjusting] = useState(false);
   const [adjustError, setAdjustError] = useState<string | null>(null);
+  const [history, setHistory] = useState<Workout[]>([]);
+  // Sessions finished with no signal exist only in the queue; re-render when it moves.
+  const queue = useOfflineStore((state) => state.queue);
 
   useEffect(() => {
     if (!id) return;
-    trainingPlansApi.get(Number(id)).then(setPlan).finally(() => setIsLoading(false));
+    // Both reads fall back to the local snapshot when the network is gone, which
+    // is what lets this screen answer "o que falta essa semana?" inside the gym.
+    trainingPlansApi.get(Number(id)).then(setPlan).catch(() => undefined).finally(() => setIsLoading(false));
+    workoutsApi.list().then(setHistory).catch(() => undefined);
   }, [id]);
+
+  // The week and the day that is due are derived here instead of read from the
+  // dashboard: that endpoint computes them on the server and is unreachable
+  // exactly when they matter most.
+  const progress = useMemo(
+    () => (plan ? computePlanWeekProgress({ plan, workouts: history, pending: pendingCompletedWorkouts(queue) }) : null),
+    [plan, history, queue],
+  );
 
   if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando plano...</div>;
   if (!plan) return <div className="py-20 text-center text-zinc-500">Plano não encontrado</div>;
@@ -89,8 +107,49 @@ export function TrainingPlanDetailPage() {
           <button onClick={() => setShowDetails((value) => !value)} className="mt-3 text-xs font-medium text-primary-400">{showDetails ? 'Ocultar detalhes' : 'Ver detalhes do plano'}</button>
         </Card>
 
+        {progress && <PlanWeekCard progress={progress} />}
+
         <div className="space-y-4">
-          {plan.days?.map((day) => <Card key={day.id} onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)}><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase text-primary-400">Treino {day.day_number}</p><h2 className="mt-0.5 text-lg font-bold text-white">{day.name}</h2><p className="mt-1 text-xs text-zinc-500">Última vez: {day.last_done_at ? new Date(day.last_done_at).toLocaleDateString('pt-BR') : 'ainda não feito'}</p></div><span className="text-2xl text-zinc-600">›</span></div></Card>)}
+          {progress?.days.map((entry) => {
+            const day = entry.day;
+            return (
+              <Card
+                key={day.id}
+                onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)}
+                // The ring is the "comece por aqui" cue: it has to survive a
+                // glance at arm's length, with the phone on a bench.
+                className={entry.isNext ? 'border-primary-600 bg-primary-950/40 ring-1 ring-primary-700' : undefined}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-semibold uppercase text-primary-400">Treino {day.day_number}</p>
+                      {entry.isNext && (
+                        <span className="rounded-full bg-primary-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                          Comece por aqui
+                        </span>
+                      )}
+                      {entry.doneThisWeek > 0 && (
+                        <span className="rounded-full bg-emerald-950 px-2 py-0.5 text-[9px] font-semibold text-emerald-300">
+                          {entry.doneThisWeek}x nesta semana
+                        </span>
+                      )}
+                      {entry.fromPendingQueue && (
+                        <span className="rounded-full bg-sky-950 px-2 py-0.5 text-[9px] font-semibold text-sky-300">
+                          aguardando envio
+                        </span>
+                      )}
+                    </div>
+                    <h2 className="mt-0.5 text-lg font-bold text-white">{day.name}</h2>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Última vez: {entry.lastDoneAt ? new Date(entry.lastDoneAt).toLocaleDateString('pt-BR') : 'ainda não feito'}
+                    </p>
+                  </div>
+                  <span className="text-2xl text-zinc-600">›</span>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </div>
 

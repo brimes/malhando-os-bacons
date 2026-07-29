@@ -30,6 +30,22 @@ export interface PendingMutation {
   createdAt: number;
   attempts: number;
   lastError?: string;
+  /**
+   * Negative id handed to the entity this POST created while offline. Kept so the
+   * replay can pair it with the real id the server answers with, and rewrite the
+   * mutations still queued behind it (the series of a workout started offline all
+   * point at `/workouts/-1/...` until that swap happens).
+   */
+  localEntityId?: number;
+  /**
+   * Training plan day this mutation's workout belongs to. Only ever set on a
+   * queued `finish`/`complete` (see `dayIdForActiveWorkout` in
+   * `workoutSession.ts`), captured at the moment it is enqueued because that
+   * is the only time it is guaranteed to still be known — the session that
+   * knew it may be cleared, or its start may already have synced and left the
+   * queue, by the time anything reads this mutation again.
+   */
+  trainingPlanDayId?: number;
 }
 
 /** A mutation the server refused, or that ran out of retries. Kept for inspection. */

@@ -12,17 +12,22 @@ type User struct {
 }
 
 type Workout struct {
-	ID                int64        `json:"id"`
-	UserID            int64        `json:"user_id"`
-	Name              string       `json:"name"`
-	Date              time.Time    `json:"date"`
-	Notes             string       `json:"notes,omitempty"`
-	TrainingPlanDayID *int64       `json:"training_plan_day_id,omitempty"`
-	DurationMinutes   *int         `json:"duration_minutes,omitempty"`
-	Status            string       `json:"status"`
-	StartedAt         *time.Time   `json:"started_at,omitempty"`
-	FinishedAt        *time.Time   `json:"finished_at,omitempty"`
-	Sets              []WorkoutSet `json:"sets,omitempty"`
+	ID                int64      `json:"id"`
+	UserID            int64      `json:"user_id"`
+	Name              string     `json:"name"`
+	Date              time.Time  `json:"date"`
+	Notes             string     `json:"notes,omitempty"`
+	TrainingPlanDayID *int64     `json:"training_plan_day_id,omitempty"`
+	DurationMinutes   *int       `json:"duration_minutes,omitempty"`
+	Status            string     `json:"status"`
+	StartedAt         *time.Time `json:"started_at,omitempty"`
+	FinishedAt        *time.Time `json:"finished_at,omitempty"`
+	// ClientSessionID is the identity the app minted when the session was started
+	// offline. It is echoed back so the app can match the workout it built
+	// locally with the one the server returned, and swap the local id for the
+	// real one in the requests still queued.
+	ClientSessionID *string      `json:"client_session_id,omitempty"`
+	Sets            []WorkoutSet `json:"sets,omitempty"`
 	// SetCount is filled by the list query so the history can show how much was
 	// done without loading every set.
 	SetCount  int       `json:"set_count,omitempty"`
@@ -42,6 +47,9 @@ type WorkoutSet struct {
 	SetNumber              *int       `json:"set_number,omitempty"`
 	CompletedAt            *time.Time `json:"completed_at,omitempty"`
 	CreatedAt              time.Time  `json:"created_at"`
+	// ClientSetID is the idempotency key the app sent when logging this series
+	// offline, if any. Rows created online carry no key.
+	ClientSetID *string `json:"client_set_id,omitempty"`
 }
 
 type FoodItem struct {

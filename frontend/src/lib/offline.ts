@@ -26,6 +26,8 @@ export {
   isLocalId,
   dropQueuedMutations,
   clearOfflineData,
+  readLocalActiveSession,
+  writeLocalActiveSession,
 } from './offlineStore';
 
 export {
@@ -46,6 +48,25 @@ export {
 } from './offlineSync';
 
 export type { ReadThroughOptions, MutationExecutor } from './offlineSync';
+
+export {
+  applyChecklistLocally,
+  dayIdForActiveWorkout,
+  dependentMutationsOf,
+  OfflineSessionConflictError,
+  OfflineSessionUnavailableError,
+  newClientSessionId,
+  onWorkoutIdRemap,
+  parseCloseRoute,
+  pendingCompletedWorkouts,
+  readCachedActiveWorkout,
+  reconcileActiveSessionRead,
+  reconcileWorkoutStart,
+  storeLocalActiveWorkout,
+  WorkoutStartConflictError,
+} from './workoutSession';
+
+export type { LocalCompletedWorkout } from './workoutSession';
 
 export { useOfflineStatus, getOfflineStatus } from './useOfflineStatus';
 

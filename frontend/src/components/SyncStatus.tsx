@@ -76,7 +76,12 @@ export function SyncStatusPanel() {
             {failedMutations.slice(0, 5).map((mutation) => (
               <li key={mutation.localId} className="text-[11px] leading-relaxed text-red-200/80">
                 {mutation.method} {mutation.url}
-                {mutation.lastError ? ` — ${mutation.lastError}` : ''}
+                {/* `reason` is the explanation set when this was parked as
+                    failed and is always present; `lastError` only ever holds
+                    a message from an earlier retry attempt and is frequently
+                    empty for something that failed outright on its first try
+                    — e.g. a session start refused with a 409. */}
+                {mutation.reason ? ` — ${mutation.reason}` : ''}
               </li>
             ))}
           </ul>

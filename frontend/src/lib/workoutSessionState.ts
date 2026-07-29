@@ -78,8 +78,15 @@ function parseSession(raw: string): PersistedWorkoutSession | null {
 
 /**
  * Returns the stored state when it belongs to `workoutId` and is still fresh.
- * State from another workout is discarded: the session it described is over or
- * was replaced, and reusing it would drop the person into the wrong exercise.
+ * Otherwise returns `null` without touching storage — a look-up is a read,
+ * and only actual staleness (nobody is coming back to resume a session left
+ * open for `MAX_AGE_MS`) is a reason to clear it. A mismatched id on its own
+ * is not: the id in memory can briefly disagree with what is stored around a
+ * remap or a fresh start, and a query landing in that window must not be
+ * the thing that throws away a still-live session it merely was not asking
+ * about. Whatever legitimately needs the slot cleared already does so
+ * explicitly (finishing, cancelling, or `workoutsApi.active()` coming back
+ * empty).
  */
 export function loadWorkoutSessionState(workoutId: number): PersistedWorkoutSession | null {
   let raw: string | null;
@@ -91,10 +98,18 @@ export function loadWorkoutSessionState(workoutId: number): PersistedWorkoutSess
   if (!raw) return null;
 
   const stored = parseSession(raw);
-  if (!stored || stored.workoutId !== workoutId || Date.now() - stored.savedAt > MAX_AGE_MS) {
+  // Unreadable (corrupt JSON, a shape from an old app version): nothing to
+  // return either way, and there is no "wrong id" risk in clearing something
+  // that could not be attributed to any workout in the first place.
+  if (!stored) {
     clearWorkoutSessionState();
     return null;
   }
+  if (Date.now() - stored.savedAt > MAX_AGE_MS) {
+    clearWorkoutSessionState();
+    return null;
+  }
+  if (stored.workoutId !== workoutId) return null;
   return stored;
 }
 
@@ -104,6 +119,26 @@ export function saveWorkoutSessionState(state: PersistedWorkoutSession): void {
   } catch {
     // A full quota must never break the workout that is running.
   }
+}
+
+/**
+ * Swaps the workout id the stored phase belongs to. Called when a session that
+ * was started offline finally reaches the server and gets its real id: without
+ * this the state would still be filed under the negative id, `loadWorkoutSessionState`
+ * would reject it as belonging to another workout, and the timer — plus every
+ * weight typed but not yet sent — would be thrown away on the next reload.
+ */
+export function remapWorkoutSessionState(localId: number, realId: number): void {
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return;
+  }
+  if (!raw) return;
+  const stored = parseSession(raw);
+  if (!stored || stored.workoutId !== localId) return;
+  saveWorkoutSessionState({ ...stored, workoutId: realId });
 }
 
 export function clearWorkoutSessionState(): void {

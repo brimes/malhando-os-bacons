@@ -3,12 +3,15 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/middleware"
 	"github.com/mob/backend/internal/models"
@@ -22,14 +25,48 @@ func NewWorkoutSessionHandler(database *db.DB) *WorkoutSessionHandler {
 	return &WorkoutSessionHandler{db: database}
 }
 
+// offlineKeyPattern accepts a UUID or any short opaque identifier the app may
+// mint offline, for either a client_session_id or a client_set_id. Kept
+// deliberately narrow so the value stays safe to log and to compare, and
+// bounded so it cannot be used to stuff the column.
+var offlineKeyPattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+
 // Start opens a session for a plan day. If one is already open it is returned
 // as-is, so a double tap on "iniciar" never creates two workouts.
+//
+// When the app starts a session without connectivity it mints a client_session_id
+// and queues this request. The queue may replay it (after a timeout, or once the
+// network flaps), so a start carrying a client_session_id already seen for this
+// user returns the workout it created the first time instead of creating another.
 func (h *WorkoutSessionHandler) Start(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
 	var req models.StartWorkoutRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
+	}
+	req.ClientSessionID = strings.TrimSpace(req.ClientSessionID)
+	if req.ClientSessionID != "" && !offlineKeyPattern.MatchString(req.ClientSessionID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "client_session_id inválido: use até 64 caracteres alfanuméricos ou hífen"})
+		return
+	}
+
+	// A replay wins over every other rule: the workout this key already created
+	// is returned as-is, finished or not, so retrying is always safe and never
+	// resurrects nor duplicates a session.
+	if req.ClientSessionID != "" {
+		var existingID int64
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT id FROM workouts WHERE user_id = $1 AND client_session_id = $2`,
+			userID, req.ClientSessionID).Scan(&existingID)
+		if err == nil {
+			h.writeActive(w, r, userID, existingID)
+			return
+		}
+		if err != pgx.ErrNoRows {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to check client session"})
+			return
+		}
 	}
 
 	var dayName string
@@ -68,12 +105,41 @@ func (h *WorkoutSessionHandler) Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
+	var clientSessionID *string
+	if req.ClientSessionID != "" {
+		clientSessionID = &req.ClientSessionID
+	}
 	var workoutID int64
 	err = h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO workouts (user_id, name, date, notes, training_plan_day_id, status, started_at)
-		 VALUES ($1, $2, $3, '', $4, 'in_progress', $3) RETURNING id`,
-		userID, dayName, now, req.TrainingPlanDayID).Scan(&workoutID)
+		`INSERT INTO workouts (user_id, name, date, notes, training_plan_day_id, status, started_at, client_session_id)
+		 VALUES ($1, $2, $3, '', $4, 'in_progress', $3, $5) RETURNING id`,
+		userID, dayName, now, req.TrainingPlanDayID, clientSessionID).Scan(&workoutID)
 	if err != nil {
+		// Both partial unique indexes on workouts (one open session per user, one
+		// row per client key) surface as 23505 here when replays of the queued
+		// start land concurrently: the lookup above ran before the winner's
+		// insert. Neither case is a 500.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// A burst of identical replays violates both indexes at once, and the
+			// index Postgres names then is arbitrary — so the key, not the
+			// constraint name, decides. Postgres only raises the violation after
+			// the winning transaction commits, so this lookup does see its row.
+			if req.ClientSessionID != "" {
+				var existingID int64
+				if lookupErr := h.db.Pool.QueryRow(r.Context(),
+					`SELECT id FROM workouts WHERE user_id = $1 AND client_session_id = $2`,
+					userID, req.ClientSessionID).Scan(&existingID); lookupErr == nil {
+					h.writeActive(w, r, userID, existingID)
+					return
+				}
+			}
+			// No row carries this key, so what collided was the single open session:
+			// a different start claimed the slot. Same situation the app already
+			// knows how to display, so reuse its conflict instead of a 500.
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "another workout is already in progress"})
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to start workout"})
 		return
 	}
@@ -98,6 +164,16 @@ func (h *WorkoutSessionHandler) Active(w http.ResponseWriter, r *http.Request) {
 }
 
 // CompleteSet records one finished series and remembers the weight used.
+//
+// When the app logs a series without connectivity, or the connection drops
+// after the server commits but before the response arrives, it mints a
+// client_set_id and queues the request for replay. Because set_number is
+// always derived here from a COUNT (never from what the client sends, so a
+// stale button tap can't record extra series), a replay without an
+// idempotency key is indistinguishable from a real extra series and used to
+// be silently inserted as "the next legitimate one". A request carrying a
+// client_set_id already seen for this workout returns the series it created
+// the first time instead.
 func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
 	workoutID, err := parseWorkoutIDFromSessionPath(r.URL.Path)
@@ -111,6 +187,7 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	req.ExerciseName = strings.TrimSpace(req.ExerciseName)
+	req.ClientSetID = strings.TrimSpace(req.ClientSetID)
 	if req.TrackingType == "" {
 		req.TrackingType = "reps"
 	}
@@ -120,10 +197,31 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid set data"})
 		return
 	}
+	if req.ClientSetID != "" && !offlineKeyPattern.MatchString(req.ClientSetID) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "client_set_id inválido: use até 64 caracteres alfanuméricos ou hífen"})
+		return
+	}
 
 	if !h.ownsActiveWorkout(r, userID, workoutID) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "active workout not found"})
 		return
+	}
+
+	// A replay wins over everything else below: if this key already recorded a
+	// series for this workout, return that row as-is instead of computing a new
+	// set_number and inserting again. This is the common case (the retry lands
+	// after the original response was merely lost) and skips the write path
+	// entirely.
+	if req.ClientSetID != "" {
+		existing, lookupErr := h.findSetByClientID(r.Context(), workoutID, req.ClientSetID)
+		if lookupErr == nil {
+			writeJSON(w, http.StatusOK, existing)
+			return
+		}
+		if lookupErr != pgx.ErrNoRows {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save set"})
+			return
+		}
 	}
 
 	tx, err := h.db.Pool.Begin(r.Context())
@@ -172,19 +270,38 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	var clientSetID *string
+	if req.ClientSetID != "" {
+		clientSetID = &req.ClientSetID
+	}
+
 	var set models.WorkoutSet
 	err = tx.QueryRow(r.Context(),
 		`INSERT INTO workout_sets (workout_id, exercise_name, sets, reps, weight_kg, tracking_type,
-		 duration_seconds, training_plan_exercise_id, set_number, completed_at)
-		 VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,NOW())
+		 duration_seconds, training_plan_exercise_id, set_number, client_set_id, completed_at)
+		 VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,$9,NOW())
 		 RETURNING id, workout_id, exercise_name, sets, reps, tracking_type, duration_seconds,
-		 weight_kg, training_plan_exercise_id, set_number, completed_at, created_at`,
+		 weight_kg, training_plan_exercise_id, set_number, client_set_id, completed_at, created_at`,
 		workoutID, req.ExerciseName, req.Reps, req.WeightKg, req.TrackingType,
-		req.DurationSeconds, req.TrainingPlanExerciseID, setNumber,
+		req.DurationSeconds, req.TrainingPlanExerciseID, setNumber, clientSetID,
 	).Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps, &set.TrackingType,
 		&set.DurationSeconds, &set.WeightKg, &set.TrainingPlanExerciseID, &set.SetNumber,
-		&set.CompletedAt, &set.CreatedAt)
+		&set.ClientSetID, &set.CompletedAt, &set.CreatedAt)
 	if err != nil {
+		// Two replays of the same client_set_id can both pass the pre-insert
+		// lookup above (neither has committed yet) and then race here: the
+		// FOR UPDATE lock on the plan exercise serialises them, so the loser
+		// computes its set_number after the winner's insert and then collides
+		// on the unique index instead. Same pattern as Start's
+		// client_session_id race — the key, not a 500, decides the outcome.
+		var pgErr *pgconn.PgError
+		if req.ClientSetID != "" && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			_ = tx.Rollback(r.Context())
+			if existing, lookupErr := h.findSetByClientID(r.Context(), workoutID, req.ClientSetID); lookupErr == nil {
+				writeJSON(w, http.StatusOK, existing)
+				return
+			}
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save set"})
 		return
 	}
@@ -203,6 +320,22 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusCreated, set)
+}
+
+// findSetByClientID looks up a series already recorded under this idempotency
+// key, so a replay — a legitimate retry, or two retries racing each other —
+// can be answered with the row that already exists instead of inserting again.
+func (h *WorkoutSessionHandler) findSetByClientID(ctx context.Context, workoutID int64, clientSetID string) (models.WorkoutSet, error) {
+	var set models.WorkoutSet
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT id, workout_id, exercise_name, sets, reps, tracking_type, duration_seconds,
+		 weight_kg, training_plan_exercise_id, set_number, client_set_id, completed_at, created_at
+		 FROM workout_sets WHERE workout_id = $1 AND client_set_id = $2`,
+		workoutID, clientSetID,
+	).Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps, &set.TrackingType,
+		&set.DurationSeconds, &set.WeightKg, &set.TrainingPlanExerciseID, &set.SetNumber,
+		&set.ClientSetID, &set.CompletedAt, &set.CreatedAt)
+	return set, err
 }
 
 // DeleteSet undoes the last recorded series, backing the session up one step.
@@ -400,11 +533,11 @@ func closeWorkout(ctx context.Context, q queryRower, workoutID, userID int64, no
 		 duration_minutes=GREATEST(1, LEAST(600, ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(started_at, date))) / 60)::int))
 		 WHERE id=$1 AND user_id=$2 AND status='in_progress'
 		 RETURNING id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
-		 status, started_at, finished_at, created_at`,
+		 status, started_at, finished_at, client_session_id, created_at`,
 		workoutID, userID, strings.TrimSpace(notes),
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
 		&workout.TrainingPlanDayID, &workout.DurationMinutes, &workout.Status,
-		&workout.StartedAt, &workout.FinishedAt, &workout.CreatedAt)
+		&workout.StartedAt, &workout.FinishedAt, &workout.ClientSessionID, &workout.CreatedAt)
 	return workout, err
 }
 
@@ -447,11 +580,12 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 	var planDayID *int64
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
-		 status, started_at, finished_at, created_at
+		 status, started_at, finished_at, client_session_id, created_at
 		 FROM workouts WHERE id=$1 AND user_id=$2`, workoutID, userID,
 	).Scan(&active.Workout.ID, &active.Workout.UserID, &active.Workout.Name, &active.Workout.Date,
 		&active.Workout.Notes, &planDayID, &active.Workout.DurationMinutes, &active.Workout.Status,
-		&active.Workout.StartedAt, &active.Workout.FinishedAt, &active.Workout.CreatedAt)
+		&active.Workout.StartedAt, &active.Workout.FinishedAt, &active.Workout.ClientSessionID,
+		&active.Workout.CreatedAt)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load workout"})
 		return
@@ -489,7 +623,7 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 
 	setRows, err := h.db.Pool.Query(r.Context(),
 		`SELECT id, workout_id, exercise_name, sets, reps, tracking_type, duration_seconds,
-		 weight_kg, training_plan_exercise_id, set_number, completed_at, created_at
+		 weight_kg, training_plan_exercise_id, set_number, client_set_id, completed_at, created_at
 		 FROM workout_sets WHERE workout_id=$1 ORDER BY id`, workoutID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load sets"})
@@ -501,7 +635,7 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		var set models.WorkoutSet
 		if err := setRows.Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps,
 			&set.TrackingType, &set.DurationSeconds, &set.WeightKg, &set.TrainingPlanExerciseID,
-			&set.SetNumber, &set.CompletedAt, &set.CreatedAt); err == nil {
+			&set.SetNumber, &set.ClientSetID, &set.CompletedAt, &set.CreatedAt); err == nil {
 			active.Workout.Sets = append(active.Workout.Sets, set)
 		}
 	}
