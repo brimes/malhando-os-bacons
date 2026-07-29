@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MOB - Malhando os Bacons</string>
+    <string name="title_activity_main">MOB - Malhando os Bacons</string>
+    <string name="package_name">com.mob.app</string>
+    <string name="custom_url_scheme">com.mob.app</string>
+</resources>

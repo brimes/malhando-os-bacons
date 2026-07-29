@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.mob.app',
+  appId: 'net.brimes.mob',
   appName: 'MOB - Malhando os Bacons',
   webDir: 'dist',
   server: {

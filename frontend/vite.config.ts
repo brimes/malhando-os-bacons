@@ -17,7 +17,10 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: 'dist',
-      sourcemap: true,
+      // Off in production: the maps ship inside the APK (1,5 MB measured) and
+      // hand the full source to anyone who unzips it. Kept for other modes so
+      // a local production-like build can still be debugged.
+      sourcemap: mode !== 'production',
       rollupOptions: {
         output: {
           manualChunks: {

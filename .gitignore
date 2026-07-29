@@ -19,7 +19,17 @@ backend/mob-server
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-frontend/android/
+# Projeto nativo Android: versionado, porque carrega configuração que não é
+# regenerável — applicationId, targetSdk, assinatura e o tratamento de insets
+# do MainActivity. Só os artefatos de build e os segredos ficam de fora.
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/keystore.properties
+frontend/android/.idea/
+frontend/android/capacitor-cordova-android-plugins/build/
+frontend/android/app/release/
 frontend/ios/
 
 # Android / Watch
@@ -45,3 +55,7 @@ watch/libs/
 
 # Docker volumes
 postgres_data/
+
+# Assinatura Android — nunca versionar
+*.keystore
+*.jks
