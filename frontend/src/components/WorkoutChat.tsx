@@ -111,9 +111,11 @@ export function WorkoutChat({ workoutId, open = true, onClose, exerciseName }: W
         <div className="flex items-start justify-between gap-4">
           <div>
             <h3 className="text-lg font-bold text-white">Tirar dúvida</h3>
+            {/* No AI disclaimer here on purpose: the terms gate already covers
+                it once, up front. Repeating it on every screen turns a warning
+                that matters into noise people stop reading. */}
             <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
-              {exerciseName ? `Sobre ${exerciseName}.` : 'Sobre o treino de agora.'} Respostas geradas por IA — podem
-              errar.
+              {exerciseName ? `Sobre ${exerciseName}.` : 'Sobre o treino de agora.'}
             </p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fechar" className="-mr-1 -mt-1 p-2 text-2xl leading-none text-zinc-500">
