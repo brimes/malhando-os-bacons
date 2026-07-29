@@ -51,14 +51,55 @@ func (g *GeminiGenerator) Generate(ctx context.Context, system, prompt string, s
 			"responseSchema":   toGeminiSchema(schema),
 		},
 	}
-	data, err := json.Marshal(body)
+	text, err := g.generateContent(ctx, body)
 	if err != nil {
 		return err
+	}
+	if err := json.Unmarshal([]byte(text), out); err != nil {
+		return fmt.Errorf("decode gemini structured output: %w", err)
+	}
+	return nil
+}
+
+// Chat answers in free text: same endpoint as Generate, but with no
+// responseSchema, so the model writes prose instead of JSON.
+func (g *GeminiGenerator) Chat(ctx context.Context, system string, messages []ChatMessage) (string, error) {
+	if len(messages) == 0 {
+		return "", fmt.Errorf("chat requires at least one message")
+	}
+	contents := make([]map[string]any, 0, len(messages))
+	for _, message := range messages {
+		// Gemini calls the assistant turn "model"; everything else is a user turn.
+		role := "user"
+		if message.Role == "assistant" {
+			role = "model"
+		}
+		contents = append(contents, map[string]any{
+			"role":  role,
+			"parts": []map[string]string{{"text": message.Content}},
+		})
+	}
+	body := map[string]any{
+		"systemInstruction": map[string]any{
+			"parts": []map[string]string{{"text": system}},
+		},
+		"contents": contents,
+	}
+	return g.generateContent(ctx, body)
+}
+
+// generateContent posts one request and returns the answer as plain text.
+// Shared by Generate and Chat so both handle blocked prompts, truncated answers
+// and empty candidates the same way.
+func (g *GeminiGenerator) generateContent(ctx context.Context, body map[string]any) (string, error) {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return "", err
 	}
 	url := fmt.Sprintf("%s/models/%s:generateContent", geminiBaseURL, g.model)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// The key goes in a header rather than the query string so it never lands in logs.
@@ -66,11 +107,11 @@ func (g *GeminiGenerator) Generate(ctx context.Context, system, prompt string, s
 
 	resp, err := g.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("gemini request: %w", err)
+		return "", fmt.Errorf("gemini request: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("gemini returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("gemini returned status %d", resp.StatusCode)
 	}
 
 	var response struct {
@@ -87,28 +128,62 @@ func (g *GeminiGenerator) Generate(ctx context.Context, system, prompt string, s
 		} `json:"promptFeedback"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return fmt.Errorf("decode gemini response: %w", err)
+		return "", fmt.Errorf("decode gemini response: %w", err)
 	}
 	if response.PromptFeedback.BlockReason != "" {
-		return fmt.Errorf("gemini blocked the prompt: %s", response.PromptFeedback.BlockReason)
+		return "", fmt.Errorf("gemini blocked the prompt: %s", response.PromptFeedback.BlockReason)
 	}
 	if len(response.Candidates) == 0 {
-		return fmt.Errorf("gemini returned no candidates")
+		return "", fmt.Errorf("gemini returned no candidates")
 	}
 	candidate := response.Candidates[0]
-	// Anything other than STOP means the JSON is cut short and would not parse.
+	// Anything other than STOP means the answer is cut short — as structured
+	// output it would not even parse.
 	if candidate.FinishReason != "" && candidate.FinishReason != "STOP" {
-		return fmt.Errorf("gemini stopped early: %s", candidate.FinishReason)
+		return "", fmt.Errorf("gemini stopped early: %s", candidate.FinishReason)
 	}
 	var text strings.Builder
 	for _, part := range candidate.Content.Parts {
 		text.WriteString(part.Text)
 	}
 	if strings.TrimSpace(text.String()) == "" {
-		return fmt.Errorf("gemini returned an empty response")
+		return "", fmt.Errorf("gemini returned an empty response")
 	}
-	if err := json.Unmarshal([]byte(text.String()), out); err != nil {
-		return fmt.Errorf("decode gemini structured output: %w", err)
+	return text.String(), nil
+}
+
+// ValidateGeminiAPIKey checks a key against the cheapest call the API offers,
+// listing the available models. A key is only ever saved after this passes:
+// otherwise the first sign of a wrong key would be a plan generation failing
+// minutes later, with nothing pointing back at the key.
+//
+// The returned errors are shown to the user, so they are in Portuguese. The key
+// itself is never logged nor echoed back.
+func ValidateGeminiAPIKey(ctx context.Context, apiKey string) error {
+	apiKey = strings.TrimSpace(apiKey)
+	if apiKey == "" {
+		return fmt.Errorf("informe a chave da API")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, geminiBaseURL+"/models", nil)
+	if err != nil {
+		return fmt.Errorf("não foi possível validar a chave agora; tente novamente")
+	}
+	req.Header.Set("x-goog-api-key", apiKey)
+
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		return fmt.Errorf("não foi possível falar com o Gemini para validar a chave; verifique a conexão e tente novamente")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnauthorized ||
+		resp.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("o Gemini recusou essa chave; confira se ela está ativa e com a API Generative Language habilitada")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("o Gemini respondeu com erro %d ao validar a chave; tente de novo em alguns minutos", resp.StatusCode)
 	}
 	return nil
 }

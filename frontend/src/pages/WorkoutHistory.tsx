@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
 import { workoutsApi } from '../api/workouts';
+import { invalidateCacheByPrefix } from '../lib/offline';
 import { getErrorMessage } from '../api/client';
 import type { Workout, WorkoutCalendarData } from '../types';
 
@@ -58,6 +59,10 @@ export function WorkoutHistoryPage() {
     setError(null);
     try {
       await workoutsApi.delete(workout.id);
+      // Offline the DELETE is only queued, so the cached lists still contain the
+      // workout. Dropping the snapshots keeps it from reappearing and being
+      // deleted a second time — the duplicate would 404 on replay.
+      invalidateCacheByPrefix('get:/workouts');
       const [remaining] = await Promise.all([
         selectedDate ? workoutsApi.list(selectedDate) : Promise.resolve([]),
         loadMonth(),

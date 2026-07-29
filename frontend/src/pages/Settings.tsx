@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { LlmSettingsSection } from '../components/LlmSettingsSection';
+import { SyncStatusPanel } from '../components/SyncStatus';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { getErrorMessage } from '../api/client';
 import type { TrainingSettings } from '../types';
@@ -23,6 +26,7 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
 }
 
 export function SettingsPage() {
+  const { hash } = useLocation();
   const [settings, setSettings] = useState<TrainingSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +39,13 @@ export function SettingsPage() {
       .catch((requestError) => setError(getErrorMessage(requestError)))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Deep link from the profile (/settings#ia) lands directly on the AI section.
+  // Runs after the loading state clears, otherwise the anchor is not mounted yet.
+  useEffect(() => {
+    if (isLoading || hash !== '#ia') return;
+    document.getElementById('ia')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [isLoading, hash]);
 
   const update = (patch: Partial<TrainingSettings>) => {
     setSettings((current) => ({ ...current, ...patch }));
@@ -86,6 +97,11 @@ export function SettingsPage() {
         </div>
 
         <div>
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Dados e sincronização</h3>
+          <SyncStatusPanel />
+        </div>
+
+        <div>
           <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Durante o treino</h3>
           <Card className="space-y-5">
             <Toggle
@@ -107,6 +123,11 @@ export function SettingsPage() {
         <Button fullWidth size="lg" onClick={save} isLoading={isSaving}>
           {saved ? 'Salvo!' : 'Salvar configurações'}
         </Button>
+
+        <div id="ia" className="scroll-mt-16 pt-2">
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Inteligência artificial</h3>
+          <LlmSettingsSection />
+        </div>
       </div>
     </>
   );

@@ -68,9 +68,10 @@ func main() {
 		slog.Error("failed to configure assistant provider", "provider", cfg.AssistantProvider, "error", err)
 		os.Exit(1)
 	}
-	goalAssistant := services.NewGoalAssistant(generator)
-	planAssistant := services.NewTrainingPlanAssistant(generator)
-	handler := routes.Setup(database, goalAssistant, planAssistant, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins)
+	// The configured provider is the shared credit: users who saved their own
+	// Gemini key run on it instead, which the resolver decides per user.
+	resolver := services.NewGeneratorResolver(database, generator, cfg.GeminiModel)
+	handler := routes.Setup(database, resolver, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

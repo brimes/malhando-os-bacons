@@ -46,7 +46,7 @@ func (h *TrainingPlanHandler) Adjust(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load training plan"})
 		return
 	}
-	userContext, err := h.buildUserContext(r.Context(), userID)
+	userContext, err := buildUserContext(r.Context(), h.db, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
 		return
@@ -79,7 +79,7 @@ func (h *TrainingPlanHandler) runAdjust(jobID, userID, planID int64, userContext
 		}
 	}
 
-	adjusted, err := h.assistant.Adjust(ctx, userContext, current, instructions)
+	adjusted, err := h.assistantFor(ctx, userID).Adjust(ctx, userContext, current, instructions)
 	if err != nil {
 		fail("the training plan assistant is temporarily unavailable", err)
 		return

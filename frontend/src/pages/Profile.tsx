@@ -93,6 +93,23 @@ export function ProfilePage() {
           </button>
         </div>
 
+        <div>
+          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Inteligência artificial</h3>
+          {/* Deep link to the AI block inside the settings screen. */}
+          <button type="button" onClick={() => navigate('/settings#ia')} className="w-full text-left">
+            <Card className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🤖</span>
+                <div>
+                  <p className="text-sm font-medium text-white">IA e assinatura</p>
+                  <p className="text-xs text-zinc-500">Crédito compartilhado, sua própria chave de API ou assinatura</p>
+                </div>
+              </div>
+              <span className="text-zinc-600">›</span>
+            </Card>
+          </button>
+        </div>
+
         {/* Features */}
         <div>
           <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Recursos</h3>

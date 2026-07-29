@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { apiClient, getErrorMessage } from '../api/client';
+import { hasCache, patchCacheLocally, readThrough, resourceKeyForRequest } from '../lib/offline';
 import type { OnboardingState, SaveProfileInput, ObjectiveMessageResponse } from '../types';
+
+const ONBOARDING_KEY = resourceKeyForRequest('/onboarding');
 
 interface OnboardingStore {
   state: OnboardingState | null;
@@ -20,24 +23,31 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   isSending: false,
   error: null,
 
+  // App.tsx holds every protected route until this resolves, so it reads the
+  // local copy first: a cold start with no connection lands on the app instead
+  // of hanging on "Carregando...".
   fetchState: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const { data } = await apiClient.get<OnboardingState>('/onboarding');
-      set({ state: data, isLoading: false });
-    } catch (error) {
-      set({ error: getErrorMessage(error), isLoading: false });
-    }
+    set({ isLoading: !hasCache(ONBOARDING_KEY), error: null });
+    await readThrough<OnboardingState>({
+      resourceKey: ONBOARDING_KEY,
+      fetcher: async () => (await apiClient.get<OnboardingState>('/onboarding')).data,
+      apply: (data) => set({ state: data, isLoading: false }),
+      // A failed revalidation is silent while there is a local copy on screen.
+      onError: (error, hadCache) => set({ isLoading: false, error: hadCache ? null : getErrorMessage(error) }),
+    });
   },
 
   saveProfile: async (input) => {
     set({ isLoading: true, error: null });
     try {
+      // Offline the PUT is queued and echoed back, so the profile on screen is
+      // the one that was just typed either way.
       const { data } = await apiClient.put('/onboarding/profile', input);
-      set((current) => ({
-        state: current.state ? { ...current.state, profile: data } : null,
-        isLoading: false,
-      }));
+      set((current) => {
+        const state = current.state ? { ...current.state, profile: data } : null;
+        if (state) patchCacheLocally(ONBOARDING_KEY, state);
+        return { state, isLoading: false };
+      });
     } catch (error) {
       set({ error: getErrorMessage(error), isLoading: false });
       throw error;

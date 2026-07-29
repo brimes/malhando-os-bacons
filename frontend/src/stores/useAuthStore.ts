@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient, getErrorMessage } from '../api/client';
+import { clearOfflineData, isConnectivityError } from '../lib/offline';
 import type { User, AuthResponse } from '../types';
 
 interface AuthState {
@@ -72,6 +73,9 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('mob_token');
+        // The local cache and the pending queue belong to this account. On a
+        // shared device the next login must not inherit either of them.
+        clearOfflineData();
         set({ token: null, user: null, isAuthenticated: false });
       },
 
@@ -82,7 +86,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data } = await apiClient.get<User>('/auth/me');
           set({ user: data, isAuthenticated: true });
-        } catch {
+        } catch (error) {
+          // Being offline is no reason to sign anyone out — the token is still
+          // valid and the point of the offline mode is to keep working. A token
+          // the server actually rejects is handled by the 401 interceptor.
+          if (isConnectivityError(error)) return;
           get().logout();
         }
       },

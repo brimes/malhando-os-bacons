@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { nutritionApi } from '../api/nutrition';
+import { getErrorMessage } from '../api/client';
+import { hasCache, isNetworkOnline, patchCacheLocally, readThrough, resourceKeyForRequest } from '../lib/offline';
 import type { FoodItem, FoodLog, NutritionPlan, CreateNutritionPlanInput, CreateFoodLogInput } from '../types';
 
 interface NutritionState {
@@ -20,7 +22,11 @@ interface NutritionState {
   clearError: () => void;
 }
 
-export const useNutritionStore = create<NutritionState>((set) => ({
+const plansKey = () => resourceKeyForRequest('/nutrition/plans');
+// The logs endpoint is per day, so each day gets its own snapshot.
+const logsKey = (date?: string) => resourceKeyForRequest('/nutrition/logs', date ? { date } : undefined);
+
+export const useNutritionStore = create<NutritionState>((set, get) => ({
   plans: [],
   activePlan: null,
   todayLogs: [],
@@ -30,51 +36,53 @@ export const useNutritionStore = create<NutritionState>((set) => ({
   error: null,
 
   fetchPlans: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const plans = await nutritionApi.listPlans();
-      const active = plans.find((p) => p.active) ?? null;
-      set({ plans, activePlan: active, isLoading: false });
-    } catch (err) {
-      set({ error: String(err), isLoading: false });
-    }
+    set({ isLoading: !hasCache(plansKey()), error: null });
+    await readThrough<NutritionPlan[]>({
+      resourceKey: plansKey(),
+      fetcher: () => nutritionApi.listPlans(),
+      apply: (plans) => set({
+        plans,
+        activePlan: plans.find((plan) => plan.active) ?? null,
+        isLoading: false,
+      }),
+      onError: (error, hadCache) => set({ isLoading: false, error: hadCache ? null : getErrorMessage(error) }),
+    });
   },
 
   createPlan: async (input: CreateNutritionPlanInput) => {
     set({ isLoading: true, error: null });
     try {
       const plan = await nutritionApi.createPlan(input);
-      set((state) => ({
-        plans: [plan, ...state.plans.map((p) => ({ ...p, active: false }))],
-        activePlan: plan,
-        isLoading: false,
-      }));
+      const plans = [plan, ...get().plans.map((current) => ({ ...current, active: false }))];
+      set({ plans, activePlan: plan, isLoading: false });
+      patchCacheLocally(plansKey(), plans);
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: getErrorMessage(err), isLoading: false });
       throw err;
     }
   },
 
   fetchTodayLogs: async (date?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      const logs = await nutritionApi.getLogs(date);
-      set({ todayLogs: logs, isLoading: false });
-    } catch (err) {
-      set({ error: String(err), isLoading: false });
-    }
+    set({ isLoading: !hasCache(logsKey(date)), error: null });
+    await readThrough<FoodLog[]>({
+      resourceKey: logsKey(date),
+      fetcher: () => nutritionApi.getLogs(date),
+      apply: (todayLogs) => set({ todayLogs, isLoading: false }),
+      onError: (error, hadCache) => set({ isLoading: false, error: hadCache ? null : getErrorMessage(error) }),
+    });
   },
 
   logFood: async (input: CreateFoodLogInput) => {
     set({ isLoading: true, error: null });
     try {
       const log = await nutritionApi.createLog(input);
-      set((state) => ({
-        todayLogs: [...state.todayLogs, log],
-        isLoading: false,
-      }));
+      const todayLogs = [...get().todayLogs, log];
+      set({ todayLogs, isLoading: false });
+      // The log belongs to the day it was recorded on, which is the day the
+      // screen is showing — keeping the two in step offline as well.
+      patchCacheLocally(logsKey(input.date), todayLogs);
     } catch (err) {
-      set({ error: String(err), isLoading: false });
+      set({ error: getErrorMessage(err), isLoading: false });
       throw err;
     }
   },
@@ -84,12 +92,18 @@ export const useNutritionStore = create<NutritionState>((set) => ({
       set({ searchResults: [] });
       return;
     }
+    // Searching the food table is a server query over data the device never
+    // holds; there is nothing sensible to serve from the cache.
+    if (!isNetworkOnline()) {
+      set({ searchResults: [], isSearching: false, error: 'A busca de alimentos precisa de internet.' });
+      return;
+    }
     set({ isSearching: true });
     try {
       const results = await nutritionApi.searchFoods(query);
       set({ searchResults: results, isSearching: false });
     } catch (err) {
-      set({ error: String(err), isSearching: false });
+      set({ error: getErrorMessage(err), isSearching: false });
     }
   },
 

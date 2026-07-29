@@ -1,4 +1,21 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import {
+  enqueueMutation,
+  isConnectivityError,
+  isMutationMethod,
+  isOnlineOnlyPath,
+  isQueueableFailure,
+  normalizePath,
+  readCacheEntry,
+  referencesLocalId,
+  registerMutationExecutor,
+  reportNetworkSuccess,
+  resourceKeyForRequest,
+  takeLocalId,
+  UnsyncedDependencyError,
+  writeCache,
+} from '../lib/offline';
+import type { MutationMethod } from '../types/offline';
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -10,6 +27,67 @@ export const apiClient = axios.create({
   },
 });
 
+/** Marks a request as a queue replay, so a second failure does not re-queue it. */
+interface OfflineAwareConfig extends InternalAxiosRequestConfig {
+  isOfflineReplay?: boolean;
+}
+
+// Volatile or unbounded responses: caching them buys nothing and eats the
+// localStorage budget the queue depends on.
+const NON_CACHEABLE_GET_PATHS: RegExp[] = [
+  /^\/nutrition\/foods\/search/,
+  /^\/training-plans\/jobs\//,
+  /^\/chat(\/|$)/,
+  // The chat screen refuses to open offline anyway, so a cached history would
+  // only take up room that the pending queue needs more.
+  /^\/workouts\/\d+\/chat(\/|$)/,
+];
+
+const ONLINE_ONLY_MESSAGE = 'Esta ação precisa de internet. Conecte-se e tente novamente.';
+
+function isCacheableGetPath(url: string): boolean {
+  const path = normalizePath(url);
+  return !NON_CACHEABLE_GET_PATHS.some((pattern) => pattern.test(path));
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Axios has already serialized the body by the time an interceptor sees it. */
+function parseRequestBody(data: unknown): unknown {
+  if (typeof data !== 'string') return data;
+  try {
+    return JSON.parse(data);
+  } catch {
+    return undefined;
+  }
+}
+
+function buildResponse<T>(config: InternalAxiosRequestConfig, status: number, data: T, statusText: string): AxiosResponse<T> {
+  return { data, status, statusText, headers: {}, config };
+}
+
+/**
+ * Stand-in body for a write that got queued. Callers expect the created entity
+ * back, so the request body is echoed with a negative id — negative ids are the
+ * marker for "exists only on this device yet".
+ */
+function buildOptimisticPayload(config: OfflineAwareConfig, method: MutationMethod): unknown {
+  if (method === 'DELETE') return null;
+  const body = parseRequestBody(config.data);
+  if (!isPlainObject(body)) return null;
+
+  const idInUrl = Number(normalizePath(config.url ?? '').match(/\/(\d+)(?:\?|$)/)?.[1]);
+  const id = method === 'POST'
+    ? takeLocalId()
+    : (typeof body.id === 'number' ? body.id : (Number.isFinite(idInUrl) ? idInUrl : takeLocalId()));
+
+  const payload: Record<string, unknown> = { ...body, id, offline_pending: true };
+  if (method === 'POST') payload.created_at = new Date().toISOString();
+  return payload;
+}
+
 // Attach JWT token to every request
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('mob_token');
@@ -19,21 +97,86 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-// Handle 401 globally — clear token and redirect to login
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // A response of any kind proves the server is reachable.
+    reportNetworkSuccess();
+    const config = response.config as OfflineAwareConfig;
+    const url = config.url ?? '';
+    const method = (config.method ?? 'get').toUpperCase();
+    // Every GET is cached on the way through, which is what lets screens that
+    // call the API directly (without a store) keep working offline.
+    if (method === 'GET' && response.status >= 200 && response.status < 300 && isCacheableGetPath(url)) {
+      writeCache(resourceKeyForRequest(url, config.params), response.status === 204 ? null : response.data);
+    }
+    return response;
+  },
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('mob_token');
       localStorage.removeItem('mob_user');
       window.location.href = '/login';
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
-  }
+
+    const config = error.config as OfflineAwareConfig | undefined;
+    if (!config || !isConnectivityError(error)) return Promise.reject(error);
+    // Replays are driven by flushQueue, which decides what to do with failures.
+    if (config.isOfflineReplay) return Promise.reject(error);
+
+    const url = config.url ?? '';
+    const method = (config.method ?? 'get').toUpperCase();
+
+    // Reads fall back to the last snapshot instead of failing the screen.
+    if (!isMutationMethod(method)) {
+      const cached = readCacheEntry(resourceKeyForRequest(url, config.params));
+      if (cached) {
+        // A cached `null` is the 204 the server sent (e.g. no active workout).
+        const status = cached.data === null ? 204 : 200;
+        return Promise.resolve(buildResponse(config, status, cached.data, 'OK (cache local)'));
+      }
+      return Promise.reject(error);
+    }
+
+    if (isOnlineOnlyPath(url)) {
+      return Promise.reject(new Error(ONLINE_ONLY_MESSAGE));
+    }
+    if (referencesLocalId(url)) {
+      // The target only exists in the queue; the server has no id for it yet.
+      return Promise.reject(new UnsyncedDependencyError());
+    }
+    if (!isQueueableFailure(error)) return Promise.reject(error);
+
+    enqueueMutation({
+      method,
+      url,
+      body: parseRequestBody(config.data),
+      params: config.params as Record<string, unknown> | undefined,
+    });
+    // Resolved, not rejected: the write is durable and will reach the server on
+    // reconnect, so the screen should carry on instead of showing an error.
+    return Promise.resolve(
+      buildResponse(config, 202, buildOptimisticPayload(config, method), 'Accepted (offline)'),
+    );
+  },
 );
+
+// Lets the queue replay through this very instance (auth header, base URL and
+// the 401 handling included) without offlineSync having to import it.
+registerMutationExecutor(async (mutation) => {
+  await apiClient.request({
+    method: mutation.method,
+    url: mutation.url,
+    data: mutation.body,
+    params: mutation.params,
+    isOfflineReplay: true,
+  } as OfflineAwareConfig);
+});
 
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    // "Network Error" says nothing to whoever is holding the phone.
+    if (isConnectivityError(error)) return 'Sem conexão com o servidor. Tente novamente quando estiver online.';
     const data = error.response?.data as { error?: string } | undefined;
     return data?.error ?? error.message;
   }

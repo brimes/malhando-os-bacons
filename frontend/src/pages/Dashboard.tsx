@@ -6,6 +6,7 @@ import { Card, StatCard } from '../components/Card';
 import { MacroProgress } from '../components/Chart';
 import { Button } from '../components/Button';
 import { workoutsApi } from '../api/workouts';
+import { SyncBanner } from '../components/SyncStatus';
 import type { ActiveWorkout, DashboardData } from '../types';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 
@@ -47,6 +48,8 @@ export function DashboardPage() {
 
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
+      {/* Only renders when offline or with something pending. */}
+      <div className="-mx-4 -mt-3"><SyncBanner /></div>
       {/* Greeting */}
       <div className="flex items-center justify-between gap-4">
         <div>

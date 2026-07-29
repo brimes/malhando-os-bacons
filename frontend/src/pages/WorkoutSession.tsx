@@ -6,10 +6,35 @@ import { Button } from '../components/Button';
 import { workoutsApi } from '../api/workouts';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
+import { WorkoutChat } from '../components/WorkoutChat';
 import { getErrorMessage } from '../api/client';
+import {
+  dropQueuedMutations,
+  isLocalId,
+  isNetworkOnline,
+  patchCacheLocally,
+  resourceKeyForRequest,
+} from '../lib/offline';
+import {
+  clearWorkoutSessionState,
+  loadWorkoutSessionState,
+  saveWorkoutSessionState,
+  type WorkoutSessionPhase,
+} from '../lib/workoutSessionState';
 import type { ActiveWorkout, TrainingPlanExercise, TrainingSettings, WorkoutSet } from '../types';
 
-type Phase = 'countdown' | 'executing' | 'resting' | 'rest_done' | 'exercise_done' | 'done';
+// The phase list lives next to the persistence helper: restoring one of these is
+// what makes the timer survive the app being closed.
+type Phase = WorkoutSessionPhase;
+
+// A phase that ended while the app was closed still has to be reflected on
+// screen, but buzzing for it is pointless — the alert only means something in
+// the moment it fires. Anything older than this is treated as a late resume.
+const STALE_ALERT_SECONDS = 5;
+
+// Cache slot of the running session. Offline reads of /workouts/active are
+// served from it, so patching it is what keeps a session alive without network.
+const ACTIVE_SESSION_KEY = resourceKeyForRequest('/workouts/active');
 
 // One colour per phase so a glance mid-set tells you whether you are working or
 // resting. Rest is blue against the orange brand — the two never read alike,
@@ -31,6 +56,24 @@ function formatClock(totalSeconds: number) {
 function parseWeight(text: string | undefined) {
   const value = Number((text ?? '').replace(',', '.'));
   return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Orders series from oldest to newest. Ones recorded offline carry negative ids
+ * and are always the most recent, the newest being the most negative — sorting
+ * by raw id would put them first and make "voltar" undo the wrong series.
+ */
+function byOldestFirst(a: WorkoutSet, b: WorkoutSet) {
+  if (isLocalId(a.id) !== isLocalId(b.id)) return isLocalId(a.id) ? 1 : -1;
+  return isLocalId(a.id) ? b.id - a.id : a.id - b.id;
+}
+
+/** Matches the queued POST that created a series, so undoing it drops the request. */
+function isQueuedSetFor(body: unknown, set: WorkoutSet) {
+  if (typeof body !== 'object' || body === null) return false;
+  const payload = body as { set_number?: unknown; training_plan_exercise_id?: unknown };
+  return payload.set_number === set.set_number
+    && payload.training_plan_exercise_id === set.training_plan_exercise_id;
 }
 
 function vibrate(pattern: number | number[], enabled: boolean) {
@@ -96,6 +139,7 @@ export function WorkoutSessionPage() {
   // here forces a "0" that new digits get appended to ("30" typed over 0 => "030").
   const [weights, setWeights] = useState<Record<number, string>>({});
   const [showPostpone, setShowPostpone] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const [finishSheet, setFinishSheet] = useState<ChecklistState | null>(null);
   // Set when the last series of an exercise lands, so the handover screen can
   // still show what was just finished after the current exercise moves on.
@@ -131,27 +175,67 @@ export function WorkoutSessionPage() {
     setNow(Date.now());
   }, []);
 
-  // Load the open session plus the user's timing preferences.
+  // Load the open session plus the user's timing preferences, then pick the
+  // phase timer up wherever it was when the app was last closed.
   useEffect(() => {
     Promise.all([workoutsApi.active(), settingsApi.get().catch(() => DEFAULT_SETTINGS)])
       .then(([session, loadedSettings]) => {
         if (!session) {
           setError('Nenhum treino em andamento.');
+          // No open workout means whatever is stored belongs to a session that
+          // is already over.
+          clearWorkoutSessionState();
           return;
         }
         setActive(session);
         setSettings(loadedSettings);
         // Starts blank when there is no previous weight, so the field is ready to type into.
-        setWeights(Object.fromEntries(
+        const defaultWeights = Object.fromEntries(
           session.exercises
             .filter((exercise) => exercise.id)
             .map((exercise) => [exercise.id as number, exercise.last_weight_kg ? String(exercise.last_weight_kg) : '']),
-        ));
+        );
+
+        // Only state belonging to this workout id is honoured; the helper drops
+        // anything else. The completed series are not restored from here — they
+        // come from the server with the session above.
+        const restored = loadWorkoutSessionState(session.workout.id);
+        if (restored) {
+          // The original phaseStart is kept instead of being reset to now:
+          // `elapsed` is derived from it, so a series carries on from where it
+          // stopped, and a rest that ran out while the app was closed comes back
+          // already finished instead of counting down again.
+          setPhase(restored.phase);
+          setPhaseStart(restored.phaseStart);
+          setNow(Date.now());
+          setCurrentExerciseId(restored.currentExerciseId);
+          setFinishedExerciseId(restored.finishedExerciseId);
+          // What was typed by hand wins over the weight suggested by the server.
+          setWeights({ ...defaultWeights, ...restored.weights });
+          return;
+        }
+
+        setWeights(defaultWeights);
         startPhase(loadedSettings.countdown_seconds > 0 ? 'countdown' : 'executing');
       })
       .catch((requestError) => setError(getErrorMessage(requestError)))
       .finally(() => setIsLoading(false));
   }, [startPhase]);
+
+  // Mirrors the phase state to localStorage on every change, so closing the app
+  // — or the system killing it in the background — costs nothing.
+  useEffect(() => {
+    if (!active) return;
+    saveWorkoutSessionState({
+      workoutId: active.workout.id,
+      phase,
+      phaseStart,
+      currentExerciseId,
+      finishedExerciseId,
+      weights,
+      savedAt: Date.now(),
+    });
+  }, [active, phase, phaseStart, currentExerciseId, finishedExerciseId, weights]);
 
   // Single ticker drives every phase.
   useEffect(() => {
@@ -169,6 +253,26 @@ export function WorkoutSessionPage() {
     const session = await workoutsApi.active();
     if (session) setActive(session);
     return session;
+  }, []);
+
+  // Applies a change to the running session in memory and to the cached snapshot
+  // of /workouts/active. Offline the server cannot confirm anything, so this is
+  // what keeps the session moving — and what makes it survive a reload with no
+  // connection, since the cache is where a restart reads the session from.
+  const applySessionLocally = useCallback((sets: WorkoutSet[]) => {
+    setActive((current) => {
+      if (!current) return current;
+      const patched: ActiveWorkout = { ...current, workout: { ...current.workout, sets } };
+      patchCacheLocally(ACTIVE_SESSION_KEY, patched);
+      return patched;
+    });
+  }, []);
+
+  // The session is over: a stale snapshot would greet the next visit with a
+  // workout that has already been closed.
+  const forgetSessionLocally = useCallback(() => {
+    clearWorkoutSessionState();
+    patchCacheLocally(ACTIVE_SESSION_KEY, null);
   }, []);
 
   // Single place that decides what follows a series, so every path out of the
@@ -190,7 +294,7 @@ export function WorkoutSessionPage() {
     isRecording.current = true;
     setIsBusy(true);
     try {
-      await workoutsApi.completeSet(active.workout.id, {
+      const recorded = await workoutsApi.completeSet(active.workout.id, {
         training_plan_exercise_id: currentExercise.id,
         exercise_name: currentExercise.exercise_name,
         set_number: currentSetNumber,
@@ -199,7 +303,11 @@ export function WorkoutSessionPage() {
         tracking_type: currentExercise.tracking_type,
         duration_seconds: secondsSpent > 0 ? secondsSpent : undefined,
       });
-      await refresh();
+      // A negative id means the POST is sitting in the offline queue. Re-reading
+      // the session would hand back a snapshot that predates this series and the
+      // screen would ask for the same one again, so it is applied locally.
+      if (isLocalId(recorded.id)) applySessionLocally([...completedSets, recorded]);
+      else await refresh();
       const wasLastSet = currentSetNumber >= currentExercise.sets;
       if (wasLastSet) {
         // Straight to the handover. Staying in the plain rest phase would show
@@ -229,6 +337,9 @@ export function WorkoutSessionPage() {
   useEffect(() => {
     if (!currentExercise || isBusy) return;
     const key = `${phase}-${currentExercise.id}-${currentSetNumber}-${phaseStart}`;
+    // True when the phase ended a while ago, i.e. the app is coming back from
+    // being closed. The transition still happens, only the buzz is dropped.
+    const isLateResume = (phaseSeconds: number) => elapsed - phaseSeconds > STALE_ALERT_SECONDS;
 
     if (phase === 'countdown' && elapsed >= settings.countdown_seconds) {
       if (transitionGuard.current === key) return;
@@ -239,6 +350,13 @@ export function WorkoutSessionPage() {
     if (phase === 'executing' && isTimed && plannedDuration > 0 && elapsed >= plannedDuration) {
       if (transitionGuard.current === key) return;
       transitionGuard.current = key;
+      // Only auto-record when the timer really ran out with the screen open. On
+      // a late resume (phone died mid-plank, reopened hours later) we cannot
+      // know the exercise was performed — recording it would invent work the
+      // person never did, so the series is left for them to confirm.
+      // Staying in `executing` keeps the "Concluir agora" button on screen, so
+      // finishing the series stays one deliberate tap away.
+      if (isLateResume(plannedDuration)) return;
       vibrate(200, settings.vibration_enabled);
       void recordSet(plannedDuration);
       return;
@@ -246,7 +364,7 @@ export function WorkoutSessionPage() {
     if (phase === 'resting' && elapsed >= restSeconds) {
       if (transitionGuard.current === key) return;
       transitionGuard.current = key;
-      vibrate([300, 150, 300], settings.vibration_enabled);
+      vibrate([300, 150, 300], settings.vibration_enabled && !isLateResume(restSeconds));
       // Changing exercise always waits for a tap — that handover is the whole
       // point of this screen, so auto-advance only applies between series.
       if (finishedExerciseId !== null || settings.auto_advance) {
@@ -263,7 +381,7 @@ export function WorkoutSessionPage() {
       if (handoverRest > 0 && elapsed >= handoverRest) {
         if (transitionGuard.current === key) return;
         transitionGuard.current = key;
-        vibrate([300, 150, 300], settings.vibration_enabled);
+        vibrate([300, 150, 300], settings.vibration_enabled && !isLateResume(handoverRest));
       }
     }
   }, [phase, elapsed, settings, isTimed, plannedDuration, restSeconds, currentExercise, currentSetNumber, phaseStart, isBusy, recordSet, startPhase, finishedExerciseId, advanceAfterRest, exercises]);
@@ -284,12 +402,25 @@ export function WorkoutSessionPage() {
   // "Voltar" undoes the most recent series so it can be redone.
   const goBack = async () => {
     if (!active || completedSets.length === 0) return;
-    const last = [...completedSets].sort((a, b) => a.id - b.id).pop();
+    const last = [...completedSets].sort(byOldestFirst).pop();
     if (!last) return;
     setIsBusy(true);
     try {
-      await workoutsApi.deleteSet(active.workout.id, last.id);
-      await refresh();
+      if (isLocalId(last.id)) {
+        // The series never reached the server, so undoing it means dropping the
+        // POST that is still queued — a DELETE would carry an id the server has
+        // never seen.
+        dropQueuedMutations((mutation) => (
+          mutation.method === 'POST'
+          && mutation.url === `/workouts/${active.workout.id}/sets`
+          && isQueuedSetFor(mutation.body, last)
+        ));
+        applySessionLocally(completedSets.filter((set) => set.id !== last.id));
+      } else {
+        await workoutsApi.deleteSet(active.workout.id, last.id);
+        if (isNetworkOnline()) await refresh();
+        else applySessionLocally(completedSets.filter((set) => set.id !== last.id));
+      }
       if (last.training_plan_exercise_id) setCurrentExerciseId(last.training_plan_exercise_id);
       setFinishedExerciseId(null);
       startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
@@ -326,6 +457,7 @@ export function WorkoutSessionPage() {
             weight_kg: Number((entry.weight || '0').replace(',', '.')) || 0,
           })),
       });
+      forgetSessionLocally();
       navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -338,6 +470,7 @@ export function WorkoutSessionPage() {
     setIsBusy(true);
     try {
       await workoutsApi.finish(active.workout.id);
+      forgetSessionLocally();
       navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -351,6 +484,7 @@ export function WorkoutSessionPage() {
     setIsBusy(true);
     try {
       await workoutsApi.cancel(active.workout.id);
+      forgetSessionLocally();
       navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -374,6 +508,30 @@ export function WorkoutSessionPage() {
 
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const doneSets = completedSets.length;
+
+  // The chat sits in the header slot on purpose: it is reachable at any point of
+  // the session — usually while resting — without taking space next to
+  // "Próximo", which is the button being hit with one hand mid-set.
+  const chatButton = (
+    <button
+      type="button"
+      onClick={() => setShowChat(true)}
+      aria-label="Tirar dúvida sobre o treino"
+      className="rounded-full bg-zinc-800 px-3.5 py-2 text-xs font-semibold text-primary-300"
+    >
+      Dúvidas
+    </button>
+  );
+
+  // Rendered by the execution screen and by the handover, so a question is never
+  // more than one tap away while the session is running.
+  const chatNode = showChat && (
+    <WorkoutChat
+      workoutId={active.workout.id}
+      onClose={() => setShowChat(false)}
+      exerciseName={currentExercise?.exercise_name}
+    />
+  );
 
   // Rendered by both the main screen and the handover, so finishing early is
   // always one tap away wherever the session happens to be.
@@ -449,7 +607,7 @@ export function WorkoutSessionPage() {
 
     return (
       <>
-        <Header title={active.day_name || active.workout.name} />
+        <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
         <div className="space-y-4 px-4 py-5 pb-32">
           {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
 
@@ -563,6 +721,7 @@ export function WorkoutSessionPage() {
           />
         )}
         {finishSheetNode}
+        {chatNode}
       </>
     );
   }
@@ -581,7 +740,7 @@ export function WorkoutSessionPage() {
 
   return (
     <>
-      <Header title={active.day_name || active.workout.name} />
+      <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
       <div className="space-y-4 px-4 py-5 pb-32">
         {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
 
@@ -740,6 +899,7 @@ export function WorkoutSessionPage() {
         />
       )}
       {finishSheetNode}
+      {chatNode}
     </>
   );
 }

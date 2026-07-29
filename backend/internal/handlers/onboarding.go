@@ -15,12 +15,12 @@ import (
 )
 
 type OnboardingHandler struct {
-	db        *db.DB
-	assistant services.GoalAssistant
+	db       *db.DB
+	resolver services.GeneratorResolver
 }
 
-func NewOnboardingHandler(database *db.DB, assistant services.GoalAssistant) *OnboardingHandler {
-	return &OnboardingHandler{db: database, assistant: assistant}
+func NewOnboardingHandler(database *db.DB, resolver services.GeneratorResolver) *OnboardingHandler {
+	return &OnboardingHandler{db: database, resolver: resolver}
 }
 
 func (h *OnboardingHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +210,9 @@ func (h *OnboardingHandler) SendObjectiveMessage(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load fitness assessment"})
 		return
 	}
-	result, err := h.assistant.Analyze(r.Context(), profile, assessment, messages)
+	// The assistant runs on this user's own API key when they saved one.
+	assistant := services.NewGoalAssistant(h.resolver.For(r.Context(), userID))
+	result, err := assistant.Analyze(r.Context(), profile, assessment, messages)
 	if err != nil {
 		slog.Error("goal assistant failed", "user_id", userID, "error", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the goal assistant is temporarily unavailable"})

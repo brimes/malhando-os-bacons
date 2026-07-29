@@ -22,12 +22,19 @@ import (
 const automaticPlanTimeout = 15 * time.Minute
 
 type TrainingPlanHandler struct {
-	db        *db.DB
-	assistant services.TrainingPlanAssistant
+	db       *db.DB
+	resolver services.GeneratorResolver
 }
 
-func NewTrainingPlanHandler(database *db.DB, assistant services.TrainingPlanAssistant) *TrainingPlanHandler {
-	return &TrainingPlanHandler{db: database, assistant: assistant}
+func NewTrainingPlanHandler(database *db.DB, resolver services.GeneratorResolver) *TrainingPlanHandler {
+	return &TrainingPlanHandler{db: database, resolver: resolver}
+}
+
+// assistantFor builds the assistant on the credentials of this user: their own
+// API key when they saved one, the shared credits otherwise. It is resolved per
+// call because the key can change between two generations.
+func (h *TrainingPlanHandler) assistantFor(ctx context.Context, userID int64) services.TrainingPlanAssistant {
+	return services.NewTrainingPlanAssistant(h.resolver.For(ctx, userID))
 }
 
 func (h *TrainingPlanHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +164,7 @@ func (h *TrainingPlanHandler) CreateAutomatic(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	userContext, err := h.buildUserContext(r.Context(), userID)
+	userContext, err := buildUserContext(r.Context(), h.db, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
 		return
@@ -191,7 +198,7 @@ func (h *TrainingPlanHandler) runAutomatic(jobID, userID int64, userContext stri
 		}
 	}
 
-	input, err := h.assistant.Generate(ctx, userContext, req)
+	input, err := h.assistantFor(ctx, userID).Generate(ctx, userContext, req)
 	if err != nil {
 		fail("the training plan assistant is temporarily unavailable", err)
 		return
@@ -326,12 +333,16 @@ func validatePlanBasics(targetDate string, daysPerWeek, duration int) error {
 	return nil
 }
 
-func (h *TrainingPlanHandler) buildUserContext(ctx context.Context, userID int64) (string, error) {
+// buildUserContext summarises who the person is and what they have been doing,
+// in the shape the assistants expect. It is a package function, not a method,
+// because the workout chat needs exactly the same summary without going through
+// the training plan handler.
+func buildUserContext(ctx context.Context, database *db.DB, userID int64) (string, error) {
 	var birthDate time.Time
 	var height, weight float64
 	var sex, injuries, experience *string
 	var adaptation *time.Time
-	err := h.db.Pool.QueryRow(ctx,
+	err := database.Pool.QueryRow(ctx,
 		`SELECT birth_date,height_cm,current_weight_kg,biological_sex,injuries_or_limitations,
 		 training_experience,adaptation_ends_at FROM user_profiles WHERE user_id=$1`, userID,
 	).Scan(&birthDate, &height, &weight, &sex, &injuries, &experience, &adaptation)
@@ -341,16 +352,16 @@ func (h *TrainingPlanHandler) buildUserContext(ctx context.Context, userID int64
 	summary := fmt.Sprintf("Perfil: nascimento=%s, altura=%.1fcm, peso=%.1fkg, sexo=%v, experiência=%v, adaptação até=%v, lesões/limitações=%v. ",
 		birthDate.Format("2006-01-02"), height, weight, pointerValue(sex), pointerValue(experience), timePointerValue(adaptation), pointerValue(injuries))
 	var goalSummary string
-	_ = h.db.Pool.QueryRow(ctx, `SELECT summary FROM user_goals WHERE user_id=$1`, userID).Scan(&goalSummary)
+	_ = database.Pool.QueryRow(ctx, `SELECT summary FROM user_goals WHERE user_id=$1`, userID).Scan(&goalSummary)
 	summary += "Objetivo: " + goalSummary + ". Histórico recente: "
 	var fitnessDistance, fitnessExertion int
-	if h.db.Pool.QueryRow(ctx,
+	if database.Pool.QueryRow(ctx,
 		`SELECT distance_meters, perceived_exertion FROM fitness_assessments
 		 WHERE user_id=$1 ORDER BY performed_at DESC LIMIT 1`, userID,
 	).Scan(&fitnessDistance, &fitnessExertion) == nil {
 		summary += fmt.Sprintf("Última caminhada de 6 minutos: %dm, esforço %d/10. ", fitnessDistance, fitnessExertion)
 	}
-	rows, err := h.db.Pool.Query(ctx,
+	rows, err := database.Pool.Query(ctx,
 		`SELECT w.date::date,w.name,COALESCE(w.duration_minutes,0),
 		 COALESCE(string_agg(ws.exercise_name || ' ' || ws.sets || 'x' || ws.reps, ', ' ORDER BY ws.id),'')
 		 FROM workouts w LEFT JOIN workout_sets ws ON ws.workout_id=w.id

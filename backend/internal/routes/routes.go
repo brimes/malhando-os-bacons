@@ -9,7 +9,10 @@ import (
 	"github.com/mob/backend/internal/services"
 )
 
-func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant services.TrainingPlanAssistant, jwtSecret, googleClientID, allowedOrigins string) http.Handler {
+// Setup wires the routes. The generator resolver, rather than a ready-made
+// assistant, is what gets injected: which credentials each call runs on is only
+// known once the user is.
+func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, googleClientID, allowedOrigins string) http.Handler {
 	mux := http.NewServeMux()
 
 	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID)
@@ -19,8 +22,11 @@ func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant 
 	stepsHandler := handlers.NewStepsHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database)
 	resultsHandler := handlers.NewResultsHandler(database)
-	onboardingHandler := handlers.NewOnboardingHandler(database, goalAssistant)
-	trainingPlanHandler := handlers.NewTrainingPlanHandler(database, planAssistant)
+	onboardingHandler := handlers.NewOnboardingHandler(database, resolver)
+	trainingPlanHandler := handlers.NewTrainingPlanHandler(database, resolver)
+	termsHandler := handlers.NewTermsHandler(database)
+	llmSettingsHandler := handlers.NewLLMSettingsHandler(database)
+	workoutChatHandler := handlers.NewWorkoutChatHandler(database, resolver)
 
 	auth := middleware.AuthMiddleware(jwtSecret)
 
@@ -57,9 +63,22 @@ func Setup(database *db.DB, goalAssistant services.GoalAssistant, planAssistant 
 	mux.HandleFunc("POST /api/workouts/{id}/progress", chain(sessionHandler.Progress, auth))
 	mux.HandleFunc("POST /api/workouts/{id}/cancel", chain(sessionHandler.Cancel, auth))
 
+	// Dúvidas durante o treino
+	mux.HandleFunc("GET /api/workouts/{id}/chat", chain(workoutChatHandler.List, auth))
+	mux.HandleFunc("POST /api/workouts/{id}/chat", chain(workoutChatHandler.Send, auth))
+
 	// Training session settings
 	mux.HandleFunc("GET /api/settings", chain(sessionHandler.GetSettings, auth))
 	mux.HandleFunc("PUT /api/settings", chain(sessionHandler.UpdateSettings, auth))
+
+	// Termo de isenção de responsabilidade
+	mux.HandleFunc("GET /api/terms", chain(termsHandler.Get, auth))
+	mux.HandleFunc("POST /api/terms/accept", chain(termsHandler.Accept, auth))
+
+	// Configurações de LLM e assinatura (mock)
+	mux.HandleFunc("GET /api/llm-settings", chain(llmSettingsHandler.Get, auth))
+	mux.HandleFunc("PUT /api/llm-settings", chain(llmSettingsHandler.Update, auth))
+	mux.HandleFunc("POST /api/subscription/mock", chain(llmSettingsHandler.MockSubscription, auth))
 
 	// Training plan routes
 	mux.HandleFunc("GET /api/training-plans", chain(trainingPlanHandler.List, auth))

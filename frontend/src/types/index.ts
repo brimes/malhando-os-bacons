@@ -413,6 +413,45 @@ export interface ResultsData {
   conditioning: FitnessAssessment[];
 }
 
+export interface TermsStatus {
+  current_version: string;
+  accepted: boolean;
+  accepted_at?: string;
+}
+
+/**
+ * Provider ids are kept as plain strings instead of a union: the backend owns the
+ * list and may add providers without a frontend release. KNOWN_LLM_PROVIDERS below
+ * is only used to render friendly labels/model hints for the ones we know about.
+ */
+export type LlmSubscriptionStatus = 'free' | 'active' | 'cancelled';
+
+export interface LlmSettings {
+  provider: string;
+  model: string;
+  configured: boolean;
+  key_preview: string;
+  subscription_status: LlmSubscriptionStatus;
+  using_shared_credits: boolean;
+}
+
+export interface LlmSettingsInput {
+  provider: string;
+  model: string;
+  /** Empty string removes the stored key and falls back to the shared credits. */
+  api_key: string;
+}
+
+export interface SubscriptionMockInput {
+  action: 'subscribe' | 'cancel';
+}
+
+export interface WorkoutChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
 export interface SaveBodyMeasurementInput {
   measured_at: string;
   weight_kg?: number | null;
