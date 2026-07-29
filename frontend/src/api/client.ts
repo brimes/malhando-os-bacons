@@ -9,6 +9,7 @@ import {
   readCacheEntry,
   referencesLocalId,
   registerMutationExecutor,
+  flushQueueIfPending,
   reportNetworkSuccess,
   resourceKeyForRequest,
   takeLocalId,
@@ -103,6 +104,9 @@ apiClient.interceptors.response.use(
   (response) => {
     // A response of any kind proves the server is reachable.
     reportNetworkSuccess();
+    // ...so anything waiting in the queue can go out now. Relying only on the
+    // `online` event leaves writes stranded whenever the link never dropped.
+    if (!(response.config as OfflineAwareConfig).isOfflineReplay) flushQueueIfPending();
     const config = response.config as OfflineAwareConfig;
     const url = config.url ?? '';
     const method = (config.method ?? 'get').toUpperCase();

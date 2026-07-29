@@ -36,6 +36,7 @@ export {
   readThrough,
   syncNow,
   flushQueue,
+  flushQueueIfPending,
   enqueueMutation,
   registerMutationExecutor,
   isConnectivityError,

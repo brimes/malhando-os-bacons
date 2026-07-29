@@ -25,6 +25,9 @@ import { remapWorkoutSessionState } from './workoutSessionState';
 const START_ROUTE = '/workouts/start';
 /** `/workouts/{id}/finish` and `/workouts/{id}/complete` both close a session. */
 const CLOSE_ROUTE = /^\/workouts\/(-?\d+)\/(finish|complete)$/;
+// Cancel ends the session too. It is kept apart from CLOSE_ROUTE because a
+// cancelled workout is not history — it must not count towards the week.
+const END_ROUTE = /^\/workouts\/(-?\d+)\/(finish|complete|cancel)$/;
 /** Cached snapshots of a single plan — the only place the days and exercises live. */
 const PLAN_DETAIL_KEY = /^get:\/training-plans\/\d+$/;
 
@@ -434,4 +437,27 @@ export function pendingCompletedWorkouts(queue: PendingMutation[] = getQueue()):
     if (dayId !== undefined) completed.push({ trainingPlanDayId: dayId, completedAt: mutation.createdAt });
   }
   return completed;
+}
+
+/**
+ * True for any request whose whole purpose is to leave no open session behind:
+ * finish, complete or cancel.
+ */
+export function parseSessionEndRoute(url: string): { workoutId: number } | null {
+  const match = normalizeRoute(url).match(END_ROUTE);
+  return match ? { workoutId: Number(match[1]) } : null;
+}
+
+/**
+ * Forgets the local session when it is the one being referred to. Used when the
+ * server reports it has no such open workout: the end state the request was
+ * asking for is already true, so keeping the session on the device would leave
+ * a workout on screen that cannot be closed — cancelling again only queues
+ * another doomed request.
+ */
+export function forgetLocalSessionIfMatches(workoutId: number): boolean {
+  const current = readCachedActiveWorkout();
+  if (!current || current.workout.id !== workoutId) return false;
+  storeLocalActiveWorkout(null);
+  return true;
 }

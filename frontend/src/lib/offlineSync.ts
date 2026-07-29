@@ -19,7 +19,14 @@ import {
   writeCache,
 } from './offlineStore';
 import { normalizePath, normalizeRoute } from './requestPath';
-import { dependentMutationsOf, isIdempotentRetryable, reconcileWorkoutStart, WorkoutStartConflictError } from './workoutSession';
+import {
+  dependentMutationsOf,
+  forgetLocalSessionIfMatches,
+  isIdempotentRetryable,
+  parseSessionEndRoute,
+  reconcileWorkoutStart,
+  WorkoutStartConflictError,
+} from './workoutSession';
 
 /** A mutation that keeps failing on the server is dropped instead of blocking the queue forever. */
 const MAX_MUTATION_ATTEMPTS = 5;
@@ -194,6 +201,19 @@ export function flushQueue(): Promise<void> {
 }
 
 /**
+ * Drains the queue whenever we learn the server answered something. Without
+ * this the only triggers are app start and the `online` event, and neither
+ * fires in the common case: a single write fails (flaky request, server
+ * blip) while the device never actually loses its link. `navigator.onLine`
+ * stays true, so no `online` event ever comes, and the write sits in the
+ * queue until the app is reopened.
+ */
+export function flushQueueIfPending(): void {
+  if (runningFlush || !isNetworkOnline() || getQueue().length === 0) return;
+  void flushQueue();
+}
+
+/**
  * Fails a mutation and, when it was a workout start, everything still queued
  * behind it that only makes sense once the start succeeds (its series, its
  * finish). A start that is refused for good — a 409 "another workout is
@@ -277,6 +297,18 @@ async function runFlush(): Promise<void> {
         if (status === 401 || status === 403) {
           patchQueuedMutation(mutation.localId, { lastError: 'Sessão expirada. Entre de novo para enviar o que ficou pendente.' });
           break;
+        }
+        // Closing a session the server no longer has open is not a failure:
+        // finish, complete and cancel all ask for "no open session", and a 404
+        // or 409 means that is already true. Parking it would leave the workout
+        // on screen forever, and every new attempt to close it only queues
+        // another doomed request.
+        const ending = parseSessionEndRoute(mutation.url);
+        if (ending && (status === 404 || status === 409)) {
+          removeFromQueue(mutation.localId);
+          forgetLocalSessionIfMatches(ending.workoutId);
+          replayed += 1;
+          continue;
         }
         // A 4xx will never succeed on replay (duplicate, stale, refused), so it
         // is parked as failed — along with anything that only made sense once
