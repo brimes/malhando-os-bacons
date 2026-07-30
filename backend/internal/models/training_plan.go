@@ -3,17 +3,22 @@ package models
 import "time"
 
 type TrainingPlan struct {
-	ID                     int64             `json:"id"`
-	Name                   string            `json:"name"`
-	Description            string            `json:"description"`
-	TargetDate             time.Time         `json:"target_date"`
-	DaysPerWeek            int               `json:"days_per_week"`
-	SessionDurationMinutes int               `json:"session_duration_minutes"`
-	CreationMethod         string            `json:"creation_method"`
-	AdaptationPhase        bool              `json:"adaptation_phase"`
-	Active                 bool              `json:"active"`
-	Days                   []TrainingPlanDay `json:"days,omitempty"`
-	CreatedAt              time.Time         `json:"created_at"`
+	ID                     int64     `json:"id"`
+	Name                   string    `json:"name"`
+	Description            string    `json:"description"`
+	TargetDate             time.Time `json:"target_date"`
+	DaysPerWeek            int       `json:"days_per_week"`
+	SessionDurationMinutes int       `json:"session_duration_minutes"`
+	CreationMethod         string    `json:"creation_method"`
+	AdaptationPhase        bool      `json:"adaptation_phase"`
+	Active                 bool      `json:"active"`
+	// Kind is "regular" for the person's real plan or "compensation" for a
+	// cheat-day compensation — a separate row so the real plan is never
+	// touched. ExpiresAt is only set for compensation plans.
+	Kind      string            `json:"kind"`
+	ExpiresAt *time.Time        `json:"expires_at,omitempty"`
+	Days      []TrainingPlanDay `json:"days,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
 }
 
 type TrainingPlanDay struct {

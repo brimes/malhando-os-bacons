@@ -22,6 +22,11 @@ type Config struct {
 	GeminiAPIKey       string
 	GeminiModel        string
 	MigrationsDir      string
+	// PhotoDir is where nutrition photos (plate/label) are written: a bind
+	// mount in dev, a PersistentVolumeClaim in production. Without it the
+	// backend would write into the container's ephemeral filesystem and lose
+	// every photo on the next deploy.
+	PhotoDir string
 }
 
 func Load() (*Config, error) {
@@ -42,6 +47,7 @@ func Load() (*Config, error) {
 		GeminiAPIKey:       getEnv("GEMINI_API_KEY", ""),
 		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
 		MigrationsDir:      getEnv("MIGRATIONS_DIR", "/app/migrations"),
+		PhotoDir:           getEnv("PHOTO_DIR", "/data/photos"),
 	}
 
 	return cfg, nil

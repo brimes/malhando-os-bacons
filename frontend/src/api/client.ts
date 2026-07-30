@@ -38,6 +38,10 @@ interface OfflineAwareConfig extends InternalAxiosRequestConfig {
 // localStorage budget the queue depends on.
 const NON_CACHEABLE_GET_PATHS: RegExp[] = [
   /^\/nutrition\/foods\/search/,
+  /^\/nutrition\/plans\/jobs\//,
+  /^\/nutrition\/suggestion/,
+  /^\/nutrition\/photos\//,
+  /^\/nutrition\/cheat-day/,
   /^\/training-plans\/jobs\//,
   /^\/chat(\/|$)/,
   // The chat screen refuses to open offline anyway, so a cached history would

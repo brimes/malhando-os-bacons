@@ -1,0 +1,18 @@
+# Fotos de nutrição (prato/rótulo). NÃO é aplicado pelo workflow — precisa de
+#   kubectl apply -f k8s/pvc.yml
+# uma vez, manualmente, ANTES do primeiro deploy que usa PHOTO_DIR. O
+# provisioner local-path do Rancher só suporta ReadWriteOnce, por isso o
+# deployment.yml usa strategy: Recreate em vez de RollingUpdate — com dois
+# pods tentando montar o mesmo volume RWO o rollout trava esperando o volume
+# que o pod antigo ainda segura.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mob-photos
+  namespace: brimes
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi

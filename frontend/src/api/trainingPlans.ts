@@ -10,6 +10,11 @@ export const trainingPlansApi = {
     await apiClient.post<TrainingPlanJob>('/training-plans/automatic', input)
   ).data,
   getJob: async (id: number) => (await apiClient.get<TrainingPlanJob>(`/training-plans/jobs/${id}`)).data,
+  // 204 when there is no cheat-day compensation currently valid.
+  getCompensation: async (): Promise<TrainingPlan | null> => {
+    const { data, status } = await apiClient.get<TrainingPlan | null>('/training-plans/compensation');
+    return status === 204 ? null : data;
+  },
   // Ajuste por texto livre: também assíncrono, com o mesmo polling de job.
   adjust: async (id: number, instructions: string) => (
     await apiClient.post<TrainingPlanJob>(`/training-plans/${id}/adjust`, { instructions })

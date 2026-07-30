@@ -52,41 +52,89 @@ type WorkoutSet struct {
 	ClientSetID *string `json:"client_set_id,omitempty"`
 }
 
+// FoodItem is either a catalog row shared by everyone (UserID nil) or a
+// personal food someone registered by hand or by photo (UserID set).
 type FoodItem struct {
-	ID              int64   `json:"id"`
-	Name            string  `json:"name"`
-	CaloriesPer100g float64 `json:"calories_per_100g"`
-	ProteinG        float64 `json:"protein_g"`
-	CarbsG          float64 `json:"carbs_g"`
-	FatG            float64 `json:"fat_g"`
-	Source          string  `json:"source,omitempty"`
+	ID              int64    `json:"id"`
+	UserID          *int64   `json:"user_id,omitempty"`
+	Name            string   `json:"name"`
+	Brand           string   `json:"brand,omitempty"`
+	CaloriesPer100g float64  `json:"calories_per_100g"`
+	ProteinG        float64  `json:"protein_g"`
+	CarbsG          float64  `json:"carbs_g"`
+	FatG            float64  `json:"fat_g"`
+	FiberG          float64  `json:"fiber_g"`
+	SodiumMg        float64  `json:"sodium_mg"`
+	ServingLabel    string   `json:"serving_label,omitempty"`
+	ServingGrams    *float64 `json:"serving_grams,omitempty"`
+	Source          string   `json:"source,omitempty"`
+	Archived        bool     `json:"archived"`
+	// CoverPhotoID is the label photo used as this food's cover, if any.
+	CoverPhotoID *int64    `json:"cover_photo_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type NutritionPlan struct {
-	ID             int64   `json:"id"`
-	UserID         int64   `json:"user_id"`
-	Name           string  `json:"name"`
-	CaloriesTarget int     `json:"calories_target"`
-	ProteinTarget  float64 `json:"protein_target"`
-	CarbsTarget    float64 `json:"carbs_target"`
-	FatTarget      float64 `json:"fat_target"`
-	Active         bool    `json:"active"`
+	ID             int64               `json:"id"`
+	UserID         int64               `json:"user_id"`
+	Name           string              `json:"name"`
+	CaloriesTarget int                 `json:"calories_target"`
+	ProteinTarget  float64             `json:"protein_target"`
+	CarbsTarget    float64             `json:"carbs_target"`
+	FatTarget      float64             `json:"fat_target"`
+	Rationale      string              `json:"rationale,omitempty"`
+	CreationMethod string              `json:"creation_method"`
+	TrainingPlanID *int64              `json:"training_plan_id,omitempty"`
+	Active         bool                `json:"active"`
+	Meals          []NutritionPlanMeal `json:"meals,omitempty"`
+	CreatedAt      time.Time           `json:"created_at"`
 }
 
+type NutritionPlanMeal struct {
+	ID          int64                   `json:"id"`
+	MealOrder   int                     `json:"meal_order"`
+	MealType    string                  `json:"meal_type"`
+	Name        string                  `json:"name"`
+	SuggestedAt *string                 `json:"suggested_at,omitempty"` // "HH:MM"
+	Notes       string                  `json:"notes,omitempty"`
+	Items       []NutritionPlanMealItem `json:"items"`
+}
+
+type NutritionPlanMealItem struct {
+	ID         int64   `json:"id"`
+	ItemOrder  int     `json:"item_order"`
+	FoodItemID *int64  `json:"food_item_id,omitempty"`
+	FoodName   string  `json:"food_name"`
+	QuantityG  float64 `json:"quantity_g"`
+	Calories   float64 `json:"calories"`
+	ProteinG   float64 `json:"protein_g"`
+	CarbsG     float64 `json:"carbs_g"`
+	FatG       float64 `json:"fat_g"`
+}
+
+// FoodLog snapshots the macros at the moment it was logged, so correcting a
+// catalog food later never rewrites history — the same principle behind
+// workout_sets storing the weight used instead of a live reference.
 type FoodLog struct {
 	ID         int64     `json:"id"`
 	UserID     int64     `json:"user_id"`
-	FoodItemID int64     `json:"food_item_id"`
+	FoodItemID *int64    `json:"food_item_id,omitempty"`
 	FoodItem   *FoodItem `json:"food_item,omitempty"`
+	FoodName   string    `json:"food_name"`
 	MealType   string    `json:"meal_type"` // breakfast, lunch, dinner, snack
 	QuantityG  float64   `json:"quantity_g"`
-	Date       time.Time `json:"date"`
-	CreatedAt  time.Time `json:"created_at"`
-	// Computed fields
-	Calories float64 `json:"calories,omitempty"`
-	ProteinG float64 `json:"protein_g,omitempty"`
-	CarbsG   float64 `json:"carbs_g,omitempty"`
-	FatG     float64 `json:"fat_g,omitempty"`
+	Calories   float64   `json:"calories"`
+	ProteinG   float64   `json:"protein_g"`
+	CarbsG     float64   `json:"carbs_g"`
+	FatG       float64   `json:"fat_g"`
+	Origin     string    `json:"origin"`
+	// ClientLogID is the idempotency key the app sent when logging this entry
+	// offline, if any. Rows created online carry no key.
+	ClientLogID *string   `json:"client_log_id,omitempty"`
+	PhotoID     *int64    `json:"photo_id,omitempty"`
+	Date        time.Time `json:"date"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type Steps struct {
@@ -145,21 +193,6 @@ type WorkoutStats struct {
 	TotalSets         int     `json:"total_sets"`
 	TotalVolume       float64 `json:"total_volume_kg"`
 	Streak            int     `json:"streak_days"`
-}
-
-type CreateNutritionPlanRequest struct {
-	Name           string  `json:"name"`
-	CaloriesTarget int     `json:"calories_target"`
-	ProteinTarget  float64 `json:"protein_target"`
-	CarbsTarget    float64 `json:"carbs_target"`
-	FatTarget      float64 `json:"fat_target"`
-}
-
-type CreateFoodLogRequest struct {
-	FoodItemID int64   `json:"food_item_id"`
-	MealType   string  `json:"meal_type"`
-	QuantityG  float64 `json:"quantity_g"`
-	Date       string  `json:"date"` // YYYY-MM-DD
 }
 
 type SyncStepsRequest struct {

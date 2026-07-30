@@ -16,6 +16,8 @@ import { ProfilePage } from './pages/Profile';
 import { OnboardingPage } from './pages/Onboarding';
 import { WorkoutHistoryPage } from './pages/WorkoutHistory';
 import { NutritionHistoryPage } from './pages/NutritionHistory';
+import { FoodPhotoPage } from './pages/FoodPhoto';
+import { CheatDayPage } from './pages/CheatDay';
 import { FitnessAssessmentPage } from './pages/FitnessAssessment';
 import { NewTrainingPlanPage } from './pages/NewTrainingPlan';
 import { TrainingPlanDetailPage } from './pages/TrainingPlanDetail';
@@ -121,6 +123,8 @@ export default function App() {
             }
           />
           <Route path="/nutrition/history" element={<ProtectedRoute><NutritionHistoryPage /></ProtectedRoute>} />
+          <Route path="/nutrition/photo/:kind" element={<ProtectedRoute><FoodPhotoPage /></ProtectedRoute>} />
+          <Route path="/nutrition/cheat-day" element={<ProtectedRoute><CheatDayPage /></ProtectedRoute>} />
           <Route path="/fitness-assessment" element={<ProtectedRoute><FitnessAssessmentPage /></ProtectedRoute>} />
 
           <Route

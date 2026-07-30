@@ -94,6 +94,9 @@ export interface TrainingPlan {
   creation_method: 'manual' | 'automatic';
   adaptation_phase: boolean;
   active: boolean;
+  /** "compensation" is a cheat-day plan: a separate row, never the real plan. */
+  kind?: 'regular' | 'compensation';
+  expires_at?: string;
   days?: TrainingPlanDay[];
   created_at: string;
 }
@@ -142,14 +145,46 @@ export interface WorkoutCalendarData {
   days: WorkoutCalendarDay[];
 }
 
+/** user_id absent/null = shared catalog; present = a personal food. */
 export interface FoodItem {
   id: number;
+  user_id?: number | null;
   name: string;
+  brand?: string;
   calories_per_100g: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  fiber_g: number;
+  sodium_mg: number;
+  serving_label?: string;
+  serving_grams?: number;
   source?: string;
+  archived: boolean;
+  cover_photo_id?: number;
+  created_at: string;
+}
+
+export interface NutritionPlanMealItem {
+  id: number;
+  item_order: number;
+  food_item_id?: number;
+  food_name: string;
+  quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface NutritionPlanMeal {
+  id: number;
+  meal_order: number;
+  meal_type: MealType;
+  name: string;
+  suggested_at?: string; // "HH:MM"
+  notes?: string;
+  items: NutritionPlanMealItem[];
 }
 
 export interface NutritionPlan {
@@ -160,22 +195,41 @@ export interface NutritionPlan {
   protein_target: number;
   carbs_target: number;
   fat_target: number;
+  rationale?: string;
+  creation_method: 'manual' | 'automatic';
+  training_plan_id?: number;
   active: boolean;
+  meals?: NutritionPlanMeal[];
+  created_at: string;
+}
+
+export interface NutritionPlanJob {
+  id: number;
+  kind: 'generate' | 'adjust';
+  status: 'pending' | 'done' | 'failed';
+  plan_id?: number;
+  error?: string;
+  created_at: string;
 }
 
 export interface FoodLog {
   id: number;
   user_id: number;
-  food_item_id: number;
+  food_item_id?: number;
   food_item?: FoodItem;
+  food_name: string;
   meal_type: MealType;
   quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  origin: 'manual' | 'plan' | 'photo_plate' | 'photo_label' | 'cheat_day';
+  client_log_id?: string;
+  photo_id?: number;
   date: string;
   created_at: string;
-  calories?: number;
-  protein_g?: number;
-  carbs_g?: number;
-  fat_g?: number;
+  updated_at: string;
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -328,11 +382,103 @@ export interface CreateNutritionPlanInput {
   fat_target: number;
 }
 
+export interface AutomaticNutritionPlanInput {
+  preferences: string;
+}
+
 export interface CreateFoodLogInput {
-  food_item_id: number;
-  meal_type: MealType;
+  food_item_id?: number;
+  food_name?: string;
   quantity_g: number;
+  meal_type: MealType;
   date?: string;
+  origin?: FoodLog['origin'];
+  photo_id?: number;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
+  /** Idempotency key; the API layer fills it in. */
+  client_log_id?: string;
+}
+
+export interface UpdateFoodLogInput {
+  quantity_g: number;
+  meal_type: MealType;
+}
+
+export interface CreateFoodItemInput {
+  name: string;
+  brand?: string;
+  calories_per_100g: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g?: number;
+  sodium_mg?: number;
+  serving_label?: string;
+  serving_grams?: number;
+  photo_id?: number;
+}
+
+export interface PlateAnalysisItem {
+  food_name: string;
+  estimated_grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface PlateAnalysis {
+  items: PlateAnalysisItem[];
+  confidence: 'high' | 'medium' | 'low';
+  caveat: string;
+}
+
+export interface LabelAnalysis {
+  name: string;
+  brand: string;
+  serving_label: string;
+  serving_grams: number;
+  calories_per_100g: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sodium_mg: number;
+}
+
+export interface PhotoUploadResponse<T> {
+  photo_id: number;
+  kind: 'plate' | 'label';
+  analysis: T;
+}
+
+export interface NutritionSuggestion {
+  remaining_calories: number;
+  remaining_protein_g: number;
+  remaining_carbs_g: number;
+  remaining_fat_g: number;
+  suggestions: string[];
+}
+
+export interface CheatDayMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export interface CheatDaySession {
+  id: number;
+  status: 'open' | 'accepted' | 'discarded';
+  happens_on: string;
+  estimated_calories?: number;
+  summary?: string;
+  compensation_plan_id?: number;
+  messages: CheatDayMessage[];
+  created_at: string;
 }
 
 export interface SyncStepsInput {

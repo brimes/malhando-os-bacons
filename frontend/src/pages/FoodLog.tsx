@@ -13,12 +13,17 @@ export function FoodLogPage() {
 
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<FoodItem | null>(null);
+  const [useServing, setUseServing] = useState(false);
   const [quantity, setQuantity] = useState('100');
   const [mealType, setMealType] = useState<MealType>('lunch');
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     clearTimeout(searchTimeout.current);
+    // Re-searching after a selection needs to work too — clearing `selected`
+    // whenever the query is edited by hand is what lets the dropdown come
+    // back instead of staying hidden until the field is cleared outright.
     if (query.length >= 2) {
       searchTimeout.current = setTimeout(() => searchFoods(query), 400);
     }
@@ -27,6 +32,13 @@ export function FoodLogPage() {
   const handleSelect = (food: FoodItem) => {
     setSelected(food);
     setQuery(food.name);
+    setUseServing(Boolean(food.serving_grams));
+    setQuantity(food.serving_grams ? String(food.serving_grams) : '100');
+  };
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (selected) setSelected(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -37,6 +49,7 @@ export function FoodLogPage() {
       food_item_id: selected.id,
       meal_type: mealType,
       quantity_g: Number(quantity),
+      date,
     });
     navigate('/nutrition');
   };
@@ -59,7 +72,7 @@ export function FoodLogPage() {
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
             placeholder="Buscar alimento..."
             autoFocus
             className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3.5 text-white placeholder-zinc-500 focus:outline-none focus:border-primary-500 transition-colors"
@@ -80,7 +93,9 @@ export function FoodLogPage() {
                   onClick={() => handleSelect(food)}
                   className="w-full px-4 py-3 text-left hover:bg-zinc-800 transition-colors border-b border-zinc-800 last:border-0"
                 >
-                  <p className="text-sm font-medium text-white">{food.name}</p>
+                  <p className="text-sm font-medium text-white">
+                    {food.name} {food.brand && <span className="text-zinc-500">· {food.brand}</span>}
+                  </p>
                   <p className="text-xs text-zinc-500">
                     {food.calories_per_100g} kcal/100g · P:{food.protein_g}g C:{food.carbs_g}g G:{food.fat_g}g
                   </p>
@@ -113,10 +128,39 @@ export function FoodLogPage() {
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Data</label>
+              <input
+                type="date"
+                value={date}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+              />
+            </div>
+
             {/* Quantity */}
             <Card>
+              {selected.serving_grams && (
+                <div className="mb-3 grid grid-cols-2 rounded-xl bg-zinc-950 p-1">
+                  <button
+                    type="button"
+                    onClick={() => { setUseServing(true); setQuantity(String(selected.serving_grams)); }}
+                    className={`rounded-lg py-2 text-xs font-semibold ${useServing ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}
+                  >
+                    {selected.serving_label || 'Porção'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseServing(false)}
+                    className={`rounded-lg py-2 text-xs font-semibold ${!useServing ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}
+                  >
+                    Gramas
+                  </button>
+                </div>
+              )}
               <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">
-                Quantidade (gramas)
+                {useServing ? `Quantidade (${selected.serving_label || 'porções'})` : 'Quantidade (gramas)'}
               </label>
               <input
                 type="number"

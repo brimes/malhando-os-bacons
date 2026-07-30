@@ -7,6 +7,7 @@ import { MacroProgress } from '../components/Chart';
 import { Button } from '../components/Button';
 import { workoutsApi } from '../api/workouts';
 import { SyncBanner } from '../components/SyncStatus';
+import { CompensationCard } from '../components/CompensationCard';
 import type { ActiveWorkout, DashboardData } from '../types';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 
@@ -199,6 +200,8 @@ export function DashboardPage() {
           </Card>
         )}
       </div>
+
+      <CompensationCard />
 
       {/* Nutrition summary */}
       {data?.active_plan && (

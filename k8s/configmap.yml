@@ -14,3 +14,5 @@ data:
   # and defaults to gemini. GEMINI_API_KEY lives in the secret.
   ASSISTANT_PROVIDER: "gemini"
   GEMINI_MODEL: "gemini-3.6-flash"
+  # Precisa bater com o mountPath do PVC mob-photos em k8s/deployment.yml.
+  PHOTO_DIR: "/data/photos"

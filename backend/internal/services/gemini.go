@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,6 +46,41 @@ func (g *GeminiGenerator) Generate(ctx context.Context, system, prompt string, s
 		},
 		"contents": []map[string]any{
 			{"role": "user", "parts": []map[string]string{{"text": prompt}}},
+		},
+		"generationConfig": map[string]any{
+			"responseMimeType": "application/json",
+			"responseSchema":   toGeminiSchema(schema),
+		},
+	}
+	text, err := g.generateContent(ctx, body)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal([]byte(text), out); err != nil {
+		return fmt.Errorf("decode gemini structured output: %w", err)
+	}
+	return nil
+}
+
+// GenerateWithImages is Generate plus one or more photos attached to the same
+// user turn. inlineData is an object, not a string, which is exactly why the
+// plain Generate/Chat part shape ([]map[string]string) cannot express it.
+func (g *GeminiGenerator) GenerateWithImages(ctx context.Context, system, prompt string, images []ImagePart, schema map[string]any, out any) error {
+	parts := []map[string]any{{"text": prompt}}
+	for _, image := range images {
+		parts = append(parts, map[string]any{
+			"inlineData": map[string]any{
+				"mimeType": image.MIMEType,
+				"data":     base64.StdEncoding.EncodeToString(image.Data),
+			},
+		})
+	}
+	body := map[string]any{
+		"systemInstruction": map[string]any{
+			"parts": []map[string]string{{"text": system}},
+		},
+		"contents": []map[string]any{
+			{"role": "user", "parts": parts},
 		},
 		"generationConfig": map[string]any{
 			"responseMimeType": "application/json",

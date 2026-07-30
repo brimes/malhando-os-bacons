@@ -8,16 +8,27 @@ spec:
   selector:
     matchLabels:
       app: mob
+  # local-path (o provisioner do PVC de fotos) só suporta ReadWriteOnce: um
+  # RollingUpdate tentaria montar o mesmo volume em dois pods ao mesmo tempo
+  # e travaria esperando um volume que o pod antigo ainda segura. Recreate
+  # custa alguns segundos de indisponibilidade, aceitável num app de uso
+  # pessoal, e evita essa classe inteira de problema.
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+    type: Recreate
   template:
     metadata:
       labels:
         app: mob
     spec:
+      securityContext:
+        # O container roda como USER nobody (backend/Dockerfile) — no Alpine,
+        # uid/gid 65534. Sem isso o pod sobe normal e só falha ao gravar a
+        # primeira foto, em runtime, longe do deploy.
+        fsGroup: 65534
+      volumes:
+        - name: photos
+          persistentVolumeClaim:
+            claimName: mob-photos
       containers:
         - name: mob
           image: localhost:5000/mob:latest
@@ -29,6 +40,9 @@ spec:
                 name: mob-config
             - secretRef:
                 name: mob-secrets
+          volumeMounts:
+            - name: photos
+              mountPath: /data/photos
           livenessProbe:
             httpGet:
               path: /health

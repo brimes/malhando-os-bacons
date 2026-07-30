@@ -12,13 +12,13 @@ import (
 // Setup wires the routes. The generator resolver, rather than a ready-made
 // assistant, is what gets injected: which credentials each call runs on is only
 // known once the user is.
-func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, googleClientID, allowedOrigins string) http.Handler {
+func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, googleClientID, allowedOrigins, photoDir string) http.Handler {
 	mux := http.NewServeMux()
 
 	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID)
 	workoutHandler := handlers.NewWorkoutHandler(database)
 	sessionHandler := handlers.NewWorkoutSessionHandler(database)
-	nutritionHandler := handlers.NewNutritionHandler(database)
+	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
 	stepsHandler := handlers.NewStepsHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database)
 	resultsHandler := handlers.NewResultsHandler(database)
@@ -86,6 +86,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	mux.HandleFunc("POST /api/training-plans/manual", chain(trainingPlanHandler.CreateManual, auth))
 	mux.HandleFunc("POST /api/training-plans/automatic", chain(trainingPlanHandler.CreateAutomatic, auth))
 	mux.HandleFunc("GET /api/training-plans/jobs/{id}", chain(trainingPlanHandler.GetJob, auth))
+	mux.HandleFunc("GET /api/training-plans/compensation", chain(trainingPlanHandler.GetCompensation, auth))
 	mux.HandleFunc("GET /api/training-plans/{id}", chain(trainingPlanHandler.Get, auth))
 	mux.HandleFunc("POST /api/training-plans/{id}/adjust", chain(trainingPlanHandler.Adjust, auth))
 	mux.HandleFunc("DELETE /api/training-plans/{id}", chain(trainingPlanHandler.Delete, auth))
@@ -93,10 +94,27 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	// Nutrition routes
 	mux.HandleFunc("GET /api/nutrition/plans", chain(nutritionHandler.ListPlans, auth))
 	mux.HandleFunc("POST /api/nutrition/plans", chain(nutritionHandler.CreatePlan, auth))
+	mux.HandleFunc("POST /api/nutrition/plans/automatic", chain(nutritionHandler.CreateAutomatic, auth))
+	mux.HandleFunc("GET /api/nutrition/plans/jobs/{id}", chain(nutritionHandler.GetJob, auth))
+	mux.HandleFunc("POST /api/nutrition/plans/{id}/adjust", chain(nutritionHandler.Adjust, auth))
+	mux.HandleFunc("PUT /api/nutrition/plans/{id}/activate", chain(nutritionHandler.Activate, auth))
 	mux.HandleFunc("GET /api/nutrition/logs", chain(nutritionHandler.GetLogs, auth))
 	mux.HandleFunc("POST /api/nutrition/logs", chain(nutritionHandler.CreateLog, auth))
+	mux.HandleFunc("PUT /api/nutrition/logs/{id}", chain(nutritionHandler.UpdateLog, auth))
+	mux.HandleFunc("DELETE /api/nutrition/logs/{id}", chain(nutritionHandler.DeleteLog, auth))
 	mux.HandleFunc("GET /api/nutrition/calendar", chain(nutritionHandler.Calendar, auth))
 	mux.HandleFunc("GET /api/nutrition/foods/search", chain(nutritionHandler.SearchFoods, auth))
+	mux.HandleFunc("GET /api/nutrition/foods", chain(nutritionHandler.ListPersonalFoods, auth))
+	mux.HandleFunc("POST /api/nutrition/foods", chain(nutritionHandler.CreatePersonalFood, auth))
+	mux.HandleFunc("PUT /api/nutrition/foods/{id}", chain(nutritionHandler.UpdatePersonalFood, auth))
+	mux.HandleFunc("DELETE /api/nutrition/foods/{id}", chain(nutritionHandler.DeletePersonalFood, auth))
+	mux.HandleFunc("GET /api/nutrition/suggestion", chain(nutritionHandler.SuggestRestOfDay, auth))
+	mux.HandleFunc("POST /api/nutrition/photos", chain(nutritionHandler.UploadPhoto, auth))
+	mux.HandleFunc("GET /api/nutrition/photos/{id}", chain(nutritionHandler.ServePhoto, auth))
+	mux.HandleFunc("GET /api/nutrition/cheat-day", chain(nutritionHandler.GetCheatDay, auth))
+	mux.HandleFunc("POST /api/nutrition/cheat-day/messages", chain(nutritionHandler.SendCheatDayMessage, auth))
+	mux.HandleFunc("POST /api/nutrition/cheat-day/{id}/accept", chain(nutritionHandler.AcceptCheatDay, auth))
+	mux.HandleFunc("POST /api/nutrition/cheat-day/{id}/discard", chain(nutritionHandler.DiscardCheatDay, auth))
 
 	// Steps routes
 	mux.HandleFunc("GET /api/steps", chain(stepsHandler.GetToday, auth))

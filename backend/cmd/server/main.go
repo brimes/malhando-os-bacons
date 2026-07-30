@@ -54,6 +54,7 @@ func main() {
 	// Plan generation runs in an in-process goroutine, so anything still pending
 	// was orphaned by the previous shutdown and will never finish on its own.
 	// Failing it here stops the client from polling a job that is already dead.
+	// Nutrition plan generation uses the exact same pattern and has the same problem.
 	if tag, err := database.Pool.Exec(ctx,
 		`UPDATE training_plan_jobs SET status='failed', updated_at=NOW(),
 		 error='a geração foi interrompida por um reinício do servidor; tente novamente'
@@ -61,6 +62,19 @@ func main() {
 		slog.Error("failed to clear orphaned training plan jobs", "error", err)
 	} else if tag.RowsAffected() > 0 {
 		slog.Info("cleared orphaned training plan jobs", "count", tag.RowsAffected())
+	}
+	if tag, err := database.Pool.Exec(ctx,
+		`UPDATE nutrition_plan_jobs SET status='failed', updated_at=NOW(),
+		 error='a geração foi interrompida por um reinício do servidor; tente novamente'
+		 WHERE status='pending'`); err != nil {
+		slog.Error("failed to clear orphaned nutrition plan jobs", "error", err)
+	} else if tag.RowsAffected() > 0 {
+		slog.Info("cleared orphaned nutrition plan jobs", "count", tag.RowsAffected())
+	}
+
+	if err := os.MkdirAll(cfg.PhotoDir, 0o755); err != nil {
+		slog.Error("failed to create photo directory", "dir", cfg.PhotoDir, "error", err)
+		os.Exit(1)
 	}
 
 	generator, err := newAssistantGenerator(cfg)
@@ -71,7 +85,7 @@ func main() {
 	// The configured provider is the shared credit: users who saved their own
 	// Gemini key run on it instead, which the resolver decides per user.
 	resolver := services.NewGeneratorResolver(database, generator, cfg.GeminiModel)
-	handler := routes.Setup(database, resolver, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins)
+	handler := routes.Setup(database, resolver, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins, cfg.PhotoDir)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

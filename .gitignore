@@ -55,6 +55,7 @@ watch/libs/
 
 # Docker volumes
 postgres_data/
+data/photos/
 
 # Assinatura Android — nunca versionar
 *.keystore

@@ -37,12 +37,16 @@ func (h *TrainingPlanHandler) assistantFor(ctx context.Context, userID int64) se
 	return services.NewTrainingPlanAssistant(h.resolver.For(ctx, userID))
 }
 
+// List returns the person's real plans only. Compensation plans (kind =
+// 'compensation') are always active=false and have their own display surface
+// via the cheat-day flow — mixing them into this history would make an
+// expired indulgence look like an abandoned training plan.
 func (h *TrainingPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT id, name, description, target_date, days_per_week, session_duration_minutes,
-		 creation_method, adaptation_phase, active, created_at
-		 FROM training_plans WHERE user_id = $1 ORDER BY active DESC, created_at DESC`, userID)
+		 creation_method, adaptation_phase, active, kind, created_at
+		 FROM training_plans WHERE user_id = $1 AND kind = 'regular' ORDER BY active DESC, created_at DESC`, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load training plans"})
 		return
@@ -52,7 +56,7 @@ func (h *TrainingPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var plan models.TrainingPlan
 		if err := rows.Scan(&plan.ID, &plan.Name, &plan.Description, &plan.TargetDate, &plan.DaysPerWeek,
-			&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.CreatedAt); err == nil {
+			&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.Kind, &plan.CreatedAt); err == nil {
 			plans = append(plans, plan)
 		}
 	}
@@ -69,10 +73,11 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var plan models.TrainingPlan
 	err = h.db.Pool.QueryRow(r.Context(),
 		`SELECT id, name, description, target_date, days_per_week, session_duration_minutes,
-		 creation_method, adaptation_phase, active, created_at
+		 creation_method, adaptation_phase, active, kind, expires_at, created_at
 		 FROM training_plans WHERE id = $1 AND user_id = $2`, id, userID,
 	).Scan(&plan.ID, &plan.Name, &plan.Description, &plan.TargetDate, &plan.DaysPerWeek,
-		&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.CreatedAt)
+		&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active,
+		&plan.Kind, &plan.ExpiresAt, &plan.CreatedAt)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "training plan not found"})
 		return
@@ -115,6 +120,30 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 		plan.Days = append(plan.Days, day)
 	}
 	writeJSON(w, http.StatusOK, plan)
+}
+
+// GetCompensation returns the currently valid cheat-day compensation plan, if
+// any — the one non-expired kind='compensation' row, so the dashboard and the
+// plan screen can surface it as a standalone extra session without the
+// person having to dig through the cheat-day conversation history.
+func (h *TrainingPlanHandler) GetCompensation(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	var id int64
+	err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT id FROM training_plans
+		 WHERE user_id = $1 AND kind = 'compensation' AND expires_at >= CURRENT_DATE
+		 ORDER BY created_at DESC LIMIT 1`, userID,
+	).Scan(&id)
+	if err == pgx.ErrNoRows {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load compensation plan"})
+		return
+	}
+	r.URL.Path = fmt.Sprintf("/api/training-plans/%d", id)
+	h.Get(w, r)
 }
 
 func (h *TrainingPlanHandler) Delete(w http.ResponseWriter, r *http.Request) {

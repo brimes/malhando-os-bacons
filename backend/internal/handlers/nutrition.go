@@ -1,106 +1,31 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/middleware"
 	"github.com/mob/backend/internal/models"
+	"github.com/mob/backend/internal/services"
 )
 
+var validMealTypes = map[string]bool{"breakfast": true, "lunch": true, "dinner": true, "snack": true}
+
 type NutritionHandler struct {
-	db *db.DB
+	db       *db.DB
+	resolver services.GeneratorResolver
+	photoDir string
 }
 
-func NewNutritionHandler(database *db.DB) *NutritionHandler {
-	return &NutritionHandler{db: database}
-}
-
-func (h *NutritionHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, user_id, name, calories_target, protein_target, carbs_target, fat_target, active
-		 FROM nutrition_plans WHERE user_id = $1 ORDER BY active DESC, id DESC`,
-		userID,
-	)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch plans"})
-		return
-	}
-	defer rows.Close()
-
-	plans := []models.NutritionPlan{}
-	for rows.Next() {
-		var p models.NutritionPlan
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.CaloriesTarget,
-			&p.ProteinTarget, &p.CarbsTarget, &p.FatTarget, &p.Active); err != nil {
-			continue
-		}
-		plans = append(plans, p)
-	}
-
-	writeJSON(w, http.StatusOK, plans)
-}
-
-func (h *NutritionHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	var req models.CreateNutritionPlanRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-
-	if req.Name == "" || req.CaloriesTarget <= 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "name and calories_target are required"})
-		return
-	}
-
-	tx, err := h.db.Pool.Begin(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "transaction error"})
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	// Deactivate existing plans
-	_, err = tx.Exec(r.Context(),
-		`UPDATE nutrition_plans SET active = false WHERE user_id = $1`, userID)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update plans"})
-		return
-	}
-
-	var plan models.NutritionPlan
-	err = tx.QueryRow(r.Context(),
-		`INSERT INTO nutrition_plans (user_id, name, calories_target, protein_target, carbs_target, fat_target, active)
-		 VALUES ($1, $2, $3, $4, $5, $6, true)
-		 RETURNING id, user_id, name, calories_target, protein_target, carbs_target, fat_target, active`,
-		userID, req.Name, req.CaloriesTarget, req.ProteinTarget, req.CarbsTarget, req.FatTarget,
-	).Scan(&plan.ID, &plan.UserID, &plan.Name, &plan.CaloriesTarget,
-		&plan.ProteinTarget, &plan.CarbsTarget, &plan.FatTarget, &plan.Active)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create plan"})
-		return
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "commit error"})
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, plan)
+func NewNutritionHandler(database *db.DB, resolver services.GeneratorResolver, photoDir string) *NutritionHandler {
+	return &NutritionHandler{db: database, resolver: resolver, photoDir: photoDir}
 }
 
 func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
@@ -124,10 +49,11 @@ func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT fl.id, fl.user_id, fl.food_item_id, fl.meal_type, fl.quantity_g, fl.date, fl.created_at,
-		        fi.id, fi.name, fi.calories_per_100g, fi.protein_g, fi.carbs_g, fi.fat_g, fi.source
+		`SELECT fl.id, fl.user_id, fl.food_item_id, fl.food_name, fl.meal_type, fl.quantity_g,
+		        fl.calories, fl.protein_g, fl.carbs_g, fl.fat_g, fl.origin, fl.client_log_id,
+		        mp.id, fl.date, fl.created_at, fl.updated_at
 		 FROM food_logs fl
-		 JOIN food_items fi ON fi.id = fl.food_item_id
+		 LEFT JOIN meal_photos mp ON mp.food_log_id = fl.id
 		 WHERE fl.user_id = $1 AND fl.date::date = $2::date
 		 ORDER BY fl.created_at`,
 		userID, date,
@@ -141,19 +67,13 @@ func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	logs := []models.FoodLog{}
 	for rows.Next() {
 		var log models.FoodLog
-		var fi models.FoodItem
 		if err := rows.Scan(
-			&log.ID, &log.UserID, &log.FoodItemID, &log.MealType, &log.QuantityG, &log.Date, &log.CreatedAt,
-			&fi.ID, &fi.Name, &fi.CaloriesPer100g, &fi.ProteinG, &fi.CarbsG, &fi.FatG, &fi.Source,
+			&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
+			&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID,
+			&log.PhotoID, &log.Date, &log.CreatedAt, &log.UpdatedAt,
 		); err != nil {
 			continue
 		}
-		log.FoodItem = &fi
-		ratio := log.QuantityG / 100.0
-		log.Calories = fi.CaloriesPer100g * ratio
-		log.ProteinG = fi.ProteinG * ratio
-		log.CarbsG = fi.CarbsG * ratio
-		log.FatG = fi.FatG * ratio
 		logs = append(logs, log)
 	}
 
@@ -172,15 +92,21 @@ func (h *NutritionHandler) CreateLog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-
-	if req.FoodItemID == 0 || req.QuantityG <= 0 || req.MealType == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "food_item_id, quantity_g, and meal_type are required"})
+	if req.QuantityG <= 0 || !validMealTypes[req.MealType] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "quantity_g e meal_type (breakfast, lunch, dinner ou snack) são obrigatórios"})
 		return
 	}
-
-	validMeals := map[string]bool{"breakfast": true, "lunch": true, "dinner": true, "snack": true}
-	if !validMeals[req.MealType] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "meal_type must be: breakfast, lunch, dinner, or snack"})
+	if req.FoodItemID == nil && strings.TrimSpace(req.FoodName) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "food_item_id ou food_name é obrigatório"})
+		return
+	}
+	origin := req.Origin
+	validOrigins := map[string]bool{"manual": true, "plan": true, "photo_plate": true, "photo_label": true, "cheat_day": true}
+	if origin == "" {
+		origin = "manual"
+	}
+	if !validOrigins[origin] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "origin inválido"})
 		return
 	}
 
@@ -194,49 +120,153 @@ func (h *NutritionHandler) CreateLog(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	foodName := strings.TrimSpace(req.FoodName)
+	calories, proteinG, carbsG, fatG := req.Calories, req.ProteinG, req.CarbsG, req.FatG
+	if req.FoodItemID != nil {
+		var fi models.FoodItem
+		err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT name, calories_per_100g, protein_g, carbs_g, fat_g FROM food_items WHERE id=$1 AND (user_id IS NULL OR user_id=$2)`,
+			*req.FoodItemID, userID).Scan(&fi.Name, &fi.CaloriesPer100g, &fi.ProteinG, &fi.CarbsG, &fi.FatG)
+		if err == pgx.ErrNoRows {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "alimento não encontrado"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load food item"})
+			return
+		}
+		ratio := req.QuantityG / 100.0
+		foodName = fi.Name
+		calories = round2(fi.CaloriesPer100g * ratio)
+		proteinG = round2(fi.ProteinG * ratio)
+		carbsG = round2(fi.CarbsG * ratio)
+		fatG = round2(fi.FatG * ratio)
+	}
+
+	var clientLogID *string
+	if strings.TrimSpace(req.ClientLogID) != "" {
+		trimmed := strings.TrimSpace(req.ClientLogID)
+		clientLogID = &trimmed
+	}
+
 	var log models.FoodLog
 	err := h.db.Pool.QueryRow(r.Context(),
-		`INSERT INTO food_logs (user_id, food_item_id, meal_type, quantity_g, date)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, user_id, food_item_id, meal_type, quantity_g, date, created_at`,
-		userID, req.FoodItemID, req.MealType, req.QuantityG, logDate,
-	).Scan(&log.ID, &log.UserID, &log.FoodItemID, &log.MealType, &log.QuantityG, &log.Date, &log.CreatedAt)
+		`INSERT INTO food_logs (user_id, food_item_id, food_name, meal_type, quantity_g, calories, protein_g, carbs_g, fat_g, date, origin, client_log_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		 RETURNING id, user_id, food_item_id, food_name, meal_type, quantity_g, calories, protein_g, carbs_g, fat_g, origin, client_log_id, date, created_at, updated_at`,
+		userID, req.FoodItemID, foodName, req.MealType, req.QuantityG, calories, proteinG, carbsG, fatG, logDate, origin, clientLogID,
+	).Scan(&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
+		&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID, &log.Date, &log.CreatedAt, &log.UpdatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		// A replay of the offline queue collides on idx_food_logs_client_id: the
+		// row this key already created is returned as-is, so retrying is safe.
+		if clientLogID != nil && errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			existing, lookupErr := h.findLogByClientID(r.Context(), userID, *clientLogID)
+			if lookupErr == nil {
+				writeJSON(w, http.StatusOK, existing)
+				return
+			}
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create food log"})
 		return
+	}
+	if req.PhotoID != nil {
+		// The log was created successfully; losing the photo link is not fatal.
+		_, _ = h.db.Pool.Exec(r.Context(),
+			`UPDATE meal_photos SET food_log_id=$1 WHERE id=$2 AND user_id=$3`, log.ID, *req.PhotoID, userID)
 	}
 
 	writeJSON(w, http.StatusCreated, log)
 }
 
-func (h *NutritionHandler) SearchFoods(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	if q == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "query parameter 'q' is required"})
-		return
-	}
+func (h *NutritionHandler) findLogByClientID(ctx context.Context, userID int64, clientLogID string) (models.FoodLog, error) {
+	var log models.FoodLog
+	err := h.db.Pool.QueryRow(ctx,
+		`SELECT id, user_id, food_item_id, food_name, meal_type, quantity_g, calories, protein_g, carbs_g, fat_g, origin, client_log_id, date, created_at, updated_at
+		 FROM food_logs WHERE user_id=$1 AND client_log_id=$2`, userID, clientLogID,
+	).Scan(&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
+		&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID, &log.Date, &log.CreatedAt, &log.UpdatedAt)
+	return log, err
+}
 
-	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, name, calories_per_100g, protein_g, carbs_g, fat_g, COALESCE(source, '') as source
-		 FROM food_items WHERE name ILIKE '%' || $1 || '%' ORDER BY name LIMIT 20`,
-		q,
-	)
+func round2(v float64) float64 {
+	return float64(int(v*100+0.5)) / 100
+}
+
+func (h *NutritionHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	id, err := parseIDFromPath(r.URL.Path)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "search failed"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid log id"})
 		return
 	}
-	defer rows.Close()
-
-	foods := []models.FoodItem{}
-	for rows.Next() {
-		var f models.FoodItem
-		if err := rows.Scan(&f.ID, &f.Name, &f.CaloriesPer100g, &f.ProteinG, &f.CarbsG, &f.FatG, &f.Source); err != nil {
-			continue
-		}
-		foods = append(foods, f)
+	var req models.UpdateFoodLogRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.QuantityG <= 0 || !validMealTypes[req.MealType] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "quantity_g e meal_type são obrigatórios"})
+		return
 	}
 
-	writeJSON(w, http.StatusOK, foods)
+	// Rescale the snapshotted macros by the new quantity relative to the old one,
+	// so editing "170g em vez de 150g" keeps the same per-gram ratio instead of
+	// requiring a fresh catalog lookup (a free-text or photo log has none).
+	var oldQuantity, calories, proteinG, carbsG, fatG float64
+	err = h.db.Pool.QueryRow(r.Context(),
+		`SELECT quantity_g, calories, protein_g, carbs_g, fat_g FROM food_logs WHERE id=$1 AND user_id=$2`,
+		id, userID).Scan(&oldQuantity, &calories, &proteinG, &carbsG, &fatG)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "food log not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load food log"})
+		return
+	}
+	if oldQuantity > 0 {
+		ratio := req.QuantityG / oldQuantity
+		calories, proteinG, carbsG, fatG = round2(calories*ratio), round2(proteinG*ratio), round2(carbsG*ratio), round2(fatG*ratio)
+	}
+
+	var log models.FoodLog
+	err = h.db.Pool.QueryRow(r.Context(),
+		`UPDATE food_logs SET quantity_g=$3, meal_type=$4, calories=$5, protein_g=$6, carbs_g=$7, fat_g=$8, updated_at=NOW()
+		 WHERE id=$1 AND user_id=$2
+		 RETURNING id, user_id, food_item_id, food_name, meal_type, quantity_g, calories, protein_g, carbs_g, fat_g, origin, client_log_id, date, created_at, updated_at`,
+		id, userID, req.QuantityG, req.MealType, calories, proteinG, carbsG, fatG,
+	).Scan(&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
+		&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID, &log.Date, &log.CreatedAt, &log.UpdatedAt)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "food log not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update food log"})
+		return
+	}
+	writeJSON(w, http.StatusOK, log)
+}
+
+func (h *NutritionHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	id, err := parseIDFromPath(r.URL.Path)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid log id"})
+		return
+	}
+	tag, err := h.db.Pool.Exec(r.Context(), `DELETE FROM food_logs WHERE id=$1 AND user_id=$2`, id, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete food log"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "food log not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *NutritionHandler) Calendar(w http.ResponseWriter, r *http.Request) {
@@ -248,10 +278,10 @@ func (h *NutritionHandler) Calendar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT fl.date::date, COALESCE(SUM(fi.calories_per_100g * fl.quantity_g / 100.0), 0)
-		 FROM food_logs fl JOIN food_items fi ON fi.id = fl.food_item_id
-		 WHERE fl.user_id = $1 AND fl.date >= $2 AND fl.date < $3
-		 GROUP BY fl.date::date ORDER BY fl.date::date`, userID, start, end)
+		`SELECT date::date, COALESCE(SUM(calories), 0)
+		 FROM food_logs
+		 WHERE user_id = $1 AND date >= $2 AND date < $3
+		 GROUP BY date::date ORDER BY date::date`, userID, start, end)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch nutrition calendar"})
 		return

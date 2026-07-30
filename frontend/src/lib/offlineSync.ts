@@ -53,6 +53,16 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   /^\/onboarding\/objective\//,
   /^\/training-plans\/automatic/,
   /^\/training-plans\/\d+\/adjust/,
+  // Same reasoning as the training plan assistant: generation/adjustment run
+  // for minutes against a live LLM call, and a photo upload cannot be queued
+  // in localStorage at all (base64 would blow past the per-entry cap and the
+  // origin's ~5MB budget). The cheat-day conversation and its acceptance are
+  // also live exchanges with the assistant, same as workout/onboarding chat.
+  /^\/nutrition\/plans\/automatic/,
+  /^\/nutrition\/plans\/\d+\/adjust/,
+  /^\/nutrition\/photos/,
+  /^\/nutrition\/suggestion/,
+  /^\/nutrition\/cheat-day/,
   // Never queue the user's own API key: the queue is persisted in localStorage
   // in clear text, so an offline save would leave a third-party credential
   // sitting on the device indefinitely. The server also validates the key

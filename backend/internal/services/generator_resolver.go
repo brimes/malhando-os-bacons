@@ -22,6 +22,9 @@ type GeneratorResolver interface {
 	// ChatFor returns the free-text side of the same generator, or
 	// ErrChatNotSupported when the provider in use cannot do it.
 	ChatFor(ctx context.Context, userID int64) (ChatGenerator, error)
+	// VisionFor returns the image side of the same generator, or
+	// ErrVisionNotSupported when the provider in use cannot see.
+	VisionFor(ctx context.Context, userID int64) (VisionGenerator, error)
 }
 
 type userGeneratorResolver struct {
@@ -82,6 +85,14 @@ func (r *userGeneratorResolver) ChatFor(ctx context.Context, userID int64) (Chat
 	generator, ok := r.For(ctx, userID).(ChatGenerator)
 	if !ok {
 		return nil, ErrChatNotSupported
+	}
+	return generator, nil
+}
+
+func (r *userGeneratorResolver) VisionFor(ctx context.Context, userID int64) (VisionGenerator, error) {
+	generator, ok := r.For(ctx, userID).(VisionGenerator)
+	if !ok {
+		return nil, ErrVisionNotSupported
 	}
 	return generator, nil
 }
