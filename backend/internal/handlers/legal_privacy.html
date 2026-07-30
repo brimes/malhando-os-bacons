@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de Privacidade — MOB</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0 auto; padding:2rem 1.25rem 5rem; max-width:46rem;
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         color:#18181b; background:#fff; }
+  @media (prefers-color-scheme: dark) { body { color:#e4e4e7; background:#18181b; } }
+  h1 { font-size:1.7rem; line-height:1.2; margin:0 0 .25rem; }
+  h2 { font-size:1.15rem; margin:2.25rem 0 .5rem; }
+  h3 { font-size:1rem; margin:1.25rem 0 .35rem; }
+  .meta { color:#71717a; font-size:.9rem; margin:0 0 2rem; }
+  ul { padding-left:1.25rem; }
+  li { margin:.3rem 0; }
+  table { width:100%; border-collapse:collapse; margin:.75rem 0; font-size:.94rem; }
+  th,td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid #e4e4e7; vertical-align:top; }
+  @media (prefers-color-scheme: dark) { th,td { border-color:#3f3f46; } }
+  th { font-weight:600; }
+  .box { border:1px solid #e4e4e7; border-radius:.75rem; padding:1rem 1.1rem; margin:1.25rem 0; }
+  @media (prefers-color-scheme: dark) { .box { border-color:#3f3f46; } }
+  a { color:#c34522; }
+</style>
+</head>
+<body>
+
+<h1>Política de Privacidade do MOB</h1>
+<p class="meta">Malhando os Bacons · Última atualização: 29 de julho de 2026</p>
+
+<p>Esta política explica quais dados o MOB coleta, para que usa, com quem
+compartilha e como você pode acessá-los ou apagá-los. Está escrita para ser lida
+de verdade, sem juridiquês.</p>
+
+<div class="box">
+  <strong>O essencial em quatro linhas.</strong>
+  <ul>
+    <li>Coletamos o que você digita no app: dados de perfil, treinos, medidas e objetivos.</li>
+    <li>São dados de saúde, tratados como <em>dados pessoais sensíveis</em> pela LGPD.</li>
+    <li>Trechos desses dados vão para a IA do Google, que é quem gera os planos e responde dúvidas.</li>
+    <li>Não vendemos, não alugamos e não usamos seus dados para publicidade.</li>
+  </ul>
+</div>
+
+<h2>1. Quem é o responsável</h2>
+<p>O MOB é um aplicativo pessoal mantido por seu desenvolvedor independente. Para
+qualquer assunto de privacidade, inclusive pedidos de acesso ou exclusão, o canal
+é <a href="mailto:privacidade@brimes.net">privacidade@brimes.net</a>.</p>
+
+<h2>2. Que dados coletamos</h2>
+<p>Somente o que você fornece ou gera usando o app. Não compramos dados de
+terceiros e não rastreamos você fora do MOB.</p>
+
+<h3>Conta</h3>
+<table>
+  <tr><th>Dado</th><th>Para quê</th></tr>
+  <tr><td>Nome e e-mail</td><td>Identificar sua conta e permitir o login.</td></tr>
+  <tr><td>Senha</td><td>Guardada apenas como <em>hash</em>. Não temos acesso à senha em si.</td></tr>
+  <tr><td>Identificador e foto do Google</td><td>Somente se você optar por entrar com o Google.</td></tr>
+</table>
+
+<h3>Perfil e saúde <em>(dados sensíveis)</em></h3>
+<table>
+  <tr><th>Dado</th><th>Para quê</th></tr>
+  <tr><td>Data de nascimento, altura, peso, sexo biológico</td><td>Dimensionar o treino e estimar necessidades.</td></tr>
+  <tr><td>Lesões e limitações</td><td>Evitar exercícios que possam te machucar.</td></tr>
+  <tr><td>Experiência de treino</td><td>Ajustar volume e complexidade.</td></tr>
+  <tr><td>Objetivo e metas (peso, gordura, massa muscular, prazo)</td><td>Orientar o plano e mostrar seu progresso.</td></tr>
+  <tr><td>Medidas corporais (peso, percentual de gordura, massa muscular, cintura, quadril, braço, coxa, peito)</td><td>Acompanhar evolução ao longo do tempo.</td></tr>
+  <tr><td>Testes de condicionamento (distância, frequência cardíaca, esforço percebido)</td><td>Medir condicionamento e progresso.</td></tr>
+  <tr><td>Passos e calorias</td><td>Complementar o acompanhamento diário.</td></tr>
+</table>
+
+<h3>Uso do app</h3>
+<table>
+  <tr><th>Dado</th><th>Para quê</th></tr>
+  <tr><td>Treinos, séries, cargas, repetições e duração</td><td>Registrar seu histórico e sugerir a carga da próxima vez.</td></tr>
+  <tr><td>Registros de alimentação</td><td>Acompanhar sua nutrição diária.</td></tr>
+  <tr><td>Perguntas e respostas do chat de dúvidas</td><td>Manter o histórico da conversa daquele treino.</td></tr>
+  <tr><td>Aceite do termo de uso, com data e versão</td><td>Registrar que você foi informado sobre os riscos.</td></tr>
+  <tr><td>Sua chave de API de IA, se você cadastrar uma</td><td>Usar a sua cota em vez do crédito compartilhado. Nunca é devolvida pela API nem registrada em log.</td></tr>
+</table>
+
+<h2>3. Inteligência artificial: o que sai do app</h2>
+<p>Os planos de treino e as respostas do chat são gerados pela IA do Google
+(Gemini). Para isso, enviamos ao Google apenas o contexto necessário:</p>
+<ul>
+  <li>idade, altura, peso, sexo biológico, experiência de treino e as lesões ou limitações que você informou;</li>
+  <li>seu objetivo e prazo;</li>
+  <li>seu histórico recente de treinos;</li>
+  <li>o texto que você escrever ao pedir um plano ou tirar uma dúvida.</li>
+</ul>
+<p><strong>Não enviamos</strong> seu nome, e-mail ou qualquer identificador de
+conta. O uso desses dados pelo Google segue os termos do serviço dele.</p>
+<p>Se você cadastrar a sua própria chave de API nas configurações, as chamadas
+passam a usar a sua conta no provedor, sujeitas aos termos dele.</p>
+
+<div class="box">
+  <strong>A IA pode errar.</strong> Os planos e orientações são gerados
+  automaticamente e não substituem avaliação de um profissional de educação
+  física, nem acompanhamento médico. Valide seu plano com um profissional antes
+  de seguir. O uso é por sua conta e risco.
+</div>
+
+<h2>4. Dados guardados no seu aparelho</h2>
+<p>Para o app funcionar sem internet, uma cópia dos seus treinos, planos e
+histórico fica salva no próprio aparelho, junto com as alterações que ainda não
+foram enviadas ao servidor. Esses dados não saem do aparelho por outro caminho, e
+são apagados quando você sai da conta ou desinstala o app.</p>
+
+<h2>5. Com quem compartilhamos</h2>
+<ul>
+  <li><strong>Google (Gemini)</strong> — para gerar planos e responder dúvidas, como descrito acima.</li>
+  <li><strong>Google (login)</strong> — apenas se você escolher entrar com o Google.</li>
+  <li><strong>Provedor de infraestrutura</strong> — onde o servidor e o banco de dados são hospedados.</li>
+</ul>
+<p>Fora disso, ninguém. Não vendemos, não alugamos, não trocamos e não usamos
+seus dados para publicidade ou para treinar modelos de IA.</p>
+
+<h2>6. Por quanto tempo guardamos</h2>
+<p>Enquanto sua conta existir, porque o histórico é justamente o que dá sentido
+ao acompanhamento. Ao pedir a exclusão da conta, apagamos seus dados pessoais e
+todo o conteúdo vinculado a ela (perfil, treinos, medidas, conversas e objetivo).
+A exclusão é definitiva e não há como recuperar depois.</p>
+
+<h2>7. Seus direitos</h2>
+<p>Pela LGPD (Lei 13.709/2018), você pode a qualquer momento:</p>
+<ul>
+  <li>saber quais dados temos sobre você e obter uma cópia;</li>
+  <li>corrigir dados incompletos ou desatualizados;</li>
+  <li>pedir a exclusão da conta e dos dados;</li>
+  <li>revogar o consentimento para o tratamento dos dados de saúde, o que implica
+      parar de usar o app, já que ele não funciona sem eles;</li>
+  <li>saber com quem compartilhamos seus dados.</li>
+</ul>
+<p>Para exercer qualquer um deles, escreva para
+<a href="mailto:privacidade@brimes.net">privacidade@brimes.net</a>. Respondemos em
+até 15 dias.</p>
+
+<h2>8. Segurança</h2>
+<p>O tráfego entre o app e o servidor é criptografado (HTTPS). Senhas são
+guardadas apenas como hash. O acesso à API exige autenticação por token. Nenhum
+sistema é imune a incidentes; se ocorrer algum que possa afetar você, comunicaremos.</p>
+
+<h2>9. Menores de idade</h2>
+<p>O MOB não é destinado a menores de 16 anos. Se você tem entre 16 e 18 anos,
+use o app com acompanhamento de um responsável e de um profissional de educação
+física.</p>
+
+<h2>10. Mudanças nesta política</h2>
+<p>Se esta política mudar de forma relevante, atualizaremos a data no topo e
+avisaremos no aplicativo. Continuar usando o MOB após o aviso significa que você
+está ciente da nova versão.</p>
+
+</body>
+</html>

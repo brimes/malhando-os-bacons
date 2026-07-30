@@ -22,6 +22,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	stepsHandler := handlers.NewStepsHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database)
 	resultsHandler := handlers.NewResultsHandler(database)
+	legalHandler := handlers.NewLegalHandler()
 	onboardingHandler := handlers.NewOnboardingHandler(database, resolver)
 	trainingPlanHandler := handlers.NewTrainingPlanHandler(database, resolver)
 	termsHandler := handlers.NewTermsHandler(database)
@@ -108,6 +109,11 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 
 	// Dashboard
 	mux.HandleFunc("GET /api/dashboard", chain(dashboardHandler.Get, auth))
+
+	// Política de privacidade: pública, sem autenticação. A Play exige uma URL
+	// aberta, e o revisor da loja acessa sem conta.
+	mux.HandleFunc("GET /privacidade", legalHandler.Privacy)
+	mux.HandleFunc("GET /privacy", legalHandler.Privacy)
 
 	// Health check
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
