@@ -17,7 +17,7 @@ var legalPages embed.FS
 
 // privacyLastModified doubles as the cache validator. Bumping it is the reminder
 // that the page and the data inventory have to move together.
-var privacyLastModified = time.Date(2026, time.July, 29, 0, 0, 0, 0, time.UTC)
+var privacyLastModified = time.Date(2026, time.July, 30, 0, 0, 0, 0, time.UTC)
 
 type LegalHandler struct{}
 

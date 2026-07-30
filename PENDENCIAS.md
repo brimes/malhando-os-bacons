@@ -1,23 +1,21 @@
 # Onde o projeto parou
 
-Estado em 29/07/2026. Complementa o `CLAUDE.md` (que tem as armadilhas técnicas)
+Estado em 30/07/2026. Complementa o `CLAUDE.md` (que tem as armadilhas técnicas)
 com o que está em aberto e depende de decisão ou ação humana.
 
 ## Bloqueia a publicação na Play
 
-1. **Ativar `privacidade@brimes.net`.** A política já está no ar em
-   `https://mob-api.brimes.net/privacidade` e cita esse endereço como canal de
-   privacidade. Se ele não receber e-mail, o canal exigido pela LGPD não existe.
-   Alternativa: trocar o endereço no arquivo
-   `backend/internal/handlers/legal_privacy.html`.
-2. **Validar o layout do release no aparelho.** Do SDK 35 em diante o Android
+1. **Validar o layout do release no aparelho.** Do SDK 35 em diante o Android
    força borda a borda; o `MainActivity` passou a aplicar os insets nativos, mas
    isso **não foi visto na tela** — o Fold estava `unauthorized` no adb. Instalar
    `~/Desktop/MOB-1.0.0-teste.apk` e conferir topo e rodapé.
-3. **Formulário de segurança de dados**, no Play Console: declarar dados de saúde
+2. **Formulário de segurança de dados**, no Play Console: declarar dados de saúde
    e que texto de treino é enviado à IA do Google. O inventário está na política.
-4. **Classificação de conteúdo** e **imagens da listagem** (ícone 512×512, banner
+3. **Classificação de conteúdo** e **imagens da listagem** (ícone 512×512, banner
    1024×500, capturas).
+
+A política de privacidade está no ar em `https://mob-api.brimes.net/privacidade`,
+pública e sem login, com `mob-contato@zel.care` como canal de privacidade.
 
 ## Acabamento antes de publicar
 
