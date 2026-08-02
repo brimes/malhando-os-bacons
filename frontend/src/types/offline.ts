@@ -55,6 +55,25 @@ export interface FailedMutation extends PendingMutation {
 }
 
 /**
+ * Everything the offline store persists across restarts — the rest
+ * (`isOnline`, `isSyncing`, `isHydrated`) describes this instant, never the
+ * last run. Lives here, not in `offlineStore.ts`, so `offlineDbStorage.ts`
+ * (the IndexedDB-backed persistence engine) can share the shape without
+ * importing the store module itself and creating a cycle: the store imports
+ * the storage engine, not the other way around.
+ */
+export interface PersistedOfflineState {
+  cache: Record<ResourceKey, CacheEntry>;
+  lastSyncAt: Record<ResourceKey, number>;
+  queue: PendingMutation[];
+  failed: FailedMutation[];
+  nextLocalId: number;
+  /** An `ActiveWorkout` from `../types`, kept as `unknown` — see `offlineStore.ts`. */
+  activeSession: unknown;
+  planDays: Record<number, CacheEntry>;
+}
+
+/**
  * Shape returned by `useOfflineStatus()` — the contract other screens consume.
  * The first four fields are the required ones; the rest are extras a status
  * banner tends to need.

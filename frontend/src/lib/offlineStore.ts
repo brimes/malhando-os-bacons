@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import type { CacheEntry, FailedMutation, PendingMutation, ResourceKey } from '../types/offline';
+import { persist, createJSONStorage, type PersistStorage } from 'zustand/middleware';
+import type { CacheEntry, FailedMutation, PendingMutation, PersistedOfflineState, ResourceKey } from '../types/offline';
 import { isNetworkOnline } from './network';
+import { indexedDbPersistStorage } from './offlineDbStorage';
+import { getStorageEngineFlag } from './offlineStorageEngine';
 
 const STORAGE_KEY = 'mob-offline';
 
@@ -65,13 +67,17 @@ interface OfflineStoreState {
   planDays: Record<number, CacheEntry>;
   isOnline: boolean;
   isSyncing: boolean;
+  /**
+   * False until `offlineBoot.ts` finishes reconciling the storage engine and
+   * rehydrating this store from it (see that module). `persist` is configured
+   * with `skipHydration: true` specifically so this flag is meaningful:
+   * without it, `queue`/`activeSession`/etc. would already be silently
+   * (wrongly) "empty" for one or more renders while IndexedDB is read
+   * asynchronously — see `App.tsx`'s `ProtectedRoute`, the only reader that
+   * has to wait on it.
+   */
+  isHydrated: boolean;
 }
-
-/** Everything that is worth writing to localStorage; the rest is per-session. */
-type PersistedOfflineState = Pick<
-  OfflineStoreState,
-  'cache' | 'lastSyncAt' | 'queue' | 'failed' | 'nextLocalId' | 'activeSession' | 'planDays'
->;
 
 const initialState: OfflineStoreState = {
   cache: {},
@@ -83,6 +89,7 @@ const initialState: OfflineStoreState = {
   planDays: {},
   isOnline: isNetworkOnline(),
   isSyncing: false,
+  isHydrated: false,
 };
 
 // Guards the eviction path below against the write it triggers itself.
@@ -165,16 +172,25 @@ const quotaAwareStorage = createJSONStorage<PersistedOfflineState>(() => ({
   removeItem: (name) => window.localStorage.removeItem(name),
 }));
 
+// Which engine backs `persist` below, decided once per app start — see
+// `offlineStorageEngine.ts`. `indexedDbPersistStorage` already speaks
+// `PersistStorage`'s async contract; `quotaAwareStorage` (localStorage) is
+// kept byte-for-byte for when the flag reverts the app, so a revert is a
+// storage-engine swap, not a rewrite of the recovery logic above.
+const storage: PersistStorage<PersistedOfflineState> = getStorageEngineFlag() === 'indexeddb'
+  ? indexedDbPersistStorage
+  : (quotaAwareStorage as PersistStorage<PersistedOfflineState>);
+
 export const useOfflineStore = create<OfflineStoreState>()(
   persist(() => initialState, {
     name: STORAGE_KEY,
-    storage: quotaAwareStorage,
+    storage,
     version: PERSISTED_STATE_VERSION,
     migrate: (persistedState) => ({
       ...(persistedState as PersistedOfflineState),
       planDays: {},
     }),
-    // isOnline/isSyncing describe this instant, never the last run.
+    // isOnline/isSyncing/isHydrated describe this instant, never the last run.
     partialize: (state) => ({
       cache: state.cache,
       lastSyncAt: state.lastSyncAt,
@@ -184,6 +200,13 @@ export const useOfflineStore = create<OfflineStoreState>()(
       activeSession: state.activeSession,
       planDays: state.planDays,
     }),
+    // `offlineBoot.ts` calls `.persist.rehydrate()` itself, after reconciling
+    // whichever storage engine the flag selects (migrating localStorage into
+    // IndexedDB, or exporting the other way on a revert) and before anything
+    // reads the queue — see that module. Auto-hydrating here, before that
+    // reconciliation runs, would read whichever engine happens to already have
+    // *some* data and race the migration that is supposed to feed it first.
+    skipHydration: true,
   }),
 );
 

@@ -3,6 +3,7 @@ import { Card } from './Card';
 import { Button } from './Button';
 import { DEFAULT_LLM_SETTINGS, KNOWN_LLM_PROVIDERS, llmApi, providerLabel, providerModels } from '../api/llm';
 import { getErrorMessage } from '../api/client';
+import { useOfflineStatus } from '../lib/offline';
 import type { LlmSettings } from '../types';
 
 function SubscriptionSheet({ isSubscribed, isBusy, onConfirm, onClose }: {
@@ -74,6 +75,12 @@ function SubscriptionSheet({ isSubscribed, isBusy, onConfirm, onClose }: {
 }
 
 export function LlmSettingsSection() {
+  // `/llm-settings` is in `ONLINE_ONLY_PATHS` (see `offlineSync.ts`): a save
+  // attempted offline is rejected, never queued — the key must never sit in
+  // the offline outbox, which is plain-text on disk either way it is stored.
+  // Disabling the button here is only the UI half of that; the API layer is
+  // what actually guarantees nothing gets written.
+  const { isOnline } = useOfflineStatus();
   const [settings, setSettings] = useState<LlmSettings>(DEFAULT_LLM_SETTINGS);
   const [provider, setProvider] = useState(DEFAULT_LLM_SETTINGS.provider);
   const [model, setModel] = useState('');
@@ -284,14 +291,17 @@ export function LlmSettingsSection() {
           fullWidth
           size="lg"
           isLoading={isSaving}
-          disabled={apiKey.trim().length === 0}
+          disabled={apiKey.trim().length === 0 || !isOnline}
           onClick={() => persist(apiKey.trim(), 'Chave salva. O MOB passou a usar a sua chave.')}
         >
           {settings.configured ? 'Atualizar minha chave' : 'Salvar minha chave'}
         </Button>
+        {!isOnline && (
+          <p className="text-center text-xs text-zinc-500">Isso precisa de internet. Conecte-se e tente de novo.</p>
+        )}
 
         {settings.configured && (
-          <Button fullWidth variant="secondary" onClick={removeKey} disabled={isSaving}>
+          <Button fullWidth variant="secondary" onClick={removeKey} disabled={isSaving || !isOnline}>
             Remover chave e voltar ao compartilhado
           </Button>
         )}

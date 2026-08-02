@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useOnboardingStore } from './stores/useOnboardingStore';
+import { useOfflineStore } from './lib/offlineStore';
 import { BottomNav } from './components/BottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TermsGate } from './components/TermsGate';
@@ -30,8 +31,15 @@ import { ResultsPage } from './pages/Results';
 function ProtectedRoute({ children, allowIncomplete = false }: { children: React.ReactNode; allowIncomplete?: boolean }) {
   const { isAuthenticated } = useAuthStore();
   const { state, isLoading } = useOnboardingStore();
+  // Waits for `offlineBoot.ts` to finish migrating/exporting the storage
+  // engine and rehydrating `useOfflineStore` from it. Skipping this would let
+  // a route render with an offline store still at `initialState` — an
+  // in-progress workout or a pending mutation would read as if it never
+  // existed, for however many renders IndexedDB's async read takes. See
+  // `offlineStore.ts`'s `isHydrated` field and `offlineBoot.ts`.
+  const isOfflineHydrated = useOfflineStore((offlineState) => offlineState.isHydrated);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (isLoading || !state) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500">Carregando...</div>;
+  if (isLoading || !state || !isOfflineHydrated) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500">Carregando...</div>;
   const onboardingReady = state.completed && Boolean(state.profile?.training_experience);
   if (!allowIncomplete && !onboardingReady) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;

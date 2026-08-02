@@ -73,6 +73,12 @@ export type { LocalCompletedWorkout } from './workoutSession';
 
 export { useOfflineStatus, getOfflineStatus } from './useOfflineStatus';
 
+// Side effect: starts the storage-engine reconciliation + rehydration as soon
+// as anything imports this barrel (which `api/client.ts` does, so effectively
+// every screen does, transitively, before React's first render). See its
+// module comment for why this has to run exactly once, in this order.
+export { offlineReady } from './offlineBoot';
+
 export type {
   CacheEntry,
   FailedMutation,
