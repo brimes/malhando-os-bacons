@@ -10,6 +10,7 @@ import { SyncBanner } from '../components/SyncStatus';
 import { CompensationCard } from '../components/CompensationCard';
 import type { ActiveWorkout, DashboardData } from '../types';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
+import { todayLocalDate } from '../lib/date';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -20,7 +21,10 @@ export function DashboardPage() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
 
   useEffect(() => {
-    apiClient.get<DashboardData>('/dashboard')
+    // Keyed by date so the offline cache does not serve yesterday's
+    // aggregate (nutrition, steps, workout of the day) forever — a bare
+    // `get:/dashboard` key would never expire on its own.
+    apiClient.get<DashboardData>('/dashboard', { params: { date: todayLocalDate() } })
       .then((res) => setData(res.data))
       .catch(console.error)
       .finally(() => setIsLoading(false));

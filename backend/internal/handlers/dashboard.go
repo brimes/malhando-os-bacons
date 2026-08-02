@@ -26,6 +26,14 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	today := time.Now()
+	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
+		parsed, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid date format, use YYYY-MM-DD"})
+			return
+		}
+		today = parsed
+	}
 	resp := models.DashboardResponse{}
 
 	// Fetch user

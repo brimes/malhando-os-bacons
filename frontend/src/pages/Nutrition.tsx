@@ -8,6 +8,7 @@ import { MacroProgress } from '../components/Chart';
 import { nutritionApi } from '../api/nutrition';
 import { getErrorMessage } from '../api/client';
 import { isLocalId } from '../lib/offline';
+import { todayLocalDate } from '../lib/date';
 import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -34,7 +35,11 @@ export function NutritionPage() {
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTodayLogs();
+    // A date-less key is the same cache entry every day of the app's life —
+    // offline, it would keep serving yesterday's snapshot forever instead of
+    // "no records yet" for a day that hasn't been read before. See
+    // useNutritionStore's `logsKey`.
+    fetchTodayLogs(todayLocalDate());
     fetchPlans();
   }, [fetchTodayLogs, fetchPlans]);
 
@@ -75,6 +80,10 @@ export function NutritionPage() {
       protein_g: item.protein_g,
       carbs_g: item.carbs_g,
       fat_g: item.fat_g,
+      // Without this the server falls back to its own time.Now() — offline,
+      // that means whatever date the queue drains on, not the day the person
+      // actually tapped "Já comi".
+      date: todayLocalDate(),
     });
   };
 
