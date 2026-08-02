@@ -6,31 +6,22 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { MacroProgress } from '../components/Chart';
 import { OriginBadge } from '../components/OriginBadge';
+import { EditFoodLogModal } from '../components/EditFoodLogModal';
 import { nutritionApi } from '../api/nutrition';
 import { getErrorMessage } from '../api/client';
-import { isLocalId } from '../lib/offline';
 import { todayLocalDate } from '../lib/date';
-import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion } from '../types';
+import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion, type UpdateFoodLogInput } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const UNSYNCED_MESSAGE = 'Este item ainda não foi sincronizado. Conecte-se à internet para alterá-lo.';
 
 export function NutritionPage() {
   const navigate = useNavigate();
   const { todayLogs, activePlan, isLoading, fetchTodayLogs, fetchPlans, logFood, deleteLog } = useNutritionStore();
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editQuantity, setEditQuantity] = useState('');
-  // Only the meal type is picked here; name, macros, origin and date stay
-  // fixed — this editor exists to fix "logged as the wrong meal", not to move
-  // a record between days or rewrite its snapshot macros.
-  const [editMealType, setEditMealType] = useState<MealType | null>(null);
-  // Set once, up front, when the record cannot be edited at all (still
-  // offline-pending): the whole form is locked while this is set.
-  const [editError, setEditError] = useState<string | null>(null);
-  // Set after a failed save attempt (bad quantity, or the request itself
-  // failing): shown next to the form, but never disables it — the user still
-  // needs the fields live to correct the mistake and try again.
-  const [editSaveError, setEditSaveError] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
+  // The suggestion is for the rest of the day as a whole (the backend has no
+  // per-meal endpoint) — tapping the icon on any meal opens the same modal
+  // with the same "rest of the day" answer, whichever meal it was tapped on.
+  const [suggestionOpen, setSuggestionOpen] = useState(false);
   const [suggestion, setSuggestion] = useState<NutritionSuggestion | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -59,7 +50,8 @@ export function NutritionPage() {
     return acc;
   }, {});
 
-  const askSuggestion = async () => {
+  const openSuggestion = async () => {
+    setSuggestionOpen(true);
     setIsSuggesting(true);
     setSuggestionError(null);
     try {
@@ -88,45 +80,12 @@ export function NutritionPage() {
     });
   };
 
-  const startEdit = (log: FoodLog) => {
-    setEditingId(log.id);
-    setEditQuantity(String(log.quantity_g));
-    setEditMealType(log.meal_type);
-    setEditSaveError(null);
-    // Created offline and its POST is still queued: the server has never heard
-    // of this id, so a PUT to it can only 404 (online) or get rejected as an
-    // unsynced dependency (offline) — either way surfaced up front instead of
-    // after the person fills the form and taps Salvar.
-    setEditError(isLocalId(log.id) ? UNSYNCED_MESSAGE : null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditMealType(null);
-    setEditError(null);
-    setEditSaveError(null);
-  };
-
-  const saveEdit = async (log: FoodLog) => {
-    if (isLocalId(log.id) || !editMealType) return;
-    const quantity = Number(editQuantity);
-    if (!(quantity > 0)) {
-      // Invalid quantity: keep the editor open and point at the field
-      // instead of silently discarding the meal-type change alongside it.
-      setEditSaveError('Informe uma quantidade válida.');
-      return;
-    }
-    try {
-      await useNutritionStore.getState().updateLog(log.id, { quantity_g: quantity, meal_type: editMealType });
-      setEditingId(null);
-      setEditMealType(null);
-      setEditSaveError(null);
-    } catch (requestError) {
-      // updateLog rejects and re-throws; caught here so the editor stays open
-      // and the failure actually reaches the screen instead of vanishing as
-      // an unhandled rejection.
-      setEditSaveError(getErrorMessage(requestError));
-    }
+  const handleSaveEdit = async (id: number, input: UpdateFoodLogInput) => {
+    // The diary only ever shows today's logs, so the record being edited is
+    // always dated today — matching the key fetchTodayLogs(todayLocalDate())
+    // populated at mount, so the offline snapshot actually gets patched
+    // instead of a second, never-read cache entry.
+    await useNutritionStore.getState().updateLog(id, input, todayLocalDate());
   };
 
   return (
@@ -195,25 +154,6 @@ export function NutritionPage() {
           </Card>
         )}
 
-        {activePlan && (
-          <Card>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">O que comer no resto do dia?</p>
-              <Button size="sm" variant="secondary" isLoading={isSuggesting} onClick={askSuggestion}>
-                Sugerir
-              </Button>
-            </div>
-            {suggestionError && <p className="mt-2 text-xs text-red-400">{suggestionError}</p>}
-            {suggestion && (
-              <ul className="mt-3 space-y-2">
-                {suggestion.suggestions.map((item, index) => (
-                  <li key={index} className="rounded-xl bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">{item}</li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        )}
-
         {isLoading ? (
           <div className="flex justify-center py-8">
             <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
@@ -228,9 +168,19 @@ export function NutritionPage() {
               return (
                 <div key={meal}>
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-white text-sm">
+                    <h3 className="flex items-center gap-1.5 font-semibold text-white text-sm">
                       {MEAL_TYPE_LABELS[meal]}
                       {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-zinc-500">{plannedMeal.suggested_at}</span>}
+                      {activePlan && (
+                        <button
+                          type="button"
+                          onClick={openSuggestion}
+                          aria-label="Sugestão do plano para o resto do dia"
+                          className="text-zinc-500 hover:text-primary-400"
+                        >
+                          💡
+                        </button>
+                      )}
                     </h3>
                     {mealCal > 0 && <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>}
                   </div>
@@ -261,70 +211,31 @@ export function NutritionPage() {
                     <div className="space-y-2">
                       {logs.map((log) => (
                         <Card key={log.id} className="py-3">
-                          {editingId === log.id ? (
-                            <div className="space-y-2">
-                              {editError && <p className="text-xs text-amber-400">{editError}</p>}
-                              {editSaveError && <p className="text-xs text-red-400">{editSaveError}</p>}
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="number"
-                                  autoFocus
-                                  disabled={!!editError}
-                                  value={editQuantity}
-                                  onChange={(e) => setEditQuantity(e.target.value)}
-                                  className="w-20 rounded-lg bg-zinc-800 px-2 py-1.5 text-center text-sm text-white disabled:opacity-50"
-                                />
-                                <span className="text-xs text-zinc-500">g</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {MEAL_ORDER.map((meal) => (
-                                  <button
-                                    key={meal}
-                                    type="button"
-                                    disabled={!!editError}
-                                    onClick={() => setEditMealType(meal)}
-                                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 ${
-                                      editMealType === meal
-                                        ? 'bg-primary-600 text-white'
-                                        : 'bg-zinc-800 text-zinc-400'
-                                    }`}
-                                  >
-                                    {MEAL_TYPE_LABELS[meal]}
-                                  </button>
-                                ))}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button size="sm" disabled={!!editError} onClick={() => saveEdit(log)}>Salvar</Button>
-                                <button type="button" onClick={cancelEdit} className="text-xs text-zinc-500">Cancelar</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between">
-                              <button className="min-w-0 flex-1 text-left" onClick={() => startEdit(log)}>
-                                <p className="text-sm font-medium text-white truncate">
-                                  {log.food_name}
-                                  <OriginBadge origin={log.origin} />
+                          <div className="flex items-center justify-between">
+                            <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
+                              <p className="text-sm font-medium text-white truncate">
+                                {log.food_name}
+                                <OriginBadge origin={log.origin} />
+                              </p>
+                              <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
+                            </button>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
+                                <p className="text-xs text-zinc-500">
+                                  P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
                                 </p>
-                                <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
-                              </button>
-                              <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
-                                  <p className="text-xs text-zinc-500">
-                                    P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
-                                  </p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => deleteLog(log.id)}
-                                  aria-label="Apagar"
-                                  className="p-1 text-lg text-zinc-600"
-                                >
-                                  ×
-                                </button>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => deleteLog(log.id)}
+                                aria-label="Apagar"
+                                className="p-1 text-lg text-zinc-600"
+                              >
+                                ×
+                              </button>
                             </div>
-                          )}
+                          </div>
                         </Card>
                       ))}
                     </div>
@@ -335,6 +246,39 @@ export function NutritionPage() {
           </div>
         )}
       </div>
+
+      {editingLog && (
+        <EditFoodLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={handleSaveEdit} />
+      )}
+
+      {suggestionOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+          onClick={() => setSuggestionOpen(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white">O que comer no resto do dia?</h3>
+            {isSuggesting && (
+              <div className="flex justify-center py-8">
+                <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            {suggestionError && <p className="mt-3 text-xs text-red-400">{suggestionError}</p>}
+            {!isSuggesting && suggestion && (
+              <ul className="mt-3 space-y-2">
+                {suggestion.suggestions.map((item, index) => (
+                  <li key={index} className="rounded-xl bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

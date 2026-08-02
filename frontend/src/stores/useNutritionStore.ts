@@ -127,21 +127,20 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     try {
       const updated = await nutritionApi.updateLog(id, input);
       // Merged, not replaced: a queued PUT resolves through the offline
-      // interceptor with a slim optimistic payload (just the fields that
-      // changed plus `id`/`offline_pending`) — no `food_name`, no macros.
-      // Replacing the whole record with that turned every ring on the day
-      // into NaN until the next successful `fetchTodayLogs`.
+      // interceptor with an optimistic payload that echoes exactly the
+      // fields sent in the request, plus `id`/`offline_pending` — see
+      // buildOptimisticPayload in api/client.ts. EditFoodLogModal always
+      // sends food_name and every macro explicitly, so that echo already
+      // has real values and a plain merge is correct. Only a caller that
+      // sends quantity_g/meal_type alone (the old behavior; nothing does
+      // today) gets the ratio rescale below, mirroring what the server does
+      // for that same case in backend/internal/handlers/nutrition.go —
+      // without it, the rings would show the new quantity next to macros
+      // still scaled for the old one until the next successful fetch.
       const pending = updated as FoodLog & { offline_pending?: boolean };
       const todayLogs = get().todayLogs.map((log) => {
         if (log.id !== id) return log;
-        // Offline, `updated` only carries the fields that were sent
-        // (quantity_g, meal_type) plus the marker — the macros it inherits
-        // from `log` below are still scaled for the *old* quantity. Only
-        // the server actually rescales them (see
-        // backend/internal/handlers/nutrition.go). Mirror that rescale here
-        // so the rings don't show the new quantity next to stale macros
-        // until the next successful fetch replaces this entry.
-        if (pending.offline_pending && log.quantity_g > 0) {
+        if (pending.offline_pending && input.calories === undefined && log.quantity_g > 0) {
           const ratio = pending.quantity_g / log.quantity_g;
           return {
             ...log,

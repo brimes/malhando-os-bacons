@@ -55,27 +55,40 @@ function selectionFromHistory(entry: FoodLogHistoryEntry): Selection {
   };
 }
 
+// Same char-for-char translate() table as migration 017's search_text and
+// nutrition_favorites.go's historyQuery ORDER BY — kept identical so
+// "Ávocado" and "avocado" sort next to each other here exactly like they do
+// server-side, not at opposite ends of the list.
+const ACCENTED = 'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ';
+const PLAIN = 'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC';
+
+function normalizeNameForSort(name: string): string {
+  let normalized = '';
+  for (const char of name.trim()) {
+    const index = ACCENTED.indexOf(char);
+    normalized += index === -1 ? char : PLAIN[index];
+  }
+  return normalized.toLowerCase();
+}
+
 /**
- * Favorites first, most recently used first; then the rest of the history by
- * how often it was logged in the last 90 days, breaking ties by last use.
- * Mirrors the backend's own ordering (GetLogHistory) so a local favorite
- * toggle — which never triggers a refetch — still lands the row in the right
- * place instead of wherever it happened to sit in the array before.
+ * Favorites first, alphabetically; then the rest of the history,
+ * alphabetically too — overriding an earlier cut sorted by frequency, which
+ * the person using it in practice wanted changed. Mirrors the backend's own
+ * ordering (GetLogHistory) so a local favorite toggle — which never triggers
+ * a refetch — still lands the row in the right place instead of wherever it
+ * happened to sit in the array before.
  */
 function sortHistory(entries: FoodLogHistoryEntry[]): FoodLogHistoryEntry[] {
-  const lastUsedEpoch = (entry: FoodLogHistoryEntry) => {
-    if (entry.last_logged_at) return new Date(entry.last_logged_at).getTime();
-    // No log left for this group_key: a favorite with nothing to sort by
-    // yet goes to the top of the favorites block (it was just touched), a
-    // non-favorite with nothing to sort by falls to the very back.
-    return entry.favorite_id ? Infinity : -Infinity;
-  };
   return [...entries].sort((a, b) => {
     const aFav = Boolean(a.favorite_id);
     const bFav = Boolean(b.favorite_id);
     if (aFav !== bFav) return aFav ? -1 : 1;
-    if (!aFav && a.times_logged !== b.times_logged) return b.times_logged - a.times_logged;
-    return lastUsedEpoch(b) - lastUsedEpoch(a);
+    const aName = normalizeNameForSort(a.food_name);
+    const bName = normalizeNameForSort(b.food_name);
+    if (aName < bName) return -1;
+    if (aName > bName) return 1;
+    return 0;
   });
 }
 

@@ -206,18 +206,48 @@ func (h *NutritionHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
-	if req.QuantityG <= 0 || !validMealTypes[req.MealType] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "quantity_g e meal_type são obrigatórios"})
+
+	// Mirrors the CHECK constraints in migrations 001/018_food_logs.sql:
+	// quantity_g and calories are NUMERIC(8,2) (max 999999.99), the macros are
+	// NUMERIC(6,2) (max 9999.99), none can be negative. Validating here keeps
+	// the offline retry queue from burning MAX_MUTATION_ATTEMPTS on what is
+	// really a 400.
+	const maxNumeric82 = 999999.99
+	const maxNumeric62 = 9999.99
+	if req.QuantityG <= 0 || req.QuantityG > maxNumeric82 || !validMealTypes[req.MealType] {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "quantity_g e meal_type são obrigatórios, e quantity_g deve estar dentro da faixa válida"})
+		return
+	}
+	var foodName *string
+	if req.FoodName != nil {
+		trimmed := strings.TrimSpace(*req.FoodName)
+		if trimmed == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "food_name não pode ser vazio"})
+			return
+		}
+		foodName = &trimmed
+	}
+	if req.Calories != nil && (*req.Calories < 0 || *req.Calories > maxNumeric82) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "calories deve estar dentro da faixa válida"})
+		return
+	}
+	if req.ProteinG != nil && (*req.ProteinG < 0 || *req.ProteinG > maxNumeric62) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "protein_g deve estar dentro da faixa válida"})
+		return
+	}
+	if req.CarbsG != nil && (*req.CarbsG < 0 || *req.CarbsG > maxNumeric62) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "carbs_g deve estar dentro da faixa válida"})
+		return
+	}
+	if req.FatG != nil && (*req.FatG < 0 || *req.FatG > maxNumeric62) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "fat_g deve estar dentro da faixa válida"})
 		return
 	}
 
-	// Rescale the snapshotted macros by the new quantity relative to the old one,
-	// so editing "170g em vez de 150g" keeps the same per-gram ratio instead of
-	// requiring a fresh catalog lookup (a free-text or photo log has none).
-	var oldQuantity, calories, proteinG, carbsG, fatG float64
+	var current models.FoodLog
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT quantity_g, calories, protein_g, carbs_g, fat_g FROM food_logs WHERE id=$1 AND user_id=$2`,
-		id, userID).Scan(&oldQuantity, &calories, &proteinG, &carbsG, &fatG)
+		`SELECT food_item_id, food_name, quantity_g, calories, protein_g, carbs_g, fat_g FROM food_logs WHERE id=$1 AND user_id=$2`,
+		id, userID).Scan(&current.FoodItemID, &current.FoodName, &current.QuantityG, &current.Calories, &current.ProteinG, &current.CarbsG, &current.FatG)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "food log not found"})
 		return
@@ -226,17 +256,81 @@ func (h *NutritionHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load food log"})
 		return
 	}
-	if oldQuantity > 0 {
-		ratio := req.QuantityG / oldQuantity
+
+	newFoodItemID := current.FoodItemID
+	newFoodName := current.FoodName
+	calories, proteinG, carbsG, fatG := current.Calories, current.ProteinG, current.CarbsG, current.FatG
+
+	// EditFoodLogModal always sends all 7 fields, including when the person
+	// only touched the quantity — it live-rescales the macro fields on screen
+	// proportionally so what is displayed matches what gets saved. That means
+	// "a macro was sent" can no longer stand in for "a macro was edited by
+	// hand": it is also true of a value the client itself computed from the
+	// same ratio the old rescale branch below would have produced. Comparing
+	// against the ratio-scaled expectation (not the raw pre-edit value)
+	// distinguishes the two — only a value that formula could not have
+	// produced is an authorial correction.
+	ratio := 1.0
+	if current.QuantityG > 0 {
+		ratio = req.QuantityG / current.QuantityG
+	}
+	// Tolerance absorbs float round-trip through JSON and any rounding-mode
+	// difference between the client's live rescale and round2 here — both
+	// round to 2 decimals, so a genuine mismatch is never this small.
+	const macroTolerance = 0.01
+	nearlyEqual := func(a, b float64) bool {
+		diff := a - b
+		if diff < 0 {
+			diff = -diff
+		}
+		return diff < macroTolerance
+	}
+	nameChanged := foodName != nil && *foodName != current.FoodName
+	caloriesChanged := req.Calories != nil && !nearlyEqual(*req.Calories, round2(current.Calories*ratio))
+	proteinChanged := req.ProteinG != nil && !nearlyEqual(*req.ProteinG, round2(current.ProteinG*ratio))
+	carbsChanged := req.CarbsG != nil && !nearlyEqual(*req.CarbsG, round2(current.CarbsG*ratio))
+	fatChanged := req.FatG != nil && !nearlyEqual(*req.FatG, round2(current.FatG*ratio))
+
+	// Editing the name or any macro by hand is an authorial correction — those
+	// values must stick exactly as sent, not get rescaled on top. It also means
+	// the row stops tracking the catalog (CreateLog/GetLogs would otherwise
+	// keep recomputing macros from a food_item_id later), the same reasoning
+	// migration 018 already applied to keep a snapshot instead of a live
+	// reference. An edit that only moves the quantity or the meal (no name, no
+	// macro actually changed) keeps the old rescale-by-ratio behavior and the
+	// catalog link untouched.
+	explicit := nameChanged || caloriesChanged || proteinChanged || carbsChanged || fatChanged
+	if explicit {
+		newFoodItemID = nil
+		if foodName != nil {
+			newFoodName = *foodName
+		}
+		if req.Calories != nil {
+			calories = *req.Calories
+		}
+		if req.ProteinG != nil {
+			proteinG = *req.ProteinG
+		}
+		if req.CarbsG != nil {
+			carbsG = *req.CarbsG
+		}
+		if req.FatG != nil {
+			fatG = *req.FatG
+		}
+	} else if current.QuantityG > 0 {
+		// Rescale the snapshotted macros by the new quantity relative to the old
+		// one, so editing "170g em vez de 150g" keeps the same per-gram ratio
+		// instead of requiring a fresh catalog lookup (a free-text or photo log
+		// has none). Same ratio already computed above to decide `explicit`.
 		calories, proteinG, carbsG, fatG = round2(calories*ratio), round2(proteinG*ratio), round2(carbsG*ratio), round2(fatG*ratio)
 	}
 
 	var log models.FoodLog
 	err = h.db.Pool.QueryRow(r.Context(),
-		`UPDATE food_logs SET quantity_g=$3, meal_type=$4, calories=$5, protein_g=$6, carbs_g=$7, fat_g=$8, updated_at=NOW()
+		`UPDATE food_logs SET quantity_g=$3, meal_type=$4, food_name=$5, calories=$6, protein_g=$7, carbs_g=$8, fat_g=$9, food_item_id=$10, updated_at=NOW()
 		 WHERE id=$1 AND user_id=$2
 		 RETURNING id, user_id, food_item_id, food_name, meal_type, quantity_g, calories, protein_g, carbs_g, fat_g, origin, client_log_id, date, created_at, updated_at`,
-		id, userID, req.QuantityG, req.MealType, calories, proteinG, carbsG, fatG,
+		id, userID, req.QuantityG, req.MealType, newFoodName, calories, proteinG, carbsG, fatG, newFoodItemID,
 	).Scan(&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
 		&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID, &log.Date, &log.CreatedAt, &log.UpdatedAt)
 	if err == pgx.ErrNoRows {
