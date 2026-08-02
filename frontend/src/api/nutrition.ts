@@ -100,7 +100,9 @@ export const nutritionApi = {
   },
 
   suggestion: async (): Promise<NutritionSuggestion> => {
-    const { data } = await apiClient.get<NutritionSuggestion>('/nutrition/suggestion');
+    // Runs synchronously against the coach (backend allows it up to 60s) —
+    // the default client timeout is sized for plain CRUD, not this.
+    const { data } = await apiClient.get<NutritionSuggestion>('/nutrition/suggestion', { timeout: 60000 });
     return data;
   },
 

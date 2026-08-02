@@ -37,9 +37,9 @@ export function TrainingPlanDayPage() {
     (async () => {
       // Both requests fire together — neither waits on the other. `active()`
       // pre-fills the checklist for an open session on this same day, entirely
-      // independent of the plan fetch, and with `timeout: 15000` a wifi that
-      // hangs instead of failing fast would otherwise double the wait to 30s
-      // by making one queue behind the other.
+      // independent of the plan fetch, and with the client's default timeout a
+      // wifi that hangs instead of failing fast would otherwise double the
+      // wait by making one queue behind the other.
       const [active, planResult] = await Promise.all([
         workoutsApi.active().catch(() => null),
         trainingPlansApi.get(Number(planId))

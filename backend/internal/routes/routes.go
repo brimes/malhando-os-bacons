@@ -133,8 +133,18 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	mux.HandleFunc("GET /privacidade", legalHandler.Privacy)
 	mux.HandleFunc("GET /privacy", legalHandler.Privacy)
 
-	// Health check
+	// Health check. Used by k8s liveness/readiness probes — do not remove or
+	// move behind auth.
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// Same check, under /api: the frontend's connectivity probe needs it here
+	// because the Vite dev proxy only forwards `/api/**`, and this is the one
+	// endpoint it must reach with a token possibly expired or absent — no
+	// auth, deliberately cheap.
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	})
