@@ -102,6 +102,67 @@ type UpdateFoodLogRequest struct {
 	MealType  string  `json:"meal_type"`
 }
 
+// NutritionFavorite is one starred food. What it stores is a snapshot of the
+// last time it was logged — quantity, meal and macros — not a live reference,
+// same reasoning as food_logs (migration 018): correcting the food in the
+// catalog later must not rewrite what the person memorized. One row per
+// group_key (see groupKeyFor): favoriting is by food, never by
+// food+meal-type combination, or the list would fragment into "egg at
+// breakfast" and "egg at dinner". Re-favoriting overwrites the snapshot.
+type NutritionFavorite struct {
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
+	GroupKey   string    `json:"group_key"`
+	FoodItemID *int64    `json:"food_item_id,omitempty"`
+	FoodName   string    `json:"food_name"`
+	QuantityG  float64   `json:"quantity_g"`
+	MealType   string    `json:"meal_type"`
+	Calories   float64   `json:"calories"`
+	ProteinG   float64   `json:"protein_g"`
+	CarbsG     float64   `json:"carbs_g"`
+	FatG       float64   `json:"fat_g"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// UpsertNutritionFavoriteRequest is what POST /nutrition/favorites accepts.
+// The client computes group_key itself (via the same normalization as the
+// server, see groupKeyFor) since it is choosing which row in the "+" list —
+// already loaded from GetLogHistory — is being starred.
+type UpsertNutritionFavoriteRequest struct {
+	GroupKey   string  `json:"group_key"`
+	FoodItemID *int64  `json:"food_item_id"`
+	FoodName   string  `json:"food_name"`
+	QuantityG  float64 `json:"quantity_g"`
+	MealType   string  `json:"meal_type"`
+	Calories   float64 `json:"calories"`
+	ProteinG   float64 `json:"protein_g"`
+	CarbsG     float64 `json:"carbs_g"`
+	FatG       float64 `json:"fat_g"`
+}
+
+// FoodLogHistoryEntry is one consolidated row for the "+ Log" screen: either
+// a food this user has actually logged before (TimesLogged reflects the last
+// 90 days; 0 means not logged that recently, even if it has older history)
+// or a favorite whose log history was since deleted (TimesLogged 0,
+// LastLoggedAt nil). Defaults (quantity, meal, macros) come from the most
+// recent log of that group_key, or from the favorite's own snapshot when
+// there is no log left at all.
+type FoodLogHistoryEntry struct {
+	GroupKey     string     `json:"group_key"`
+	FoodItemID   *int64     `json:"food_item_id,omitempty"`
+	FoodName     string     `json:"food_name"`
+	QuantityG    float64    `json:"quantity_g"`
+	MealType     string     `json:"meal_type"`
+	Calories     float64    `json:"calories"`
+	ProteinG     float64    `json:"protein_g"`
+	CarbsG       float64    `json:"carbs_g"`
+	FatG         float64    `json:"fat_g"`
+	TimesLogged  int        `json:"times_logged"`
+	LastLoggedAt *time.Time `json:"last_logged_at,omitempty"`
+	FavoriteID   *int64     `json:"favorite_id,omitempty"`
+}
+
 // MealPhoto is the inventory row for a file written under PhotoDir. Both
 // FoodLogID and FoodItemID are optional and ON DELETE SET NULL: deleting the
 // diary entry or the food must not orphan the file on disk unnoticed.

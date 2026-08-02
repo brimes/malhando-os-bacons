@@ -9,7 +9,9 @@ export const cheatDayApi = {
   },
 
   sendMessage: async (content: string): Promise<CheatDaySession> => {
-    const { data } = await apiClient.post<CheatDaySession>('/nutrition/cheat-day/messages', { content });
+    // Runs synchronously against the assistant (backend allows it up to 60s) —
+    // the default client timeout is sized for plain CRUD, not this.
+    const { data } = await apiClient.post<CheatDaySession>('/nutrition/cheat-day/messages', { content }, { timeout: 60000 });
     return data;
   },
 

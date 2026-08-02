@@ -488,6 +488,56 @@ export interface SyncStepsInput {
   source: string;
 }
 
+/**
+ * One consolidated row for the "+ Log" screen: something already registered
+ * (times_logged reflects the last 90 days), or a favorite whose log history
+ * was since deleted (times_logged 0, last_logged_at absent). Everything here
+ * — quantity_g, meal_type, macros — is the default the row opens the log form
+ * with, taken from the most recent registration of this group_key.
+ */
+export interface FoodLogHistoryEntry {
+  group_key: string;
+  food_item_id?: number;
+  food_name: string;
+  quantity_g: number;
+  meal_type: MealType;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  times_logged: number;
+  last_logged_at?: string;
+  favorite_id?: number;
+}
+
+export interface UpsertNutritionFavoriteInput {
+  group_key: string;
+  food_item_id?: number;
+  food_name: string;
+  quantity_g: number;
+  meal_type: MealType;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface NutritionFavorite {
+  id: number;
+  user_id: number;
+  group_key: string;
+  food_item_id?: number;
+  food_name: string;
+  quantity_g: number;
+  meal_type: MealType;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'Café da manhã',
   lunch: 'Almoço',

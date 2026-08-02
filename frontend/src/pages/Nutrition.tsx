@@ -7,21 +7,49 @@ import { Button } from '../components/Button';
 import { MacroProgress } from '../components/Chart';
 import { nutritionApi } from '../api/nutrition';
 import { getErrorMessage } from '../api/client';
+import { isLocalId } from '../lib/offline';
+import { todayLocalDate } from '../lib/date';
 import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+const UNSYNCED_MESSAGE = 'Este item ainda não foi sincronizado. Conecte-se à internet para alterá-lo.';
+
+// A badge of procedence, never "gerado por IA" — the AI disclosure lives only
+// in the acceptance terms (see CLAUDE.md), repeating it on every entry would
+// just become noise nobody reads. `manual` gets no badge at all.
+const ORIGIN_BADGES: Partial<Record<FoodLog['origin'], string>> = {
+  photo_plate: 'Foto',
+  photo_label: 'Foto',
+  plan: 'Plano',
+  cheat_day: 'Dia do lixo',
+};
 
 export function NutritionPage() {
   const navigate = useNavigate();
   const { todayLogs, activePlan, isLoading, fetchTodayLogs, fetchPlans, logFood, deleteLog } = useNutritionStore();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editQuantity, setEditQuantity] = useState('');
+  // Only the meal type is picked here; name, macros, origin and date stay
+  // fixed — this editor exists to fix "logged as the wrong meal", not to move
+  // a record between days or rewrite its snapshot macros.
+  const [editMealType, setEditMealType] = useState<MealType | null>(null);
+  // Set once, up front, when the record cannot be edited at all (still
+  // offline-pending): the whole form is locked while this is set.
+  const [editError, setEditError] = useState<string | null>(null);
+  // Set after a failed save attempt (bad quantity, or the request itself
+  // failing): shown next to the form, but never disables it — the user still
+  // needs the fields live to correct the mistake and try again.
+  const [editSaveError, setEditSaveError] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<NutritionSuggestion | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTodayLogs();
+    // A date-less key is the same cache entry every day of the app's life —
+    // offline, it would keep serving yesterday's snapshot forever instead of
+    // "no records yet" for a day that hasn't been read before. See
+    // useNutritionStore's `logsKey`.
+    fetchTodayLogs(todayLocalDate());
     fetchPlans();
   }, [fetchTodayLogs, fetchPlans]);
 
@@ -62,18 +90,52 @@ export function NutritionPage() {
       protein_g: item.protein_g,
       carbs_g: item.carbs_g,
       fat_g: item.fat_g,
+      // Without this the server falls back to its own time.Now() — offline,
+      // that means whatever date the queue drains on, not the day the person
+      // actually tapped "Já comi".
+      date: todayLocalDate(),
     });
   };
 
   const startEdit = (log: FoodLog) => {
     setEditingId(log.id);
     setEditQuantity(String(log.quantity_g));
+    setEditMealType(log.meal_type);
+    setEditSaveError(null);
+    // Created offline and its POST is still queued: the server has never heard
+    // of this id, so a PUT to it can only 404 (online) or get rejected as an
+    // unsynced dependency (offline) — either way surfaced up front instead of
+    // after the person fills the form and taps Salvar.
+    setEditError(isLocalId(log.id) ? UNSYNCED_MESSAGE : null);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditMealType(null);
+    setEditError(null);
+    setEditSaveError(null);
   };
 
   const saveEdit = async (log: FoodLog) => {
+    if (isLocalId(log.id) || !editMealType) return;
     const quantity = Number(editQuantity);
-    if (quantity > 0) await useNutritionStore.getState().updateLog(log.id, { quantity_g: quantity, meal_type: log.meal_type });
-    setEditingId(null);
+    if (!(quantity > 0)) {
+      // Invalid quantity: keep the editor open and point at the field
+      // instead of silently discarding the meal-type change alongside it.
+      setEditSaveError('Informe uma quantidade válida.');
+      return;
+    }
+    try {
+      await useNutritionStore.getState().updateLog(log.id, { quantity_g: quantity, meal_type: editMealType });
+      setEditingId(null);
+      setEditMealType(null);
+      setEditSaveError(null);
+    } catch (requestError) {
+      // updateLog rejects and re-throws; caught here so the editor stays open
+      // and the failure actually reaches the screen instead of vanishing as
+      // an unhandled rejection.
+      setEditSaveError(getErrorMessage(requestError));
+    }
   };
 
   return (
@@ -209,22 +271,53 @@ export function NutritionPage() {
                       {logs.map((log) => (
                         <Card key={log.id} className="py-3">
                           {editingId === log.id ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                autoFocus
-                                value={editQuantity}
-                                onChange={(e) => setEditQuantity(e.target.value)}
-                                className="w-20 rounded-lg bg-zinc-800 px-2 py-1.5 text-center text-sm text-white"
-                              />
-                              <span className="text-xs text-zinc-500">g</span>
-                              <Button size="sm" onClick={() => saveEdit(log)}>Salvar</Button>
-                              <button type="button" onClick={() => setEditingId(null)} className="text-xs text-zinc-500">Cancelar</button>
+                            <div className="space-y-2">
+                              {editError && <p className="text-xs text-amber-400">{editError}</p>}
+                              {editSaveError && <p className="text-xs text-red-400">{editSaveError}</p>}
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  autoFocus
+                                  disabled={!!editError}
+                                  value={editQuantity}
+                                  onChange={(e) => setEditQuantity(e.target.value)}
+                                  className="w-20 rounded-lg bg-zinc-800 px-2 py-1.5 text-center text-sm text-white disabled:opacity-50"
+                                />
+                                <span className="text-xs text-zinc-500">g</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {MEAL_ORDER.map((meal) => (
+                                  <button
+                                    key={meal}
+                                    type="button"
+                                    disabled={!!editError}
+                                    onClick={() => setEditMealType(meal)}
+                                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 ${
+                                      editMealType === meal
+                                        ? 'bg-primary-600 text-white'
+                                        : 'bg-zinc-800 text-zinc-400'
+                                    }`}
+                                  >
+                                    {MEAL_TYPE_LABELS[meal]}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button size="sm" disabled={!!editError} onClick={() => saveEdit(log)}>Salvar</Button>
+                                <button type="button" onClick={cancelEdit} className="text-xs text-zinc-500">Cancelar</button>
+                              </div>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between">
                               <button className="min-w-0 flex-1 text-left" onClick={() => startEdit(log)}>
-                                <p className="text-sm font-medium text-white truncate">{log.food_name}</p>
+                                <p className="text-sm font-medium text-white truncate">
+                                  {log.food_name}
+                                  {ORIGIN_BADGES[log.origin] && (
+                                    <span className="ml-2 rounded-full bg-zinc-800 px-1.5 py-0.5 align-middle text-[10px] font-medium text-zinc-400">
+                                      {ORIGIN_BADGES[log.origin]}
+                                    </span>
+                                  )}
+                                </p>
                                 <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
                               </button>
                               <div className="flex items-center gap-3">

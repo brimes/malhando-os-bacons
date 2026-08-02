@@ -7,7 +7,7 @@ import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChec
 import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
-import { applyChecklistLocally, isNetworkOnline, onWorkoutIdRemap, storeLocalActiveWorkout } from '../lib/offline';
+import { applyChecklistLocally, findCachedPlanDay, isNetworkOnline, onWorkoutIdRemap, storeLocalActiveWorkout } from '../lib/offline';
 import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
 
 export function TrainingPlanDayPage() {
@@ -19,31 +19,73 @@ export function TrainingPlanDayPage() {
   const [checklist, setChecklist] = useState<ChecklistState>({});
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Distinct from the loading state: this day is not on the device at all
+  // (never opened online, or its durable snapshot was never written), so
+  // there is nothing to keep waiting for. Without this the screen used to
+  // fall back to "Carregando treino..." forever whenever `trainingPlansApi.get`
+  // rejected offline with nothing cached.
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     if (!planId || !dayId) return;
     const numericDayId = Number(dayId);
-    Promise.all([
-      trainingPlansApi.get(Number(planId)),
-      // An open session for this same day pre-fills the checklist, so coming
-      // back here mid-workout shows what is already done instead of a blank list.
-      workoutsApi.active().catch(() => null),
-    ]).then(([result, active]) => {
-      setPlan(result);
-      const found = result.days?.find((item) => item.id === numericDayId) ?? null;
-      setDay(found);
+    let cancelled = false;
+    setPlan(null);
+    setDay(null);
+    setNotFound(false);
 
+    (async () => {
+      // Both requests fire together — neither waits on the other. `active()`
+      // pre-fills the checklist for an open session on this same day, entirely
+      // independent of the plan fetch, and with the client's default timeout a
+      // wifi that hangs instead of failing fast would otherwise double the
+      // wait by making one queue behind the other.
+      const [active, planResult] = await Promise.all([
+        workoutsApi.active().catch(() => null),
+        trainingPlansApi.get(Number(planId))
+          .then((result) => {
+            const found = result.days?.find((item) => item.id === numericDayId) ?? null;
+            return found ? { plan: result, day: found } : null;
+          })
+          // Offline, and this plan's generic cache entry was never written or
+          // has since been pruned. Fall through to the durable per-day snapshot.
+          .catch(() => null),
+      ]);
+
+      let planData: TrainingPlan | null = planResult?.plan ?? null;
+      let dayData: TrainingPlanDay | null = planResult?.day ?? null;
+
+      if (!dayData) {
+        const cached = findCachedPlanDay(numericDayId);
+        if (cached) {
+          planData = cached.plan;
+          dayData = cached.day;
+        }
+      }
+
+      if (cancelled) return;
+      if (!planData || !dayData) {
+        setNotFound(true);
+        return;
+      }
+
+      setPlan(planData);
+      setDay(dayData);
       const openHere = active && active.workout.training_plan_day_id === numericDayId ? active : null;
       setSession(openHere);
-      if (openHere && found) {
+      if (openHere) {
         setChecklist(Object.fromEntries(
-          found.exercises.filter((exercise) => exercise.id).map((exercise) => {
+          dayData.exercises.filter((exercise) => exercise.id).map((exercise) => {
             const done = openHere.workout.sets?.filter((set) => set.training_plan_exercise_id === exercise.id).length ?? 0;
             return [exercise.id as number, { setsDone: done, weight: exercise.last_weight_kg ? String(exercise.last_weight_kg) : '' }];
           }),
         ));
       }
-    });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [planId, dayId]);
 
   // Same reason WorkoutSession.tsx subscribes: a session opened offline runs
@@ -59,6 +101,20 @@ export function TrainingPlanDayPage() {
         : current
     ));
   }), []);
+
+  if (notFound) {
+    return (
+      <>
+        <Header title="Treino" showBack />
+        <div className="space-y-4 px-4 py-10 text-center">
+          <p className="text-sm text-zinc-400">
+            Este treino ainda não foi aberto neste aparelho. Conecte-se uma vez para poder iniciá-lo sem internet.
+          </p>
+          <Button onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
+        </div>
+      </>
+    );
+  }
 
   if (!plan || !day) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
 

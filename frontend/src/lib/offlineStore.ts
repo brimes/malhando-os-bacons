@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import type { CacheEntry, FailedMutation, PendingMutation, ResourceKey } from '../types/offline';
+import { persist, createJSONStorage, type PersistStorage } from 'zustand/middleware';
+import type { CacheEntry, FailedMutation, PendingMutation, PersistedOfflineState, ResourceKey } from '../types/offline';
 import { isNetworkOnline } from './network';
+import { indexedDbPersistStorage } from './offlineDbStorage';
+import { getStorageEngineFlag } from './offlineStorageEngine';
 
 const STORAGE_KEY = 'mob-offline';
 
@@ -20,6 +22,12 @@ const MAX_FAILED_MUTATIONS = 20;
 // nowhere else to be re-fetched from, so it cannot share a bounded, prunable
 // cache with things that do.
 const MAX_CACHE_ENTRIES = 60;
+// `planDays` (below) is durable, not disposable like `cache` — but durable
+// does not mean unbounded. A full plan snapshot per day, never pruned, grows
+// with every day ever opened on this device and was landing in the
+// quota-rescue payload in `quotaAwareStorage` with no ceiling of its own. 20-30
+// days covers every plan this app generates several times over.
+const MAX_PLAN_DAYS = 30;
 
 interface OfflineStoreState {
   /** Resource snapshots keyed by `resourceKeyForRequest`. */
@@ -40,15 +48,36 @@ interface OfflineStoreState {
    * only module that reads and writes it.
    */
   activeSession: unknown;
+  /**
+   * Training plan days this device has actually visited, keyed by day id. Same
+   * treatment as `activeSession` and for the same reason: `findCachedPlanDay`
+   * (`lib/workoutSession.ts`) needs a day to still be here after the generic
+   * `cache` has been pruned or wiped, or a session assembled offline has
+   * nowhere to read its exercises from. Written in place, one day at a time —
+   * never cleared in bulk — because a day that drops out of the plan on the
+   * server must stay available until the server actually confirms that,
+   * otherwise a session already pointing at it would be orphaned. See
+   * `persistPlanDaysDurable` / `findCachedPlanDay`.
+   *
+   * Bounded at `MAX_PLAN_DAYS`, LRU by `updatedAt` like `cache` — but with
+   * the day backing the current `activeSession`, and every day in the batch
+   * just written, pinned so eviction can never orphan a session mid-workout.
+   * See `writeLocalPlanDays`.
+   */
+  planDays: Record<number, CacheEntry>;
   isOnline: boolean;
   isSyncing: boolean;
+  /**
+   * False until `offlineBoot.ts` finishes reconciling the storage engine and
+   * rehydrating this store from it (see that module). `persist` is configured
+   * with `skipHydration: true` specifically so this flag is meaningful:
+   * without it, `queue`/`activeSession`/etc. would already be silently
+   * (wrongly) "empty" for one or more renders while IndexedDB is read
+   * asynchronously — see `App.tsx`'s `ProtectedRoute`, the only reader that
+   * has to wait on it.
+   */
+  isHydrated: boolean;
 }
-
-/** Everything that is worth writing to localStorage; the rest is per-session. */
-type PersistedOfflineState = Pick<
-  OfflineStoreState,
-  'cache' | 'lastSyncAt' | 'queue' | 'failed' | 'nextLocalId' | 'activeSession'
->;
 
 const initialState: OfflineStoreState = {
   cache: {},
@@ -57,47 +86,111 @@ const initialState: OfflineStoreState = {
   failed: [],
   nextLocalId: -1,
   activeSession: null,
+  planDays: {},
   isOnline: isNetworkOnline(),
   isSyncing: false,
+  isHydrated: false,
 };
 
 // Guards the eviction path below against the write it triggers itself.
 let isEvicting = false;
+// Set once localStorage has rejected a write even the smallest rescue payload
+// (queue + failed only) couldn't survive — DOM storage disabled, or the site's
+// storage blocked outright. At that point every stage below throws, every
+// time, so retrying the whole 3-stage dance (two JSON.stringify of the entire
+// state) on the next write would just throw again — out of `writeCache` on
+// every GET and `pushToQueue` on every queued mutation, both uncaught. Once
+// this is true, `setItem` gives up immediately and the app keeps running
+// without persistence instead of every read and write starting to fail.
+let persistenceDisabled = false;
+
+// `planDays` changed shape mid-branch (it used to hold `{plan, day}` raw, now
+// `{data, updatedAt}` like `cache` — see `readLocalPlanDay`). No shipped
+// release ever wrote the old shape, only this branch's intermediate builds
+// did, but a device that ran one has entries `readLocalPlanDay` silently
+// can't read. Bumping this and discarding `planDays` on `migrate` (below) is
+// free: it is re-fetched from the server like any other cache entry. The
+// rescue payloads inside `quotaAwareStorage` write this same version — if
+// they stayed at the old one, a rescue write would look stale to `persist`
+// and get migrated (i.e. wiped of `planDays`) again on the very next boot.
+const PERSISTED_STATE_VERSION = 1;
 
 const quotaAwareStorage = createJSONStorage<PersistedOfflineState>(() => ({
   getItem: (name) => window.localStorage.getItem(name),
   setItem: (name, value) => {
-    if (isEvicting) return;
+    if (isEvicting || persistenceDisabled) return;
     try {
       window.localStorage.setItem(name, value);
+      return;
     } catch {
-      // Quota blown. Cached reads can be fetched again from the server, pending
-      // mutations cannot — so the caches go and the queue stays. `activeSession`
-      // goes with the queue: a session opened offline is exactly the kind of
-      // unrecoverable state this recovery path must not touch, the same way it
-      // does not touch `queue` or `failed`.
-      isEvicting = true;
+      // fall through to recovery below
+    }
+    // Quota blown. Cached reads can be fetched again from the server, pending
+    // mutations cannot — so the caches go and the queue stays. `activeSession`
+    // goes with the queue: a session opened offline is exactly the kind of
+    // unrecoverable state this recovery path must not touch, the same way it
+    // does not touch `queue` or `failed`.
+    isEvicting = true;
+    try {
+      const { queue, failed, nextLocalId, activeSession, planDays } = useOfflineStore.getState();
       try {
-        const { queue, failed, nextLocalId, activeSession } = useOfflineStore.getState();
         window.localStorage.setItem(
           name,
-          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession }, version: 0 }),
+          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays }, version: PERSISTED_STATE_VERSION }),
         );
+        useOfflineStore.setState({ cache: {}, lastSyncAt: {} });
       } catch {
-        window.localStorage.removeItem(name);
+        // Even the bounded rescue payload didn't fit. `planDays` is capped
+        // (see `MAX_PLAN_DAYS`) but still holds full plan snapshots, not just
+        // ids, so of what is left it is the biggest thing that is not the
+        // queue — drop it too before giving up on the queue itself.
+        try {
+          window.localStorage.setItem(
+            name,
+            JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays: {} }, version: PERSISTED_STATE_VERSION }),
+          );
+          useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {} });
+        } catch {
+          try {
+            window.localStorage.removeItem(name);
+          } catch {
+            // Even clearing failed: localStorage is rejecting everything, not
+            // just this write over quota (DOM storage disabled, site storage
+            // blocked). Stop trying — see `persistenceDisabled` above.
+            persistenceDisabled = true;
+          }
+          // Disk is empty (or storage is gone) either way; keep memory in
+          // step so the next write doesn't reassemble the same `planDays`
+          // payload for nothing.
+          useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {} });
+        }
       }
-      useOfflineStore.setState({ cache: {}, lastSyncAt: {} });
+    } finally {
       isEvicting = false;
     }
   },
   removeItem: (name) => window.localStorage.removeItem(name),
 }));
 
+// Which engine backs `persist` below, decided once per app start — see
+// `offlineStorageEngine.ts`. `indexedDbPersistStorage` already speaks
+// `PersistStorage`'s async contract; `quotaAwareStorage` (localStorage) is
+// kept byte-for-byte for when the flag reverts the app, so a revert is a
+// storage-engine swap, not a rewrite of the recovery logic above.
+const storage: PersistStorage<PersistedOfflineState> = getStorageEngineFlag() === 'indexeddb'
+  ? indexedDbPersistStorage
+  : (quotaAwareStorage as PersistStorage<PersistedOfflineState>);
+
 export const useOfflineStore = create<OfflineStoreState>()(
   persist(() => initialState, {
     name: STORAGE_KEY,
-    storage: quotaAwareStorage,
-    // isOnline/isSyncing describe this instant, never the last run.
+    storage,
+    version: PERSISTED_STATE_VERSION,
+    migrate: (persistedState) => ({
+      ...(persistedState as PersistedOfflineState),
+      planDays: {},
+    }),
+    // isOnline/isSyncing/isHydrated describe this instant, never the last run.
     partialize: (state) => ({
       cache: state.cache,
       lastSyncAt: state.lastSyncAt,
@@ -105,7 +198,15 @@ export const useOfflineStore = create<OfflineStoreState>()(
       failed: state.failed,
       nextLocalId: state.nextLocalId,
       activeSession: state.activeSession,
+      planDays: state.planDays,
     }),
+    // `offlineBoot.ts` calls `.persist.rehydrate()` itself, after reconciling
+    // whichever storage engine the flag selects (migrating localStorage into
+    // IndexedDB, or exporting the other way on a revert) and before anything
+    // reads the queue — see that module. Auto-hydrating here, before that
+    // reconciliation runs, would read whichever engine happens to already have
+    // *some* data and race the migration that is supposed to feed it first.
+    skipHydration: true,
   }),
 );
 
@@ -207,6 +308,69 @@ export function readLocalActiveSession<T = unknown>(): T | null {
 /** Overwrites the session slot. `null` means "no session running right now". */
 export function writeLocalActiveSession(session: unknown): void {
   useOfflineStore.setState({ activeSession: session ?? null });
+}
+
+/**
+ * The snapshot for one training plan day, or `undefined` when this device has
+ * never visited it. Lives outside `cache` — see the field comment on
+ * `OfflineStoreState` — so it is never pruned by the generic cache path.
+ */
+export function readLocalPlanDay<T = unknown>(dayId: number): T | undefined {
+  return useOfflineStore.getState().planDays[dayId]?.data as T | undefined;
+}
+
+/** The day id backing the current `activeSession`, or `undefined` when none is running. */
+function activeSessionPlanDayId(state: OfflineStoreState): number | undefined {
+  const session = state.activeSession as { workout?: { training_plan_day_id?: number } } | null;
+  return session?.workout?.training_plan_day_id;
+}
+
+/**
+ * Drops the least recently written days once `planDays` exceeds `MAX_PLAN_DAYS`.
+ * `pinned` is never evicted no matter how old — it always includes the day
+ * behind the running session (evicting it mid-workout would reintroduce the
+ * exact bug `planDays` exists to prevent) plus every day in the batch just
+ * written, so a multi-day plan fetch cannot evict one of its own days to make
+ * room for another.
+ */
+function prunePlanDays(planDays: Record<number, CacheEntry>, pinned: Set<number>): Record<number, CacheEntry> {
+  const keys = Object.keys(planDays).map(Number);
+  if (keys.length <= MAX_PLAN_DAYS) return planDays;
+  const evictable = keys
+    .filter((id) => !pinned.has(id))
+    .sort((a, b) => (planDays[a]?.updatedAt ?? 0) - (planDays[b]?.updatedAt ?? 0));
+  const pruned = { ...planDays };
+  let toRemove = keys.length - MAX_PLAN_DAYS;
+  for (const id of evictable) {
+    if (toRemove <= 0) break;
+    delete pruned[id];
+    toRemove -= 1;
+  }
+  return pruned;
+}
+
+/**
+ * Writes (or overwrites) the snapshot for a batch of days in a single
+ * `setState` — one persisted write instead of one per day, see
+ * `persistPlanDaysDurable`. Never removes entries for days outside the batch:
+ * a day that disappears from the plan on the server must stay here, reachable,
+ * until the server actually confirms that; see the field comment on
+ * `OfflineStoreState`. Bounded by `prunePlanDays`.
+ */
+export function writeLocalPlanDays(entries: Array<readonly [dayId: number, snapshot: unknown]>): void {
+  if (entries.length === 0) return;
+  useOfflineStore.setState((state) => {
+    const updatedAt = Date.now();
+    const planDays = { ...state.planDays };
+    const justWritten = new Set<number>();
+    for (const [dayId, snapshot] of entries) {
+      planDays[dayId] = { data: snapshot, updatedAt };
+      justWritten.add(dayId);
+    }
+    const activeDayId = activeSessionPlanDayId(state);
+    if (activeDayId !== undefined) justWritten.add(activeDayId);
+    return { planDays: prunePlanDays(planDays, justWritten) };
+  });
 }
 
 export function invalidateCache(resourceKey: ResourceKey): void {
@@ -336,13 +500,32 @@ export function setOnline(isOnline: boolean): void {
  * the same reason: a workout started offline is exactly the kind of pending
  * work this function must not discard.
  *
+ * `planDays` IS cleared here, unlike `activeSession`. It holds no pending work
+ * of its own — it is a read cache, same category as `cache`, just shelved
+ * separately so pruning cannot touch it. Keeping a previous account's plan
+ * days around after logout would let whoever signs in next on this device see
+ * (and offline-start) a stranger's workout day.
+ *
  * Use `discardPendingWrites` when the intent really is to throw the writes away.
  */
 export function clearOfflineData(): void {
-  useOfflineStore.setState({ cache: {}, lastSyncAt: {} });
+  useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {} });
 }
 
 /** Drops queued and failed writes. Only for an explicit "discard" by the user. */
 export function discardPendingWrites(): void {
   useOfflineStore.setState({ queue: [], failed: [] });
+}
+
+// --- test hook ---------------------------------------------------------------
+
+/**
+ * Exposes the store to QA for manual offline testing: inspecting `queue` from
+ * the devtools console and writing 61+ throwaway cache entries to force
+ * `pruneCache`'s LRU eviction without waiting for real traffic to produce it.
+ * `import.meta.env.DEV` keeps this out of anything actually shipped — a
+ * production build has this whole block tree-shaken away, not just hidden.
+ */
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as { __offlineStoreForTests?: typeof useOfflineStore }).__offlineStoreForTests = useOfflineStore;
 }

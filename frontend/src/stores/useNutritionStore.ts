@@ -8,6 +8,7 @@ import type {
   CreateNutritionPlanInput,
   FoodItem,
   FoodLog,
+  FoodLogHistoryEntry,
   NutritionPlan,
   UpdateFoodLogInput,
 } from '../types';
@@ -21,6 +22,8 @@ interface NutritionState {
   isLoading: boolean;
   isSearching: boolean;
   error: string | null;
+  logHistory: FoodLogHistoryEntry[];
+  isLoadingHistory: boolean;
 
   fetchPlans: () => Promise<void>;
   createPlan: (input: CreateNutritionPlanInput) => Promise<void>;
@@ -34,12 +37,21 @@ interface NutritionState {
   createFood: (input: CreateFoodItemInput) => Promise<FoodItem>;
   deleteFood: (id: number) => Promise<void>;
   clearError: () => void;
+  fetchLogHistory: () => Promise<void>;
+  /**
+   * Favorites/unfavorites `entry`, updating `logHistory` in place — no
+   * refetch, so the "+ Log" screen sees the star move immediately. Throws on
+   * failure (offline unfavoriting something favorited offline included, see
+   * `referencesLocalId`), left for the screen to catch and show.
+   */
+  toggleFavorite: (entry: FoodLogHistoryEntry) => Promise<void>;
 }
 
 const plansKey = () => resourceKeyForRequest('/nutrition/plans');
 // The logs endpoint is per day, so each day gets its own snapshot.
 const logsKey = (date?: string) => resourceKeyForRequest('/nutrition/logs', date ? { date } : undefined);
 const personalFoodsKey = () => resourceKeyForRequest('/nutrition/foods');
+const logHistoryKey = () => resourceKeyForRequest('/nutrition/logs/history');
 
 export const useNutritionStore = create<NutritionState>((set, get) => ({
   plans: [],
@@ -50,6 +62,8 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   isLoading: false,
   isSearching: false,
   error: null,
+  logHistory: [],
+  isLoadingHistory: false,
 
   fetchPlans: async () => {
     set({ isLoading: !hasCache(plansKey()), error: null });
@@ -112,7 +126,34 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const updated = await nutritionApi.updateLog(id, input);
-      const todayLogs = get().todayLogs.map((log) => (log.id === id ? updated : log));
+      // Merged, not replaced: a queued PUT resolves through the offline
+      // interceptor with a slim optimistic payload (just the fields that
+      // changed plus `id`/`offline_pending`) — no `food_name`, no macros.
+      // Replacing the whole record with that turned every ring on the day
+      // into NaN until the next successful `fetchTodayLogs`.
+      const pending = updated as FoodLog & { offline_pending?: boolean };
+      const todayLogs = get().todayLogs.map((log) => {
+        if (log.id !== id) return log;
+        // Offline, `updated` only carries the fields that were sent
+        // (quantity_g, meal_type) plus the marker — the macros it inherits
+        // from `log` below are still scaled for the *old* quantity. Only
+        // the server actually rescales them (see
+        // backend/internal/handlers/nutrition.go). Mirror that rescale here
+        // so the rings don't show the new quantity next to stale macros
+        // until the next successful fetch replaces this entry.
+        if (pending.offline_pending && log.quantity_g > 0) {
+          const ratio = pending.quantity_g / log.quantity_g;
+          return {
+            ...log,
+            ...updated,
+            calories: log.calories * ratio,
+            protein_g: log.protein_g * ratio,
+            carbs_g: log.carbs_g * ratio,
+            fat_g: log.fat_g * ratio,
+          };
+        }
+        return { ...log, ...updated };
+      });
       set({ todayLogs, isLoading: false });
       patchCacheLocally(logsKey(date), todayLogs);
     } catch (err) {
@@ -196,4 +237,45 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  fetchLogHistory: async () => {
+    set({ isLoadingHistory: !hasCache(logHistoryKey()), error: null });
+    await readThrough<FoodLogHistoryEntry[]>({
+      resourceKey: logHistoryKey(),
+      fetcher: () => nutritionApi.getLogHistory(),
+      apply: (logHistory) => set({ logHistory, isLoadingHistory: false }),
+      onError: (error, hadCache) => set({ isLoadingHistory: false, error: hadCache ? null : getErrorMessage(error) }),
+    });
+  },
+
+  toggleFavorite: async (entry: FoodLogHistoryEntry) => {
+    if (entry.favorite_id) {
+      await nutritionApi.deleteFavorite(entry.favorite_id);
+      const logHistory = get()
+        .logHistory
+        // A row that only existed because it was favorited (its own log
+        // history is gone) has nothing left to show once unfavorited.
+        .filter((item) => item.group_key !== entry.group_key || item.times_logged > 0)
+        .map((item) => (item.group_key === entry.group_key ? { ...item, favorite_id: undefined } : item));
+      set({ logHistory });
+      patchCacheLocally(logHistoryKey(), logHistory);
+      return;
+    }
+    const favorite = await nutritionApi.createFavorite({
+      group_key: entry.group_key,
+      food_item_id: entry.food_item_id,
+      food_name: entry.food_name,
+      quantity_g: entry.quantity_g,
+      meal_type: entry.meal_type,
+      calories: entry.calories,
+      protein_g: entry.protein_g,
+      carbs_g: entry.carbs_g,
+      fat_g: entry.fat_g,
+    });
+    const logHistory = get().logHistory.map((item) =>
+      item.group_key === entry.group_key ? { ...item, favorite_id: favorite.id } : item
+    );
+    set({ logHistory });
+    patchCacheLocally(logHistoryKey(), logHistory);
+  },
 }));
