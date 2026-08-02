@@ -14,10 +14,12 @@ import {
   getQueue,
   isLocalId,
   readLocalActiveSession,
+  readLocalPlanDay,
   rewriteQueuedUrls,
   takeLocalId,
   useOfflineStore,
   writeLocalActiveSession,
+  writeLocalPlanDays,
 } from './offlineStore';
 import { normalizeRoute } from './requestPath';
 import { remapWorkoutSessionState } from './workoutSessionState';
@@ -85,12 +87,54 @@ export function isIdempotentRetryable(url: string, body: unknown): boolean {
 
 // --- building a session from the cache --------------------------------------
 
+/** What `persistPlanDaysDurable` writes into the durable per-day slot. */
+interface DurablePlanDay {
+  plan: TrainingPlan;
+  day: TrainingPlanDay;
+}
+
 /**
- * Looks for a plan day across every plan snapshot this device holds. The start
- * only knows the day id, and the day (with its exercises and `last_weight_kg`)
- * only exists inside `GET /training-plans/{id}` — the plan list does not carry it.
+ * Records every day of a plan just read from the server into the durable
+ * per-day slot, one entry per day id, in a single `setState`. Called whenever
+ * `GET /training-plans/{id}` succeeds (see `api/trainingPlans.ts`), so a day
+ * the person actually opened survives `pruneCache`'s eviction and the
+ * quota-recovery path exactly like `activeSession` does — see the field
+ * comment on `planDays` in `offlineStore.ts`.
+ *
+ * One `setState` for the whole plan, not one per day: `persist`'s `setItem`
+ * serializes the entire store — `cache` included — on every call, and a
+ * 6-day plan used to mean 6 full serializations on every visit to a plan
+ * screen (`Workouts.tsx`, `TrainingPlanDay.tsx`), noticeably janky on a
+ * mid-range Android WebView and each one an independent chance to hit the
+ * quota-recovery path.
+ *
+ * Deliberately never removes an entry for a day that is no longer in `plan`:
+ * a plan adjustment reconciles in place and this must not race ahead of it —
+ * see "Ajustar plano reconcilia no lugar" in CLAUDE.md. The stale entry sits
+ * unused until the server's own answer replaces it.
+ */
+export function persistPlanDaysDurable(plan: TrainingPlan): void {
+  // `days` is dropped from the stored plan: it is the one field that would
+  // duplicate everything already keyed by day id here, for no reader that
+  // needs it (`findCachedPlanDay` hands back the specific `day` alongside it).
+  const { days, ...planWithoutDays } = plan;
+  const entries = (days ?? [])
+    .filter((day): day is TrainingPlanDay & { id: number } => day.id !== undefined)
+    .map((day) => [day.id, { plan: planWithoutDays, day } satisfies DurablePlanDay] as const);
+  writeLocalPlanDays(entries);
+}
+
+/**
+ * Looks for a plan day, first in the durable per-day slot (survives cache
+ * eviction and quota recovery), then across every full plan snapshot the
+ * generic cache still happens to hold. The start only knows the day id, and
+ * the day (with its exercises and `last_weight_kg`) only exists inside
+ * `GET /training-plans/{id}` — the plan list does not carry it.
  */
 export function findCachedPlanDay(dayId: number): { plan: TrainingPlan; day: TrainingPlanDay } | null {
+  const durable = readLocalPlanDay<DurablePlanDay>(dayId);
+  if (durable) return durable;
+
   const { cache } = useOfflineStore.getState();
   for (const [key, entry] of Object.entries(cache)) {
     if (!PLAN_DETAIL_KEY.test(key)) continue;

@@ -1,9 +1,18 @@
 import { apiClient } from './client';
+import { persistPlanDaysDurable } from '../lib/offline';
 import type { AutomaticTrainingPlanInput, TrainingPlan, TrainingPlanInput, TrainingPlanJob } from '../types';
 
 export const trainingPlansApi = {
   list: async () => (await apiClient.get<TrainingPlan[]>('/training-plans')).data,
-  get: async (id: number) => (await apiClient.get<TrainingPlan>(`/training-plans/${id}`)).data,
+  get: async (id: number) => {
+    const plan = (await apiClient.get<TrainingPlan>(`/training-plans/${id}`)).data;
+    // Durable, so `findCachedPlanDay` (and therefore starting a session offline)
+    // still works after this plan's generic cache entry has been pruned or the
+    // quota-recovery path has wiped `cache` outright. See the field comment on
+    // `planDays` in `lib/offlineStore.ts`.
+    persistPlanDaysDurable(plan);
+    return plan;
+  },
   createManual: async (input: TrainingPlanInput) => (await apiClient.post<TrainingPlan>('/training-plans/manual', input)).data,
   // The assistant takes minutes, so this only enqueues the job — poll getJob until it settles.
   createAutomatic: async (input: AutomaticTrainingPlanInput) => (

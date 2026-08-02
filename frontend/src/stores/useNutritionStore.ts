@@ -112,7 +112,34 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const updated = await nutritionApi.updateLog(id, input);
-      const todayLogs = get().todayLogs.map((log) => (log.id === id ? updated : log));
+      // Merged, not replaced: a queued PUT resolves through the offline
+      // interceptor with a slim optimistic payload (just the fields that
+      // changed plus `id`/`offline_pending`) — no `food_name`, no macros.
+      // Replacing the whole record with that turned every ring on the day
+      // into NaN until the next successful `fetchTodayLogs`.
+      const pending = updated as FoodLog & { offline_pending?: boolean };
+      const todayLogs = get().todayLogs.map((log) => {
+        if (log.id !== id) return log;
+        // Offline, `updated` only carries the fields that were sent
+        // (quantity_g, meal_type) plus the marker — the macros it inherits
+        // from `log` below are still scaled for the *old* quantity. Only
+        // the server actually rescales them (see
+        // backend/internal/handlers/nutrition.go). Mirror that rescale here
+        // so the rings don't show the new quantity next to stale macros
+        // until the next successful fetch replaces this entry.
+        if (pending.offline_pending && log.quantity_g > 0) {
+          const ratio = pending.quantity_g / log.quantity_g;
+          return {
+            ...log,
+            ...updated,
+            calories: log.calories * ratio,
+            protein_g: log.protein_g * ratio,
+            carbs_g: log.carbs_g * ratio,
+            fat_g: log.fat_g * ratio,
+          };
+        }
+        return { ...log, ...updated };
+      });
       set({ todayLogs, isLoading: false });
       patchCacheLocally(logsKey(date), todayLogs);
     } catch (err) {
