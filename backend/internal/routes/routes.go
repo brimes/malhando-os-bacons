@@ -100,8 +100,13 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	mux.HandleFunc("PUT /api/nutrition/plans/{id}/activate", chain(nutritionHandler.Activate, auth))
 	mux.HandleFunc("GET /api/nutrition/logs", chain(nutritionHandler.GetLogs, auth))
 	mux.HandleFunc("POST /api/nutrition/logs", chain(nutritionHandler.CreateLog, auth))
+	// No GET /api/nutrition/logs/{id} exists, so this does not collide in the
+	// Go 1.22 mux.
+	mux.HandleFunc("GET /api/nutrition/logs/history", chain(nutritionHandler.GetLogHistory, auth))
 	mux.HandleFunc("PUT /api/nutrition/logs/{id}", chain(nutritionHandler.UpdateLog, auth))
 	mux.HandleFunc("DELETE /api/nutrition/logs/{id}", chain(nutritionHandler.DeleteLog, auth))
+	mux.HandleFunc("POST /api/nutrition/favorites", chain(nutritionHandler.CreateFavorite, auth))
+	mux.HandleFunc("DELETE /api/nutrition/favorites/{id}", chain(nutritionHandler.DeleteFavorite, auth))
 	mux.HandleFunc("GET /api/nutrition/calendar", chain(nutritionHandler.Calendar, auth))
 	mux.HandleFunc("GET /api/nutrition/foods/search", chain(nutritionHandler.SearchFoods, auth))
 	mux.HandleFunc("GET /api/nutrition/foods", chain(nutritionHandler.ListPersonalFoods, auth))

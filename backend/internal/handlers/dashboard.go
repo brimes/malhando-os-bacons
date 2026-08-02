@@ -83,28 +83,17 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Today's nutrition
-	nRows, err := h.db.Pool.Query(ctx,
-		`SELECT fl.quantity_g, fi.calories_per_100g, fi.protein_g, fi.carbs_g, fi.fat_g
-		 FROM food_logs fl JOIN food_items fi ON fi.id = fl.food_item_id
-		 WHERE fl.user_id = $1 AND fl.date::date = $2::date`,
+	// Today's nutrition. Summed from food_logs' own snapshot columns, not
+	// recomputed from food_items: a JOIN there silently drops every log with
+	// no food_item_id (a photo, "já comi" from a plan, or a manual entry),
+	// same reasoning as nutrition_plan.go's suggestion and nutrition_context.go.
+	var summary models.NutritionSummary
+	_ = h.db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(calories),0), COALESCE(SUM(protein_g),0), COALESCE(SUM(carbs_g),0), COALESCE(SUM(fat_g),0)
+		 FROM food_logs WHERE user_id = $1 AND date::date = $2::date`,
 		userID, today,
-	)
-	if err == nil {
-		defer nRows.Close()
-		var summary models.NutritionSummary
-		for nRows.Next() {
-			var qty, cal, prot, carb, fat float64
-			if err := nRows.Scan(&qty, &cal, &prot, &carb, &fat); err == nil {
-				ratio := qty / 100.0
-				summary.Calories += cal * ratio
-				summary.ProteinG += prot * ratio
-				summary.CarbsG += carb * ratio
-				summary.FatG += fat * ratio
-			}
-		}
-		resp.TodayNutrition = summary
-	}
+	).Scan(&summary.Calories, &summary.ProteinG, &summary.CarbsG, &summary.FatG)
+	resp.TodayNutrition = summary
 
 	// Active nutrition plan
 	var plan models.NutritionPlan

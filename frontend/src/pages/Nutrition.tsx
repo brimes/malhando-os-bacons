@@ -14,6 +14,16 @@ import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const UNSYNCED_MESSAGE = 'Este item ainda não foi sincronizado. Conecte-se à internet para alterá-lo.';
 
+// A badge of procedence, never "gerado por IA" — the AI disclosure lives only
+// in the acceptance terms (see CLAUDE.md), repeating it on every entry would
+// just become noise nobody reads. `manual` gets no badge at all.
+const ORIGIN_BADGES: Partial<Record<FoodLog['origin'], string>> = {
+  photo_plate: 'Foto',
+  photo_label: 'Foto',
+  plan: 'Plano',
+  cheat_day: 'Dia do lixo',
+};
+
 export function NutritionPage() {
   const navigate = useNavigate();
   const { todayLogs, activePlan, isLoading, fetchTodayLogs, fetchPlans, logFood, deleteLog } = useNutritionStore();
@@ -300,7 +310,14 @@ export function NutritionPage() {
                           ) : (
                             <div className="flex items-center justify-between">
                               <button className="min-w-0 flex-1 text-left" onClick={() => startEdit(log)}>
-                                <p className="text-sm font-medium text-white truncate">{log.food_name}</p>
+                                <p className="text-sm font-medium text-white truncate">
+                                  {log.food_name}
+                                  {ORIGIN_BADGES[log.origin] && (
+                                    <span className="ml-2 rounded-full bg-zinc-800 px-1.5 py-0.5 align-middle text-[10px] font-medium text-zinc-400">
+                                      {ORIGIN_BADGES[log.origin]}
+                                    </span>
+                                  )}
+                                </p>
                                 <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
                               </button>
                               <div className="flex items-center gap-3">

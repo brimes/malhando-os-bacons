@@ -6,14 +6,17 @@ import type {
   CreateNutritionPlanInput,
   FoodItem,
   FoodLog,
+  FoodLogHistoryEntry,
   LabelAnalysis,
   NutritionCalendarData,
+  NutritionFavorite,
   NutritionPlan,
   NutritionPlanJob,
   NutritionSuggestion,
   PhotoUploadResponse,
   PlateAnalysis,
   UpdateFoodLogInput,
+  UpsertNutritionFavoriteInput,
 } from '../types';
 
 export const nutritionApi = {
@@ -66,6 +69,24 @@ export const nutritionApi = {
 
   deleteLog: async (id: number): Promise<void> => {
     await apiClient.delete(`/nutrition/logs/${id}`);
+  },
+
+  // Consolidated "what did I already eat" list behind the "+ Log" screen's
+  // default view — cached like any other GET, which is what makes it useful
+  // offline (see NON_CACHEABLE_GET_PATHS' comment for the paths deliberately
+  // excluded from that).
+  getLogHistory: async (): Promise<FoodLogHistoryEntry[]> => {
+    const { data } = await apiClient.get<FoodLogHistoryEntry[]>('/nutrition/logs/history');
+    return data;
+  },
+
+  createFavorite: async (input: UpsertNutritionFavoriteInput): Promise<NutritionFavorite> => {
+    const { data } = await apiClient.post<NutritionFavorite>('/nutrition/favorites', input);
+    return data;
+  },
+
+  deleteFavorite: async (id: number): Promise<void> => {
+    await apiClient.delete(`/nutrition/favorites/${id}`);
   },
 
   searchFoods: async (query: string): Promise<FoodItem[]> => {
