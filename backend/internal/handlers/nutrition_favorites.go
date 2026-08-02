@@ -126,8 +126,21 @@ func (h *NutritionHandler) CreateFavorite(w http.ResponseWriter, r *http.Request
 
 	groupKey := strings.TrimSpace(req.GroupKey)
 	foodName := strings.TrimSpace(req.FoodName)
-	if groupKey == "" || foodName == "" || req.QuantityG <= 0 || !validMealTypes[req.MealType] {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "group_key, food_name, quantity_g e meal_type são obrigatórios"})
+	// Mirrors the CHECK constraints in migration 022_nutrition_favorites.sql:
+	// quantity_g/calories are NUMERIC(8,2) (max 999999.99), the macros are
+	// NUMERIC(6,2) (max 9999.99), and calories/macros can't be negative.
+	// Validating here keeps the offline retry queue from burning
+	// MAX_MUTATION_ATTEMPTS on what is really a 400.
+	const maxNumeric82 = 999999.99
+	const maxNumeric62 = 9999.99
+	if groupKey == "" || foodName == "" ||
+		req.QuantityG <= 0 || req.QuantityG > maxNumeric82 ||
+		!validMealTypes[req.MealType] ||
+		req.Calories < 0 || req.Calories > maxNumeric82 ||
+		req.ProteinG < 0 || req.ProteinG > maxNumeric62 ||
+		req.CarbsG < 0 || req.CarbsG > maxNumeric62 ||
+		req.FatG < 0 || req.FatG > maxNumeric62 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "group_key, food_name, quantity_g e meal_type são obrigatórios, e quantity_g/calories/macros devem estar dentro da faixa válida"})
 		return
 	}
 	// Defense in depth: the client is trusted to send the same group_key it
@@ -136,6 +149,24 @@ func (h *NutritionHandler) CreateFavorite(w http.ResponseWriter, r *http.Request
 	// taken at face value.
 	if expected := groupKeyFor(req.FoodItemID, foodName); groupKey != expected {
 		groupKey = expected
+	}
+
+	// A food_item_id must belong to the global catalog or to this user — same
+	// clause CreateLog already uses (nutrition.go) — otherwise this endpoint
+	// is an existence oracle over other users' personal food_items (FK
+	// violation on unknown id vs. success on someone else's id).
+	if req.FoodItemID != nil {
+		var exists bool
+		if err := h.db.Pool.QueryRow(r.Context(),
+			`SELECT EXISTS (SELECT 1 FROM food_items WHERE id=$1 AND (user_id IS NULL OR user_id=$2))`,
+			*req.FoodItemID, userID).Scan(&exists); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save favorite"})
+			return
+		}
+		if !exists {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "food_item_id inválido"})
+			return
+		}
 	}
 
 	var fav models.NutritionFavorite
