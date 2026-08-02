@@ -402,9 +402,19 @@ export interface CreateFoodLogInput {
   client_log_id?: string;
 }
 
+// quantity_g/meal_type stay required; the rest are optional so the server
+// can tell "not sent" (rescale macros by quantity, keep the catalog link)
+// apart from "sent" (use as typed, detach from the catalog) — see
+// UpdateFoodLogRequest on the backend. EditFoodLogModal always sends all of
+// them, since it edits every field at once.
 export interface UpdateFoodLogInput {
   quantity_g: number;
   meal_type: MealType;
+  food_name?: string;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fat_g?: number;
 }
 
 export interface CreateFoodItemInput {

@@ -97,9 +97,20 @@ type CreateFoodLogRequest struct {
 	FatG        float64 `json:"fat_g"`
 }
 
+// UpdateFoodLogRequest edits a food log in place. QuantityG/MealType stay
+// required — every edit still confirms both. FoodName/Calories/ProteinG/
+// CarbsG/FatG are pointers so the handler can tell "not sent" (nil: old
+// rescale-by-quantity behavior, food_item_id untouched) apart from "sent as
+// zero" (a legitimate macro value, and an authorial edit that detaches the
+// log from the catalog) — see UpdateLog in handlers/nutrition.go.
 type UpdateFoodLogRequest struct {
-	QuantityG float64 `json:"quantity_g"`
-	MealType  string  `json:"meal_type"`
+	QuantityG float64  `json:"quantity_g"`
+	MealType  string   `json:"meal_type"`
+	FoodName  *string  `json:"food_name"`
+	Calories  *float64 `json:"calories"`
+	ProteinG  *float64 `json:"protein_g"`
+	CarbsG    *float64 `json:"carbs_g"`
+	FatG      *float64 `json:"fat_g"`
 }
 
 // NutritionFavorite is one starred food. What it stores is a snapshot of the

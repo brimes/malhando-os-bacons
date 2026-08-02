@@ -25,16 +25,21 @@ func groupKeyFor(foodItemID *int64, foodName string) string {
 
 // historyQuery consolidates this user's food_logs by group_key, left-joins
 // favorites onto matching groups, and unions in favorites whose entire log
-// history was since deleted (times_logged 0, last_logged_at null). Ordering:
-// favorites first as a block, sorted by last use (falling back to the
-// favorite's own updated_at when its history is gone); then the rest of the
-// history by how often it was logged in the last 90 days, breaking ties by
-// last use. Capped at 50 rows — beyond that the person searches instead.
+// history was since deleted (times_logged 0, last_logged_at null). Ordering,
+// overriding a first cut that sorted by frequency — the person using it in
+// practice wanted this instead: favorites first as a block, alphabetically;
+// then the rest of the history, also alphabetically. times_logged and
+// last_logged_at stay in the payload (the screen still shows them, and
+// nothing else sorts by them anymore), just not in ORDER BY. Capped at 50
+// rows — beyond that the person searches instead.
 //
 // The group_key expression here is SQL for the same rule groupKeyFor applies
 // in Go, and is written to match migration 017's translate() call
 // character-for-character (see normalizeSearchText's comment) so a food
-// logged with an accented name groups identically either way.
+// logged with an accented name groups identically either way. The ORDER BY's
+// own translate() call is the identical expression again, this time so
+// "Ávocado" and "avocado" land next to each other instead of the accented one
+// sorting after everything else by raw byte order.
 const historyQuery = `
 WITH logs_with_key AS (
 	SELECT food_item_id, food_name, quantity_g, meal_type, calories, protein_g, carbs_g, fat_g, date, created_at,
@@ -57,13 +62,13 @@ history AS (
 combined AS (
 	SELECT h.group_key, h.food_item_id, h.food_name, h.quantity_g, h.meal_type,
 	       h.calories, h.protein_g, h.carbs_g, h.fat_g,
-	       h.times_logged, h.last_logged_at, f.id AS favorite_id, f.updated_at AS favorite_updated_at
+	       h.times_logged, h.last_logged_at, f.id AS favorite_id
 	FROM history h
 	LEFT JOIN nutrition_favorites f ON f.user_id = $1 AND f.group_key = h.group_key
 	UNION ALL
 	SELECT f.group_key, f.food_item_id, f.food_name, f.quantity_g, f.meal_type,
 	       f.calories, f.protein_g, f.carbs_g, f.fat_g,
-	       0 AS times_logged, NULL::timestamptz AS last_logged_at, f.id AS favorite_id, f.updated_at AS favorite_updated_at
+	       0 AS times_logged, NULL::timestamptz AS last_logged_at, f.id AS favorite_id
 	FROM nutrition_favorites f
 	WHERE f.user_id = $1 AND NOT EXISTS (SELECT 1 FROM history h WHERE h.group_key = f.group_key)
 )
@@ -72,9 +77,9 @@ SELECT group_key, food_item_id, food_name, quantity_g, meal_type, calories, prot
 FROM combined
 ORDER BY
 	(favorite_id IS NOT NULL) DESC,
-	CASE WHEN favorite_id IS NOT NULL THEN COALESCE(last_logged_at, favorite_updated_at) END DESC NULLS LAST,
-	CASE WHEN favorite_id IS NULL THEN times_logged END DESC NULLS LAST,
-	last_logged_at DESC NULLS LAST
+	lower(translate(trim(food_name),
+	       'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+	       'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC')) ASC
 LIMIT 50`
 
 // GetLogHistory answers the "+ Log" screen's default view (nothing typed
