@@ -30,7 +30,15 @@ frontend/android/keystore.properties
 frontend/android/.idea/
 frontend/android/capacitor-cordova-android-plugins/build/
 frontend/android/app/release/
-frontend/ios/
+# O projeto iOS é versionado pela mesma razão que o Android: ele carrega o
+# bundle id, o time de assinatura, a versão e as descrições de uso de câmera e
+# galeria, e um `cap add ios` apagaria tudo isso sem avisar. Só build e
+# dependências baixadas ficam de fora.
+frontend/ios/App/build/
+frontend/ios/App/Pods/
+frontend/ios/App/App/public/
+frontend/ios/DerivedData/
+frontend/ios/App/output/
 
 # Android / Watch
 watch/.gradle/
