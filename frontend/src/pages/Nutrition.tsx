@@ -7,10 +7,8 @@ import { Button } from '../components/Button';
 import { MacroProgress } from '../components/Chart';
 import { OriginBadge } from '../components/OriginBadge';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
-import { nutritionApi } from '../api/nutrition';
-import { getErrorMessage } from '../api/client';
 import { todayLocalDate } from '../lib/date';
-import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionSuggestion, type UpdateFoodLogInput } from '../types';
+import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -18,13 +16,10 @@ export function NutritionPage() {
   const navigate = useNavigate();
   const { todayLogs, activePlan, isLoading, fetchTodayLogs, fetchPlans, logFood, deleteLog } = useNutritionStore();
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
-  // The suggestion is for the rest of the day as a whole (the backend has no
-  // per-meal endpoint) — tapping the icon on any meal opens the same modal
-  // with the same "rest of the day" answer, whichever meal it was tapped on.
-  const [suggestionOpen, setSuggestionOpen] = useState(false);
-  const [suggestion, setSuggestion] = useState<NutritionSuggestion | null>(null);
-  const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  // Which meal's planned-menu modal is open, if any. The menu itself comes
+  // straight from `activePlan.meals` — already loaded with the plan — so
+  // opening this never touches the backend.
+  const [menuMeal, setMenuMeal] = useState<MealType | null>(null);
 
   useEffect(() => {
     // A date-less key is the same cache entry every day of the app's life —
@@ -49,19 +44,6 @@ export function NutritionPage() {
     (acc[log.meal_type] ??= []).push(log);
     return acc;
   }, {});
-
-  const openSuggestion = async () => {
-    setSuggestionOpen(true);
-    setIsSuggesting(true);
-    setSuggestionError(null);
-    try {
-      setSuggestion(await nutritionApi.suggestion());
-    } catch (requestError) {
-      setSuggestionError(getErrorMessage(requestError));
-    } finally {
-      setIsSuggesting(false);
-    }
-  };
 
   const logPlannedItem = async (mealType: MealType, item: { food_name: string; quantity_g: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }) => {
     await logFood({
@@ -171,11 +153,13 @@ export function NutritionPage() {
                     <h3 className="flex items-center gap-1.5 font-semibold text-white text-sm">
                       {MEAL_TYPE_LABELS[meal]}
                       {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-zinc-500">{plannedMeal.suggested_at}</span>}
-                      {activePlan && (
+                      {/* Only when there is something to show — a meal with no
+                          planned items would open an empty modal. */}
+                      {plannedMeal && plannedMeal.items.length > 0 && (
                         <button
                           type="button"
-                          onClick={openSuggestion}
-                          aria-label="Sugestão do plano para o resto do dia"
+                          onClick={() => setMenuMeal(meal)}
+                          aria-label={`Sugestão do plano para ${MEAL_TYPE_LABELS[meal].toLowerCase()}`}
                           className="text-zinc-500 hover:text-primary-400"
                         >
                           💡
@@ -184,24 +168,6 @@ export function NutritionPage() {
                     </h3>
                     {mealCal > 0 && <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>}
                   </div>
-
-                  {plannedMeal && (
-                    <Card className="mb-2 space-y-2 border-zinc-800/60 bg-zinc-950/60">
-                      <p className="text-xs uppercase tracking-wide text-zinc-600">Sugestão do plano</p>
-                      {plannedMeal.items.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-zinc-400">{item.food_name} · {item.quantity_g}g</p>
-                          <button
-                            type="button"
-                            onClick={() => logPlannedItem(meal, item)}
-                            className="shrink-0 rounded-full bg-zinc-800 px-3 py-1 text-[11px] font-medium text-zinc-300"
-                          >
-                            Já comi
-                          </button>
-                        </div>
-                      ))}
-                    </Card>
-                  )}
 
                   {logs.length === 0 ? (
                     <Card className="py-3">
@@ -251,34 +217,38 @@ export function NutritionPage() {
         <EditFoodLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={handleSaveEdit} />
       )}
 
-      {suggestionOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
-          onClick={() => setSuggestionOpen(false)}
-        >
+      {menuMeal && (() => {
+        const meal = menuMeal;
+        const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
+        return (
           <div
-            className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+            onClick={() => setMenuMeal(null)}
           >
-            <h3 className="text-lg font-bold text-white">O que comer no resto do dia?</h3>
-            {isSuggesting && (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            )}
-            {suggestionError && <p className="mt-3 text-xs text-red-400">{suggestionError}</p>}
-            {!isSuggesting && suggestion && (
-              <ul className="mt-3 space-y-2">
-                {suggestion.suggestions.map((item, index) => (
-                  <li key={index} className="rounded-xl bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
-                    {item}
-                  </li>
+            <div
+              className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-white">Sugestão do plano — {MEAL_TYPE_LABELS[meal]}</h3>
+              {plannedMeal?.suggested_at && <p className="mt-1 text-xs text-zinc-500">{plannedMeal.suggested_at}</p>}
+              <div className="mt-3 space-y-2">
+                {(plannedMeal?.items ?? []).map((item, index) => (
+                  <div key={index} className="flex items-center justify-between gap-2 rounded-xl bg-zinc-950 p-3">
+                    <p className="text-xs text-zinc-400">{item.food_name} · {item.quantity_g}g</p>
+                    <button
+                      type="button"
+                      onClick={() => logPlannedItem(meal, item)}
+                      className="shrink-0 rounded-full bg-zinc-800 px-3 py-1 text-[11px] font-medium text-zinc-300"
+                    >
+                      Já comi
+                    </button>
+                  </div>
                 ))}
-              </ul>
-            )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
