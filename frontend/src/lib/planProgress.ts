@@ -78,6 +78,12 @@ export interface PlanWeekProgress {
   daysUnknown: boolean;
   /** Sessions counted from the local queue rather than from the server. */
   pendingCount: number;
+  /**
+   * One entry per weekday of the current week, segunda a domingo, true where a
+   * session was completed. Derived from the same deduplicated `sessions` the
+   * counters use, so the strip and the numbers can never disagree.
+   */
+  weekDays: boolean[];
 }
 
 function dayNumberOf(day: TrainingPlanDay): number {
@@ -159,6 +165,17 @@ export function computePlanWeekProgress(input: PlanWeekProgressInput): PlanWeekP
   const remaining = Math.max(0, target - done);
   const left = daysLeftInWeek(now);
 
+  // Índice 0 é segunda, espelhando startOfWeek. Comparar por data local em vez
+  // de dividir a diferença em milissegundos evita errar o bloco na semana em
+  // que o horário de verão muda, quando um dos dias não tem 24h.
+  const weekDays = Array.from({ length: 7 }, (_, offset) => {
+    const day = new Date(startOfWeek(now));
+    day.setDate(day.getDate() + offset);
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+    return sessions.some((session) => session.at >= day.getTime() && session.at < next.getTime());
+  });
+
   return {
     target,
     done,
@@ -170,5 +187,6 @@ export function computePlanWeekProgress(input: PlanWeekProgressInput): PlanWeekP
     next: nextEntry?.day ?? null,
     daysUnknown: (plan.days ?? []).length === 0,
     pendingCount: pendingThisWeek,
+    weekDays,
   };
 }
