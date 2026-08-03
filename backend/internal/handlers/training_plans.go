@@ -123,16 +123,24 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetCompensation returns the currently valid cheat-day compensation plan, if
-// any — the one non-expired kind='compensation' row, so the dashboard and the
-// plan screen can surface it as a standalone extra session without the
-// person having to dig through the cheat-day conversation history.
+// any — the one non-expired kind='compensation' row with no completed workout
+// against it yet, so the dashboard and the plan screen can surface it as a
+// standalone extra session without the person having to dig through the
+// cheat-day conversation history. Once its day has been trained it stops
+// being offered here — it already shows up as a normal completed session in
+// the workout history, so nothing about it needs a special "done" surface.
 func (h *TrainingPlanHandler) GetCompensation(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
 	var id int64
 	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id FROM training_plans
-		 WHERE user_id = $1 AND kind = 'compensation' AND expires_at >= CURRENT_DATE
-		 ORDER BY created_at DESC LIMIT 1`, userID,
+		`SELECT tp.id FROM training_plans tp
+		 WHERE tp.user_id = $1 AND tp.kind = 'compensation' AND tp.expires_at >= CURRENT_DATE
+		 AND NOT EXISTS (
+		   SELECT 1 FROM workouts w
+		   JOIN training_plan_days d ON d.id = w.training_plan_day_id
+		   WHERE d.plan_id = tp.id AND w.status = 'completed'
+		 )
+		 ORDER BY tp.created_at DESC LIMIT 1`, userID,
 	).Scan(&id)
 	if err == pgx.ErrNoRows {
 		w.WriteHeader(http.StatusNoContent)
