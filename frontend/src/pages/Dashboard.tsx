@@ -121,7 +121,12 @@ export function DashboardPage() {
           ? 'Meta da semana batida. Excelente!'
           : perf.still_possible
             ? `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} e ainda restam ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Dá tempo!`
-            : `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} para ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Recupere o que der e volte firme na próxima semana.`;
+            // Zero dias restantes só passou a ser alcançável quando o dia em que
+            // já se treinou deixou de contar; sem este ramo a frase vira
+            // "faltam 2 treinos para 0 dias".
+            : perf.days_left_in_week === 0
+              ? `A semana fechou com ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} a menos. Volte firme na próxima.`
+              : `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} para ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Recupere o que der e volte firme na próxima semana.`;
         return (
           <div className={`rounded-2xl border ${tone.border} bg-zinc-900 p-4`}>
             <div className="flex items-baseline justify-between">
