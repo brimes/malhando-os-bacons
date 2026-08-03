@@ -118,14 +118,16 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		resp.TodaySteps = &steps
 	}
 
-	h.fillTrainingSummary(r, userID, &resp)
+	h.fillTrainingSummary(r, userID, today, resp.TodayWorkout != nil, &resp)
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
 // fillTrainingSummary adds what the home screen needs to nudge the person:
 // which workout is due, how long since the last one, and how the week is going.
-func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, resp *models.DashboardResponse) {
+// today is the caller's local date (see the ?date= handling in Get), not the
+// server's clock, so this must be consistent through midnight UTC.
+func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, today time.Time, trainedToday bool, resp *models.DashboardResponse) {
 	ctx := r.Context()
 
 	var lastDone time.Time
@@ -168,18 +170,14 @@ func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, re
 	var doneThisWeek int
 	_ = h.db.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM workouts
-		 WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE)`,
-		userID).Scan(&doneThisWeek)
+		 WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', $2::date)`,
+		userID, today).Scan(&doneThisWeek)
 
 	remaining := targetPerWeek - doneThisWeek
 	if remaining < 0 {
 		remaining = 0
 	}
-	// date_trunc('week') starts on Monday, matching the counting above.
-	daysLeft := 8 - int(time.Now().Weekday())
-	if time.Now().Weekday() == time.Sunday {
-		daysLeft = 1
-	}
+	daysLeft := daysLeftInWeek(today, trainedToday)
 	resp.WeeklyPerformance = &models.WeeklyPerformance{
 		PlanName:       planName,
 		TargetPerWeek:  targetPerWeek,
@@ -189,4 +187,26 @@ func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, re
 		OnTrack:        remaining == 0,
 		StillPossible:  remaining <= daysLeft,
 	}
+}
+
+// daysLeftInWeek counts how many days remain, starting from today, in the
+// Monday-to-Sunday week that date_trunc('week', ...) uses elsewhere in this
+// file. today only counts as available if trainedToday is false — a workout
+// already logged for today doesn't leave more room today, it fills it.
+// Sunday with a workout already done returns 0, not a negative number: the
+// week is over and there's no day left to make up ground, but that's not an
+// error state, just the last possible day already spent.
+func daysLeftInWeek(today time.Time, trainedToday bool) int {
+	weekday := int(today.Weekday()) // Sunday=0, Monday=1, ..., Saturday=6
+	daysLeft := 8 - weekday
+	if today.Weekday() == time.Sunday {
+		daysLeft = 1
+	}
+	if trainedToday {
+		daysLeft--
+	}
+	if daysLeft < 0 {
+		daysLeft = 0
+	}
+	return daysLeft
 }
