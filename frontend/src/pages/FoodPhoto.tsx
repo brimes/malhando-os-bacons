@@ -6,6 +6,8 @@ import { Button } from '../components/Button';
 import { FoodPhotoCapture } from '../components/FoodPhotoCapture';
 import { nutritionApi } from '../api/nutrition';
 import { useNutritionStore } from '../stores/useNutritionStore';
+import { createFoodLog } from '../lib/local/repo/foodLogs';
+import { todayLocalDate } from '../lib/date';
 import { getErrorMessage } from '../api/client';
 import { MEAL_TYPE_LABELS } from '../types';
 import type { LabelAnalysis, MealType, PlateAnalysisItem } from '../types';
@@ -15,7 +17,7 @@ const CONFIDENCE_LABEL: Record<string, string> = { high: 'Alta confiança', medi
 export function FoodPhotoPage() {
   const { kind } = useParams<{ kind: 'plate' | 'label' }>();
   const navigate = useNavigate();
-  const { logFood, createFood } = useNutritionStore();
+  const { createFood } = useNutritionStore();
 
   const [photoId, setPhotoId] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -77,7 +79,10 @@ export function FoodPhotoPage() {
     setError(null);
     try {
       for (const item of plateItems) {
-        await logFood({
+        // Grava local antes de subir, como o resto da nutrição: sem isso o
+        // registro só existiria no servidor e o diário — que lê do aparelho —
+        // não o mostraria até um pull, obrigando a fechar e reabrir o app.
+        await createFoodLog({
           food_name: item.food_name,
           quantity_g: item.estimated_grams,
           meal_type: mealType,
@@ -87,6 +92,7 @@ export function FoodPhotoPage() {
           protein_g: item.protein_g,
           carbs_g: item.carbs_g,
           fat_g: item.fat_g,
+          date: todayLocalDate(),
         });
       }
       navigate('/nutrition');
@@ -117,12 +123,22 @@ export function FoodPhotoPage() {
       });
       if (logAfterSaving) {
         const quantity = Number(servingQuantity) || label.serving_grams || 100;
-        await logFood({
+        // O servidor recalcula os macros a partir do food_item_id e ignora o
+        // que vai aqui; estes valores só seguram a tela até a criação
+        // sincronizar e a linha do servidor sobrescrever a otimista.
+        const ratio = quantity / 100;
+        await createFoodLog({
           food_item_id: food.id,
+          food_name: label.name,
           quantity_g: quantity,
           meal_type: mealType,
           origin: 'photo_label',
           photo_id: photoId ?? undefined,
+          calories: (label.calories_per_100g ?? 0) * ratio,
+          protein_g: (label.protein_g ?? 0) * ratio,
+          carbs_g: (label.carbs_g ?? 0) * ratio,
+          fat_g: (label.fat_g ?? 0) * ratio,
+          date: todayLocalDate(),
         });
       }
       navigate('/nutrition');
