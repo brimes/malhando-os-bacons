@@ -6,6 +6,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { getErrorMessage } from '../api/client';
 import { isNetworkOnline } from '../lib/offline';
+import { createFoodLog } from '../lib/local/repo/foodLogs';
 import { todayLocalDate } from '../lib/date';
 import type { FoodItem, FoodLogHistoryEntry, MealType } from '../types';
 import { MEAL_TYPE_LABELS } from '../types';
@@ -162,8 +163,6 @@ export function FoodLogPage() {
     searchResults,
     isSearching,
     clearSearch,
-    logFood,
-    isLoading,
     logHistory,
     isLoadingHistory,
     fetchLogHistory,
@@ -288,26 +287,23 @@ export function FoodLogPage() {
     if (!selection || !computedMacros) return;
     setSubmitError(null);
     try {
-      if (selection.foodItemId) {
-        await logFood({
-          food_item_id: selection.foodItemId,
-          meal_type: mealType,
-          quantity_g: Number(quantity),
-          date,
-        });
-      } else {
-        await logFood({
-          food_name: selection.name,
-          meal_type: mealType,
-          quantity_g: Number(quantity),
-          date,
-          origin: 'manual',
-          calories: computedMacros.calories,
-          protein_g: computedMacros.protein,
-          carbs_g: computedMacros.carbs,
-          fat_g: computedMacros.fat,
-        });
-      }
+      // `food_name`/macros are always sent, even for a catalog pick: the
+      // server recomputes and overwrites them itself when `food_item_id` is
+      // set (see `CreateLog` in `backend/internal/handlers/nutrition.go`), but
+      // the local-first write needs *something* to show on screen the instant
+      // it lands, before that response comes back — see `createFoodLog`.
+      await createFoodLog({
+        food_item_id: selection.foodItemId,
+        food_name: selection.name,
+        meal_type: mealType,
+        quantity_g: Number(quantity),
+        date,
+        origin: selection.foodItemId ? undefined : 'manual',
+        calories: computedMacros.calories,
+        protein_g: computedMacros.protein,
+        carbs_g: computedMacros.carbs,
+        fat_g: computedMacros.fat,
+      });
       navigate('/nutrition');
     } catch (err) {
       setSubmitError(getErrorMessage(err));
@@ -327,7 +323,7 @@ export function FoodLogPage() {
     if (!manualValid) return;
     setSubmitError(null);
     try {
-      await logFood({
+      await createFoodLog({
         food_name: manualName.trim(),
         meal_type: manualMealType,
         quantity_g: manualQuantityNumber,
@@ -557,7 +553,7 @@ export function FoodLogPage() {
 
             {submitError && <p className="text-xs text-red-400">{submitError}</p>}
 
-            <Button type="submit" fullWidth size="lg" isLoading={isLoading} disabled={!(Number(quantity) > 0)}>
+            <Button type="submit" fullWidth size="lg" disabled={!(Number(quantity) > 0)}>
               Registrar Alimento
             </Button>
           </form>
@@ -675,7 +671,7 @@ export function FoodLogPage() {
 
             {submitError && <p className="text-xs text-red-400">{submitError}</p>}
 
-            <Button type="submit" fullWidth size="lg" isLoading={isLoading} disabled={!manualValid}>
+            <Button type="submit" fullWidth size="lg" disabled={!manualValid}>
               Registrar
             </Button>
           </form>

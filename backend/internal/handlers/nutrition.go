@@ -28,10 +28,81 @@ func NewNutritionHandler(database *db.DB, resolver services.GeneratorResolver, p
 	return &NutritionHandler{db: database, resolver: resolver, photoDir: photoDir}
 }
 
+// maxLogsRangeDays caps `from`/`to` so the local-first pull (`lib/local/repo/foodLogs.ts`'s
+// 60-day sliding window) cannot be abused into a full-history dump in one request.
+const maxLogsRangeDays = 90
+
+const foodLogsSelect = `SELECT fl.id, fl.user_id, fl.food_item_id, fl.food_name, fl.meal_type, fl.quantity_g,
+	        fl.calories, fl.protein_g, fl.carbs_g, fl.fat_g, fl.origin, fl.client_log_id,
+	        mp.id, fl.date, fl.created_at, fl.updated_at
+	 FROM food_logs fl
+	 LEFT JOIN meal_photos mp ON mp.food_log_id = fl.id
+	 WHERE fl.user_id = $1 AND `
+
+func scanFoodLogRows(rows pgx.Rows) []models.FoodLog {
+	logs := []models.FoodLog{}
+	for rows.Next() {
+		var log models.FoodLog
+		if err := rows.Scan(
+			&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
+			&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID,
+			&log.PhotoID, &log.Date, &log.CreatedAt, &log.UpdatedAt,
+		); err != nil {
+			continue
+		}
+		logs = append(logs, log)
+	}
+	return logs
+}
+
+// GetLogs answers either a single day (`date`, or today when omitted — the
+// original, still-default shape every existing caller uses) or a range
+// (`from`+`to`, both required together) — the sliding-window pull the
+// local-first repo needs to refetch 60 days in one request instead of 60.
+// Purely additive: a request with neither carries on exactly as before.
 func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	if fromStr != "" || toStr != "" {
+		if fromStr == "" || toStr == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "from e to devem ser usados juntos, no formato YYYY-MM-DD"})
+			return
+		}
+		from, err := time.Parse("2006-01-02", fromStr)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid from date format, use YYYY-MM-DD"})
+			return
+		}
+		to, err := time.Parse("2006-01-02", toStr)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid to date format, use YYYY-MM-DD"})
+			return
+		}
+		if to.Before(from) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to não pode ser anterior a from"})
+			return
+		}
+		if to.Sub(from) > maxLogsRangeDays*24*time.Hour {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "o intervalo entre from e to não pode passar de 90 dias"})
+			return
+		}
+
+		rows, err := h.db.Pool.Query(r.Context(),
+			foodLogsSelect+`fl.date::date >= $2::date AND fl.date::date <= $3::date ORDER BY fl.created_at`,
+			userID, from, to,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch logs"})
+			return
+		}
+		defer rows.Close()
+		writeJSON(w, http.StatusOK, scanFoodLogRows(rows))
 		return
 	}
 
@@ -49,13 +120,7 @@ func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT fl.id, fl.user_id, fl.food_item_id, fl.food_name, fl.meal_type, fl.quantity_g,
-		        fl.calories, fl.protein_g, fl.carbs_g, fl.fat_g, fl.origin, fl.client_log_id,
-		        mp.id, fl.date, fl.created_at, fl.updated_at
-		 FROM food_logs fl
-		 LEFT JOIN meal_photos mp ON mp.food_log_id = fl.id
-		 WHERE fl.user_id = $1 AND fl.date::date = $2::date
-		 ORDER BY fl.created_at`,
+		foodLogsSelect+`fl.date::date = $2::date ORDER BY fl.created_at`,
 		userID, date,
 	)
 	if err != nil {
@@ -63,21 +128,7 @@ func (h *NutritionHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-
-	logs := []models.FoodLog{}
-	for rows.Next() {
-		var log models.FoodLog
-		if err := rows.Scan(
-			&log.ID, &log.UserID, &log.FoodItemID, &log.FoodName, &log.MealType, &log.QuantityG,
-			&log.Calories, &log.ProteinG, &log.CarbsG, &log.FatG, &log.Origin, &log.ClientLogID,
-			&log.PhotoID, &log.Date, &log.CreatedAt, &log.UpdatedAt,
-		); err != nil {
-			continue
-		}
-		logs = append(logs, log)
-	}
-
-	writeJSON(w, http.StatusOK, logs)
+	writeJSON(w, http.StatusOK, scanFoodLogRows(rows))
 }
 
 func (h *NutritionHandler) CreateLog(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useNutritionStore } from '../stores/useNutritionStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -8,27 +7,30 @@ import { MacroProgress } from '../components/Chart';
 import { OriginBadge } from '../components/OriginBadge';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
 import { todayLocalDate } from '../lib/date';
+import { dateKey, createFoodLog, deleteFoodLog, foodLogsCache, updateFoodLog } from '../lib/local/repo/foodLogs';
+import { nutritionPlansCache } from '../lib/local/repo/nutritionPlans';
+import { useLocalAll } from '../lib/local/useLocal';
 import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 export function NutritionPage() {
   const navigate = useNavigate();
-  const { todayLogs, activePlan, isLoading, fetchTodayLogs, fetchPlans, logFood, deleteLog } = useNutritionStore();
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
   // Which meal's planned-menu modal is open, if any. The menu itself comes
   // straight from `activePlan.meals` — already loaded with the plan — so
   // opening this never touches the backend.
   const [menuMeal, setMenuMeal] = useState<MealType | null>(null);
 
-  useEffect(() => {
-    // A date-less key is the same cache entry every day of the app's life —
-    // offline, it would keep serving yesterday's snapshot forever instead of
-    // "no records yet" for a day that hasn't been read before. See
-    // useNutritionStore's `logsKey`.
-    fetchTodayLogs(todayLocalDate());
-    fetchPlans();
-  }, [fetchTodayLogs, fetchPlans]);
+  // Local-first: both come straight from IndexedDB (loaded during boot — see
+  // `offlineBoot.ts`) and re-render on their own the moment a write, a pull
+  // or the outbox change them. No `isLoading`, no network call on mount —
+  // the screen never waits for one to have something to draw.
+  const today = todayLocalDate();
+  const allLogs = useLocalAll(foodLogsCache);
+  const todayLogs = useMemo(() => allLogs.filter((log) => dateKey(log.date) === today), [allLogs, today]);
+  const plans = useLocalAll(nutritionPlansCache);
+  const activePlan = useMemo(() => plans.find((plan) => plan.active) ?? null, [plans]);
 
   const totals = todayLogs.reduce(
     (acc, log) => ({
@@ -46,7 +48,7 @@ export function NutritionPage() {
   }, {});
 
   const logPlannedItem = async (mealType: MealType, item: { food_name: string; quantity_g: number; calories: number; protein_g: number; carbs_g: number; fat_g: number }) => {
-    await logFood({
+    await createFoodLog({
       food_name: item.food_name,
       quantity_g: item.quantity_g,
       meal_type: mealType,
@@ -58,16 +60,12 @@ export function NutritionPage() {
       // Without this the server falls back to its own time.Now() — offline,
       // that means whatever date the queue drains on, not the day the person
       // actually tapped "Já comi".
-      date: todayLocalDate(),
+      date: today,
     });
   };
 
   const handleSaveEdit = async (id: number, input: UpdateFoodLogInput) => {
-    // The diary only ever shows today's logs, so the record being edited is
-    // always dated today — matching the key fetchTodayLogs(todayLocalDate())
-    // populated at mount, so the offline snapshot actually gets patched
-    // instead of a second, never-read cache entry.
-    await useNutritionStore.getState().updateLog(id, input, todayLocalDate());
+    await updateFoodLog(id, input);
   };
 
   return (
@@ -136,81 +134,75 @@ export function NutritionPage() {
           </Card>
         )}
 
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {MEAL_ORDER.map((meal) => {
-              const logs = byMeal[meal] ?? [];
-              const mealCal = logs.reduce((s, l) => s + l.calories, 0);
-              const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
+        <div className="space-y-4">
+          {MEAL_ORDER.map((meal) => {
+            const logs = byMeal[meal] ?? [];
+            const mealCal = logs.reduce((s, l) => s + l.calories, 0);
+            const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
 
-              return (
-                <div key={meal}>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="flex items-center gap-1.5 font-semibold text-white text-sm">
-                      {MEAL_TYPE_LABELS[meal]}
-                      {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-zinc-500">{plannedMeal.suggested_at}</span>}
-                      {/* Only when there is something to show — a meal with no
-                          planned items would open an empty modal. */}
-                      {plannedMeal && plannedMeal.items.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setMenuMeal(meal)}
-                          aria-label={`Sugestão do plano para ${MEAL_TYPE_LABELS[meal].toLowerCase()}`}
-                          className="text-zinc-500 hover:text-primary-400"
-                        >
-                          💡
-                        </button>
-                      )}
-                    </h3>
-                    {mealCal > 0 && <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>}
-                  </div>
-
-                  {logs.length === 0 ? (
-                    <Card className="py-3">
-                      <p className="text-sm text-zinc-600 text-center">Nenhum registro</p>
-                    </Card>
-                  ) : (
-                    <div className="space-y-2">
-                      {logs.map((log) => (
-                        <Card key={log.id} className="py-3">
-                          <div className="flex items-center justify-between">
-                            <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
-                              <p className="text-sm font-medium text-white truncate">
-                                {log.food_name}
-                                <OriginBadge origin={log.origin} />
-                              </p>
-                              <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
-                            </button>
-                            <div className="flex items-center gap-3">
-                              <div className="text-right">
-                                <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
-                                <p className="text-xs text-zinc-500">
-                                  P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => deleteLog(log.id)}
-                                aria-label="Apagar"
-                                className="p-1 text-lg text-zinc-600"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+            return (
+              <div key={meal}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="flex items-center gap-1.5 font-semibold text-white text-sm">
+                    {MEAL_TYPE_LABELS[meal]}
+                    {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-zinc-500">{plannedMeal.suggested_at}</span>}
+                    {/* Only when there is something to show — a meal with no
+                        planned items would open an empty modal. */}
+                    {plannedMeal && plannedMeal.items.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMenuMeal(meal)}
+                        aria-label={`Sugestão do plano para ${MEAL_TYPE_LABELS[meal].toLowerCase()}`}
+                        className="text-zinc-500 hover:text-primary-400"
+                      >
+                        💡
+                      </button>
+                    )}
+                  </h3>
+                  {mealCal > 0 && <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>}
                 </div>
-              );
-            })}
-          </div>
-        )}
+
+                {logs.length === 0 ? (
+                  <Card className="py-3">
+                    <p className="text-sm text-zinc-600 text-center">Nenhum registro</p>
+                  </Card>
+                ) : (
+                  <div className="space-y-2">
+                    {logs.map((log) => (
+                      <Card key={log.id} className="py-3">
+                        <div className="flex items-center justify-between">
+                          <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
+                            <p className="text-sm font-medium text-white truncate">
+                              {log.food_name}
+                              <OriginBadge origin={log.origin} />
+                            </p>
+                            <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
+                          </button>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
+                              <p className="text-xs text-zinc-500">
+                                P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteFoodLog(log.id)}
+                              aria-label="Apagar"
+                              className="p-1 text-lg text-zinc-600"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {editingLog && (

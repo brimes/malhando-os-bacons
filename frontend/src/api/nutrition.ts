@@ -20,8 +20,8 @@ import type {
 } from '../types';
 
 export const nutritionApi = {
-  listPlans: async (): Promise<NutritionPlan[]> => {
-    const { data } = await apiClient.get<NutritionPlan[]>('/nutrition/plans');
+  listPlans: async (signal?: AbortSignal): Promise<NutritionPlan[]> => {
+    const { data } = await apiClient.get<NutritionPlan[]>('/nutrition/plans', { signal });
     return data;
   },
 
@@ -54,6 +54,14 @@ export const nutritionApi = {
   getLogs: async (date?: string): Promise<FoodLog[]> => {
     const params = date ? { date } : {};
     const { data } = await apiClient.get<FoodLog[]>('/nutrition/logs', { params });
+    return data;
+  },
+
+  // Sliding-window pull for the local-first repo (`lib/local/repo/foodLogs.ts`):
+  // one request for the whole range instead of one per day — see
+  // `GET /api/nutrition/logs?from=&to=` on the backend, capped at 90 days.
+  getLogsRange: async (from: string, to: string, signal?: AbortSignal): Promise<FoodLog[]> => {
+    const { data } = await apiClient.get<FoodLog[]>('/nutrition/logs', { params: { from, to }, signal });
     return data;
   },
 
@@ -96,8 +104,8 @@ export const nutritionApi = {
     return data;
   },
 
-  listPersonalFoods: async (): Promise<FoodItem[]> => {
-    const { data } = await apiClient.get<FoodItem[]>('/nutrition/foods');
+  listPersonalFoods: async (signal?: AbortSignal): Promise<FoodItem[]> => {
+    const { data } = await apiClient.get<FoodItem[]>('/nutrition/foods', { signal });
     return data;
   },
 

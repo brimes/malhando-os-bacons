@@ -117,6 +117,50 @@ export async function getAll<T>(store: StoreName): Promise<T[]> {
   return result;
 }
 
+/**
+ * Single-record helpers on top of the transaction primitives above. Added for
+ * the entity repos (`lib/local/repo/*.ts`, see `lib/local/entityStore.ts`) —
+ * `getAll`/`clearStore`/`runReadWriteTransaction` alone meant every write went
+ * through a bespoke transaction, which is exactly the boilerplate this exists
+ * to remove.
+ */
+export async function getRecord<T>(store: StoreName, key: IDBValidKey): Promise<T | undefined> {
+  const db = await openLocalDb();
+  const tx = db.transaction(store, 'readonly');
+  const result = await requestToPromise(tx.objectStore(store).get(key) as IDBRequest<T | undefined>);
+  await txDone(tx);
+  return result;
+}
+
+export async function putRecord<T>(store: StoreName, value: T): Promise<void> {
+  const db = await openLocalDb();
+  const tx = db.transaction(store, 'readwrite');
+  tx.objectStore(store).put(value);
+  await txDone(tx);
+}
+
+export async function deleteRecord(store: StoreName, key: IDBValidKey): Promise<void> {
+  const db = await openLocalDb();
+  const tx = db.transaction(store, 'readwrite');
+  tx.objectStore(store).delete(key);
+  await txDone(tx);
+}
+
+/**
+ * Replaces every record of `store` with `values` in one transaction — used by
+ * a pull that refetches a whole collection (e.g. personal foods) rather than a
+ * sliding window of it. Never used for `food_logs`: that pull writes by id
+ * within its date window instead, see `lib/local/repo/foodLogs.ts`.
+ */
+export async function putAllReplacing<T>(store: StoreName, values: T[]): Promise<void> {
+  const db = await openLocalDb();
+  const tx = db.transaction(store, 'readwrite');
+  const objectStore = tx.objectStore(store);
+  objectStore.clear();
+  for (const value of values) objectStore.put(value);
+  await txDone(tx);
+}
+
 export async function getAllKeys(store: StoreName): Promise<IDBValidKey[]> {
   const db = await openLocalDb();
   const tx = db.transaction(store, 'readonly');
