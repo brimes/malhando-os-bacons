@@ -8,9 +8,14 @@
 // catches it.
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { FailedMutation, PendingMutation } from '../../types/offline';
+import type { FailedMutation, PendingMutation, PersistedOfflineState } from '../../types/offline';
 import { clearStore, getAll } from '../localDb';
-import { readPersistedOfflineState, writePersistedOfflineState } from '../offlineDbStorage';
+import {
+  indexedDbPersistStorage,
+  markPersistHydrated,
+  readPersistedOfflineState,
+  writePersistedOfflineState,
+} from '../offlineDbStorage';
 
 const fullMutation: Required<PendingMutation> = {
   localId: 'abc123-1',
@@ -177,5 +182,60 @@ describe('offlineDbStorage — outbox round trip', () => {
       queue.map((mutation) => mutation.localId).sort(),
     );
     expect(Object.keys(restored?.planDays ?? {})).toHaveLength(30);
+  });
+});
+
+describe('indexedDbPersistStorage — write suppression before hydration', () => {
+  // Reproduces the actual bug this exists to prevent: `offlineStore.ts`'s own
+  // `setOnline(...)` call at module load fires a `setState` — and therefore a
+  // `persist` write — synchronously, long before `offlineBoot.ts`'s
+  // `rehydrate()` (an async IndexedDB read) has restored anything. Without
+  // `markPersistHydrated`, that write's still-pristine snapshot
+  // (`{ cache: {}, queue: [], ... }`) lands on disk, clobbering whatever the
+  // *previous* session had — and `rehydrate()` then faithfully restores that
+  // now-empty snapshot back into memory. `hydrated` is a module-level flag
+  // with no reset, matching real boot (set exactly once) — so this is one
+  // test, ordered: writes rejected, then `markPersistHydrated()`, then
+  // writes accepted.
+  it('drops setItem/removeItem before markPersistHydrated(), accepts them after', async () => {
+    await Promise.all([clearStore('outbox'), clearStore('meta')]);
+
+    const previousSessionState: PersistedOfflineState = {
+      cache: { 'get:/terms': { data: { accepted: true }, updatedAt: 1 } },
+      lastSyncAt: {},
+      queue: [],
+      failed: [],
+      nextLocalId: -1,
+      activeSession: null,
+      planDays: {},
+    };
+    await writePersistedOfflineState(previousSessionState);
+
+    // The early, still-pristine write a fresh boot fires before hydration —
+    // must not reach disk, or it would erase `previousSessionState` above.
+    const prematureState: PersistedOfflineState = {
+      cache: {},
+      lastSyncAt: {},
+      queue: [],
+      failed: [],
+      nextLocalId: -1,
+      activeSession: null,
+      planDays: {},
+    };
+    await indexedDbPersistStorage.setItem('mob-offline', { state: prematureState, version: 1 });
+
+    const stillIntact = await readPersistedOfflineState();
+    expect(stillIntact?.cache).toStrictEqual(previousSessionState.cache);
+
+    markPersistHydrated();
+
+    const postHydrationState: PersistedOfflineState = {
+      ...previousSessionState,
+      cache: { ...previousSessionState.cache, 'get:/onboarding': { data: { completed: true }, updatedAt: 2 } },
+    };
+    await indexedDbPersistStorage.setItem('mob-offline', { state: postHydrationState, version: 1 });
+
+    const afterHydration = await readPersistedOfflineState();
+    expect(afterHydration?.cache).toStrictEqual(postHydrationState.cache);
   });
 });

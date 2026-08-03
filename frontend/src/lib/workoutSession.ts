@@ -15,12 +15,12 @@ import {
   isLocalId,
   readLocalActiveSession,
   readLocalPlanDay,
-  rewriteQueuedUrls,
   takeLocalId,
   useOfflineStore,
   writeLocalActiveSession,
   writeLocalPlanDays,
 } from './offlineStore';
+import { queuedMutationsReferencingLocalId, remapQueuedRoute, routeIdPattern } from './local/remap';
 import { normalizeRoute } from './requestPath';
 import { remapWorkoutSessionState } from './workoutSessionState';
 
@@ -297,16 +297,14 @@ export function onWorkoutIdRemap(listener: WorkoutIdRemapListener): () => void {
   };
 }
 
-/** Matches `/workouts/{id}` as a whole path segment — not a prefix of a longer id. */
+/**
+ * Matches `/workouts/{id}` as a whole path segment — not a prefix of a longer
+ * id. Thin wrapper over the generic helper in `lib/local/remap.ts`, kept so
+ * every call site below reads `workoutRoutePattern(id)` rather than repeating
+ * the route segment.
+ */
 function workoutRoutePattern(workoutId: number): RegExp {
-  return new RegExp(`(^|/)workouts/${workoutId}(?=/|$)`);
-}
-
-function rewriteQueuedWorkoutId(localId: number, realId: number): void {
-  // Only the segment right after `/workouts/` is replaced: an id further down the
-  // path (`/sets/-3`) belongs to a different entity and is not this one's to fix.
-  const pattern = workoutRoutePattern(localId);
-  rewriteQueuedUrls((url) => url.replace(pattern, `$1workouts/${realId}`));
+  return routeIdPattern('workouts', workoutId);
 }
 
 /**
@@ -318,8 +316,7 @@ function rewriteQueuedWorkoutId(localId: number, realId: number): void {
  * trusted over what is still waiting to go out.
  */
 function hasQueuedWorkFor(workoutId: number): boolean {
-  const pattern = workoutRoutePattern(workoutId);
-  return getQueue().some((mutation) => pattern.test(normalizeRoute(mutation.url)));
+  return queuedMutationsReferencingLocalId('workouts', workoutId).length > 0;
 }
 
 /**
@@ -330,7 +327,10 @@ function hasQueuedWorkFor(workoutId: number): boolean {
 export function remapLocalWorkoutId(localId: number, realId: number): void {
   if (localId >= 0 || realId <= 0 || localId === realId) return;
 
-  rewriteQueuedWorkoutId(localId, realId);
+  // Only the segment right after `/workouts/` is replaced: an id further down
+  // the path (`/sets/-3`) belongs to a different entity and is not this one's
+  // to fix.
+  remapQueuedRoute('workouts', localId, realId);
 
   const cached = readCachedActiveWorkout();
   if (cached && cached.workout.id === localId) {

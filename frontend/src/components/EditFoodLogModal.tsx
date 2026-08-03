@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { Button } from './Button';
 import { getErrorMessage } from '../api/client';
-import { isLocalId } from '../lib/offline';
 import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const UNSYNCED_MESSAGE = 'Este item ainda não foi sincronizado. Conecte-se à internet para alterá-lo.';
 
 type MacroField = 'calories' | 'protein' | 'carbs' | 'fat';
 
@@ -29,11 +27,15 @@ const smallFieldClass =
  * again (the day panel used to hand-replicate this before). No date field:
  * the app's rule stays that a record never moves between days.
  *
- * `onSave` is left to the caller because the two screens hold today's logs
- * differently — the store's `todayLogs` vs. this panel's local `dayLogs` —
- * and merge/patch the offline cache differently after a successful write.
- * This component only builds the request body and surfaces whatever error
- * `onSave` throws; it does not touch the offline cache itself.
+ * A record still waiting to sync (negative id) is editable exactly like a
+ * synced one: `onSave` — `updateFoodLog` in `lib/local/repo/foodLogs.ts` for
+ * both callers today — enqueues the edit behind the pending create, and the
+ * generalized id-remap (`lib/local/remap.ts`) rewrites it to the real id the
+ * moment the create syncs, same mechanism a workout's series already used.
+ *
+ * `onSave` is left to the caller so this component stays free of the two
+ * screens' different local-first read paths; it only builds the request body
+ * and surfaces whatever error `onSave` throws.
  */
 interface EditFoodLogModalProps {
   log: FoodLog;
@@ -89,12 +91,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
     if (!touchedMacros.fat) setFat(String(roundMacro(log.fat_g * ratio)));
   };
 
-  // Created offline and its POST still queued: the server has never heard of
-  // this id, so a PUT to it can only 404 (online) or get rejected as an
-  // unsynced dependency (offline) — surfaced up front, form locked, instead
-  // of after the person fills everything in and taps Salvar.
-  const unsynced = isLocalId(log.id);
-
   const quantityNumber = Number(quantity);
   const caloriesNumber = Number(calories);
   const proteinNumber = Number(protein);
@@ -114,7 +110,7 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (unsynced || !valid) return;
+    if (!valid) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -142,7 +138,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold text-white">Editar registro</h3>
-        {unsynced && <p className="mt-2 text-xs text-amber-400">{UNSYNCED_MESSAGE}</p>}
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
 
         <form onSubmit={handleSubmit} className="mt-3 space-y-4">
@@ -151,7 +146,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
             <input
               type="text"
               value={name}
-              disabled={unsynced}
               onChange={(e) => setName(e.target.value)}
               className={fieldClass}
             />
@@ -164,7 +158,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 <button
                   key={option}
                   type="button"
-                  disabled={unsynced}
                   onClick={() => setMealType(option)}
                   className={`rounded-xl py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
                     mealType === option ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'
@@ -184,7 +177,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 min={0}
                 step="any"
                 value={quantity}
-                disabled={unsynced}
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 className={`${fieldClass} text-center`}
               />
@@ -196,7 +188,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 min={0}
                 step="any"
                 value={calories}
-                disabled={unsynced}
                 onChange={(e) => handleMacroChange('calories', e.target.value)}
                 className={`${fieldClass} text-center`}
               />
@@ -211,7 +202,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 min={0}
                 step="any"
                 value={protein}
-                disabled={unsynced}
                 onChange={(e) => handleMacroChange('protein', e.target.value)}
                 className={smallFieldClass}
               />
@@ -223,7 +213,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 min={0}
                 step="any"
                 value={carbs}
-                disabled={unsynced}
                 onChange={(e) => handleMacroChange('carbs', e.target.value)}
                 className={smallFieldClass}
               />
@@ -235,7 +224,6 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
                 min={0}
                 step="any"
                 value={fat}
-                disabled={unsynced}
                 onChange={(e) => handleMacroChange('fat', e.target.value)}
                 className={smallFieldClass}
               />
@@ -243,7 +231,7 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <Button type="submit" fullWidth isLoading={isSaving} disabled={unsynced || !valid}>
+            <Button type="submit" fullWidth isLoading={isSaving} disabled={!valid}>
               Salvar
             </Button>
             <button type="button" onClick={onClose} className="shrink-0 px-3 text-xs text-zinc-500">

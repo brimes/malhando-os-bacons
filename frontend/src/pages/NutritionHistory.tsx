@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { OriginBadge } from '../components/OriginBadge';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
 import { nutritionApi } from '../api/nutrition';
-import { getErrorMessage } from '../api/client';
-import { isConnectivityError, patchCacheLocally, resourceKeyForRequest } from '../lib/offline';
-import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type NutritionCalendarData, type UpdateFoodLogInput } from '../types';
+import { isNetworkOnline } from '../lib/offline';
+import {
+  dateKey,
+  foodLogsCache,
+  isDateSynced,
+  isRangeSynced,
+  updateFoodLog,
+} from '../lib/local/repo/foodLogs';
+import { useLocalAll } from '../lib/local/useLocal';
+import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput } from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const NO_OFFLINE_DATA_MESSAGE = 'Sem conexão e sem dados salvos neste dispositivo.';
@@ -15,126 +22,136 @@ const NO_OFFLINE_DATA_MESSAGE = 'Sem conexão e sem dados salvos neste dispositi
 const formatDayLabel = (date: string) =>
   new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-// Same resource key the axios interceptor caches `nutritionApi.getLogs(date)`
-// under (see `resourceKeyForRequest`'s call site in api/client.ts) — needed
-// here to patch that snapshot in place after an edit made from this screen.
-const logsKey = (date: string) => resourceKeyForRequest('/nutrition/logs', { date });
+function monthBounds(month: Date): { from: string; to: string } {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const from = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const to = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { from, to };
+}
+
+/**
+ * A day is offered as its own calendar cell only once it has calories to
+ * show — mirrors `GET /nutrition/calendar`'s `GROUP BY`, which never returns
+ * a day with zero rows either. Kept as its own function so both the
+ * always-local aggregate and the network fallback (older months, outside the
+ * local pull window) build the exact same shape.
+ */
+function aggregateByDay(logs: FoodLog[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const log of logs) {
+    const key = dateKey(log.date);
+    totals[key] = (totals[key] ?? 0) + log.calories;
+  }
+  return totals;
+}
 
 export function NutritionHistoryPage() {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [data, setData] = useState<NutritionCalendarData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+  const { from: monthFrom, to: monthTo } = monthBounds(month);
 
   // Kept local to this screen, not in useNutritionStore: the store's
   // `todayLogs`/`logsKey` model one day (today) at a time, and reusing it here
   // would make the calendar and the diary fight over the same slot.
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [dayLogs, setDayLogs] = useState<FoodLog[] | null>(null);
-  const [isLoadingDay, setIsLoadingDay] = useState(false);
-  const [dayError, setDayError] = useState<string | null>(null);
-
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
 
-  const loadMonth = useCallback(() => nutritionApi.calendar(monthKey).then(setData), [monthKey]);
+  // Local-first: every log this device has ever pulled or written offline,
+  // filtered per render. Re-renders on its own whenever a pull or the outbox
+  // touch the collection (see `EntityCache.subscribe`) — the calendar cell
+  // and the day panel below both come from this one subscription, so an
+  // edit made in the day panel updates the month total with no extra plumbing.
+  const allLogs = useLocalAll(foodLogsCache);
+  const monthLogs = useMemo(
+    () => allLogs.filter((log) => { const key = dateKey(log.date); return key >= monthFrom && key <= monthTo; }),
+    [allLogs, monthFrom, monthTo],
+  );
+  const localDays = useMemo(() => aggregateByDay(monthLogs), [monthLogs]);
+
+  // The local pull only covers the last 60 days (see `lib/local/repo/foodLogs.ts`).
+  // A month entirely inside that window never needs the network at all; an
+  // older one is enriched with it when possible, but only to fill in days
+  // this device has no local copy of — never to overwrite one it does, which
+  // is what the "não pode sumir e voltar" rule (see the slice description) exists to prevent.
+  const monthFullyLocal = isRangeSynced(monthFrom, monthTo);
+  const [networkOnlyDays, setNetworkOnlyDays] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    setIsLoading(true);
-    setError(null);
-    // Trocar de mês fecha o dia aberto: ele não existe mais no calendário à vista.
     setSelectedDate(null);
-    setDayLogs(null);
-    setDayError(null);
     setEditingLog(null);
-    // A GET's response is cached by the shared axios interceptor regardless of
-    // caller, so this already answers from the last snapshot when offline —
-    // the only gap was not telling the person anything on a month that was
-    // never opened before and has no snapshot to fall back to.
-    loadMonth()
-      .catch((requestError) => setError(getErrorMessage(requestError)))
-      .finally(() => setIsLoading(false));
-  }, [loadMonth]);
+    setNetworkOnlyDays({});
+    if (monthFullyLocal || !isNetworkOnline()) return;
+    const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+    nutritionApi.calendar(monthKey)
+      .then((data) => {
+        const fromNetwork: Record<string, number> = {};
+        for (const day of data.days) if (!(day.date in localDays)) fromNetwork[day.date] = day.calories;
+        setNetworkOnlyDays(fromNetwork);
+      })
+      .catch(() => undefined);
+    // `localDays` intentionally excluded: this only decides which days the
+    // network response is allowed to *fill in*, not when to re-fetch — a
+    // local write must never itself trigger a network calendar call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthFullyLocal, month]);
 
-  const openDay = async (date: string) => {
-    if (selectedDate === date) {
-      setSelectedDate(null);
-      setDayLogs(null);
-      setDayError(null);
-      setEditingLog(null);
-      return;
+  const values = useMemo(() => {
+    const merged: Record<string, { label: string; intensity: number }> = {};
+    const allDays = { ...networkOnlyDays, ...localDays };
+    const maxCalories = Math.max(...Object.values(allDays), 1);
+    for (const [date, calories] of Object.entries(allDays)) {
+      merged[date] = { label: `${Math.round(calories)} kcal`, intensity: calories / maxCalories };
     }
+    return merged;
+  }, [localDays, networkOnlyDays]);
+
+  const total = Object.values({ ...networkOnlyDays, ...localDays }).reduce((sum, calories) => sum + calories, 0);
+
+  // The day panel: local logs for `selectedDate`, always reactive. A day this
+  // device has genuinely synced (inside the pull window, or with local logs
+  // of its own) never shows the offline error — only a day this device has
+  // no copy of at all gets the network fallback below, or the "sem dados"
+  // message when that fallback can't run either.
+  const dayLogsLocal = useMemo(
+    () => (selectedDate ? allLogs.filter((log) => dateKey(log.date) === selectedDate) : []),
+    [allLogs, selectedDate],
+  );
+  const dayIsKnownEmpty = selectedDate !== null && dayLogsLocal.length === 0 && isDateSynced(selectedDate);
+  const [networkDayLogs, setNetworkDayLogs] = useState<FoodLog[] | null>(null);
+  const [isLoadingDayFallback, setIsLoadingDayFallback] = useState(false);
+  const [dayFallbackError, setDayFallbackError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNetworkDayLogs(null);
+    setDayFallbackError(null);
+    if (!selectedDate || dayLogsLocal.length > 0 || dayIsKnownEmpty) return;
+    // Outside the pull window and nothing local: the one case this screen
+    // still asks the network directly, same as before this slice.
+    setIsLoadingDayFallback(true);
+    nutritionApi.getLogs(selectedDate)
+      .then(setNetworkDayLogs)
+      .catch(() => setDayFallbackError(NO_OFFLINE_DATA_MESSAGE))
+      .finally(() => setIsLoadingDayFallback(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, dayIsKnownEmpty]);
+
+  const dayLogs = dayLogsLocal.length > 0 ? dayLogsLocal : (networkDayLogs ?? []);
+
+  const openDay = (date: string) => {
     setEditingLog(null);
-    setSelectedDate(date);
-    setDayLogs(null);
-    setDayError(null);
-    setIsLoadingDay(true);
-    try {
-      setDayLogs(await nutritionApi.getLogs(date));
-    } catch (requestError) {
-      // The interceptor already falls back to the cached snapshot on a
-      // connectivity failure (see api/client.ts) and only rejects when there
-      // is none — so reaching this branch with a connectivity error means the
-      // day was never opened before on this device, not just "the network is
-      // slow right now".
-      setDayError(isConnectivityError(requestError) ? NO_OFFLINE_DATA_MESSAGE : getErrorMessage(requestError));
-    } finally {
-      setIsLoadingDay(false);
-    }
+    setSelectedDate((current) => (current === date ? null : date));
   };
 
   const handleSaveEdit = async (id: number, input: UpdateFoodLogInput) => {
-    if (!selectedDate) return;
-    const updated = await nutritionApi.updateLog(id, input);
-    // Mirrors useNutritionStore's updateLog merge (see its comment):
-    // EditFoodLogModal always sends food_name and every macro explicitly, so
-    // the offline optimistic echo (buildOptimisticPayload in api/client.ts)
-    // already carries real values and a plain merge is correct. The ratio
-    // rescale only applies to a caller that sends quantity_g/meal_type alone
-    // (nothing here does today), mirroring the same case on the server.
-    const pending = updated as FoodLog & { offline_pending?: boolean };
-    const merged = (dayLogs ?? []).map((current) => {
-      if (current.id !== id) return current;
-      if (pending.offline_pending && input.calories === undefined && current.quantity_g > 0) {
-        const ratio = pending.quantity_g / current.quantity_g;
-        return {
-          ...current,
-          ...updated,
-          calories: current.calories * ratio,
-          protein_g: current.protein_g * ratio,
-          carbs_g: current.carbs_g * ratio,
-          fat_g: current.fat_g * ratio,
-        };
-      }
-      return { ...current, ...updated };
-    });
-    setDayLogs(merged);
-    // Scoped to the day actually open in this panel — which can be a
-    // different day than useNutritionStore's "today" slot. Patching the
-    // wrong key (or invalidating none at all) is exactly the bug
-    // WorkoutHistory had with a deleted workout resurrecting offline: the
-    // stale snapshot for *this* date would keep answering a later cache-only
-    // read instead of the edit just made.
-    patchCacheLocally(logsKey(selectedDate), merged);
-    // Best-effort: refreshes the month's kcal totals/labels so the calendar
-    // cell for this day does not keep showing the pre-edit number. Failing
-    // silently (typically offline) leaves the calendar as-is, which is no
-    // worse than before the edit.
-    loadMonth().catch(() => undefined);
+    await updateFoodLog(id, input);
   };
 
-  const total = data?.days.reduce((sum, day) => sum + day.calories, 0) ?? 0;
-  const maxCalories = Math.max(...(data?.days.map((day) => day.calories) ?? [1]), 1);
-  const values = Object.fromEntries((data?.days ?? []).map((day) => [day.date, {
-    label: `${Math.round(day.calories)} kcal`,
-    intensity: day.calories / maxCalories,
-  }]));
-
-  const byMeal = (dayLogs ?? []).reduce<Partial<Record<MealType, FoodLog[]>>>((acc, log) => {
+  const byMeal = dayLogs.reduce<Partial<Record<MealType, FoodLog[]>>>((acc, log) => {
     (acc[log.meal_type] ??= []).push(log);
     return acc;
   }, {});
-  const dayTotals = (dayLogs ?? []).reduce(
+  const dayTotals = dayLogs.reduce(
     (acc, log) => ({
       calories: acc.calories + log.calories,
       protein: acc.protein + log.protein_g,
@@ -149,20 +166,18 @@ export function NutritionHistoryPage() {
       <Header title="Histórico de nutrição" showBack />
       <div className="space-y-4 px-4 py-5 pb-24">
         <div><p className="text-sm text-zinc-500">Calorias registradas no mês</p><p className="text-3xl font-black text-primary-400">{Math.round(total).toLocaleString('pt-BR')} <span className="text-sm font-normal text-zinc-500">kcal</span></p></div>
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
-        {isLoading ? (
-          <div className="py-16 text-center text-zinc-500">Carregando...</div>
-        ) : (
-          <MonthlyCalendar month={month} values={values} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
+        {!monthFullyLocal && !isNetworkOnline() && (
+          <p className="text-xs text-zinc-600">Alguns dias mais antigos podem não aparecer offline.</p>
         )}
+        <MonthlyCalendar month={month} values={values} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
 
         {selectedDate ? (
           <div>
             <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-zinc-500">{formatDayLabel(selectedDate)}</h3>
-            {isLoadingDay ? (
+            {isLoadingDayFallback ? (
               <div className="py-8 text-center text-sm text-zinc-500">Carregando...</div>
-            ) : dayError ? (
-              <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{dayError}</div>
+            ) : dayFallbackError ? (
+              <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{dayFallbackError}</div>
             ) : (
               <div className="space-y-4">
                 <Card className="py-3">
@@ -213,7 +228,11 @@ export function NutritionHistoryPage() {
       </div>
 
       {editingLog && (
-        <EditFoodLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={handleSaveEdit} />
+        <EditFoodLogModal
+          log={editingLog}
+          onClose={() => setEditingLog(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </>
   );

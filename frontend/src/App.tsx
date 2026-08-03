@@ -2,7 +2,12 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useOnboardingStore } from './stores/useOnboardingStore';
+import { offlineReady } from './lib/offline';
 import { useOfflineStore } from './lib/offlineStore';
+// Side effect only: starts nutrition's local-first background sync (push/pull
+// timers — see that module's own comment for why this is imported from here
+// and not from `lib/offlineBoot.ts`).
+import './lib/local/nutritionSync';
 import { BottomNav } from './components/BottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TermsGate } from './components/TermsGate';
@@ -51,8 +56,18 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      fetchMe();
-      fetchState();
+      // Waits for `offlineReady` (the offline store's own hydration) before
+      // either call touches its cache: both `fetchMe` and `fetchState` read
+      // it cache-first (see `useAuthStore`/`useOnboardingStore`), and this
+      // effect runs on mount regardless of hydration having finished. Read
+      // any earlier and a device that already has this cached reads it as
+      // empty, then sits on the (possibly slow) network response instead of
+      // showing what it already knew — the exact bug fixed on `TermsGate`'s
+      // own effect, which raced the same way for the same reason.
+      void offlineReady.then(() => {
+        fetchMe();
+        fetchState();
+      });
     } else {
       reset();
     }

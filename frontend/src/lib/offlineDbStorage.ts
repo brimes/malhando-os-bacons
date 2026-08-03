@@ -216,6 +216,55 @@ export async function exportIndexedDbToLegacyLocalStorage(): Promise<void> {
  * without durability rather than crashing every reducer that touches the
  * store. `console.error` is the only trace, same tradeoff as before.
  */
+/**
+ * Serializes every `setItem`/`removeItem` below onto one promise chain, so a
+ * write started (and awaited) later cannot finish — and commit to
+ * IndexedDB — before one started earlier. Without this, zustand's `persist`
+ * fires an independent `setItem(fullState)` on *every* subscribed state
+ * change (there is no debouncing, and each call writes the whole state, not
+ * a diff); two calls a few state changes apart race each other freely, and
+ * IndexedDB gives no ordering guarantee between separate transactions on the
+ * same store. Losing that race means the earlier (staler) full-state
+ * snapshot commits *after* the later one and silently erases whatever the
+ * later write had that the earlier one did not.
+ */
+let writeQueue: Promise<void> = Promise.resolve();
+
+function enqueueWrite(work: () => Promise<void>): Promise<void> {
+  writeQueue = writeQueue.then(work, work);
+  return writeQueue;
+}
+
+/**
+ * True once `offlineBoot.ts` has restored this store from disk (or given up
+ * trying). `false` from module load, on purpose: `skipHydration: true` in
+ * `offlineStore.ts` only stops `persist` from *reading* disk on its own before
+ * `offlineBoot.ts` explicitly calls `rehydrate()` — it does nothing to stop
+ * `persist` *writing* to disk in the meantime. And something always does,
+ * before rehydration finishes: `offlineStore.ts`'s own `setOnline(...)` call
+ * at module load, run synchronously, long before the async `rehydrate()`
+ * settles. That `setState` still carries the pristine, not-yet-restored
+ * `cache`/`queue`/... — and persist's write subscription fires on it exactly
+ * like any other change, writing `{ cache: {}, queue: [], ... }` straight
+ * over whatever the *previous* session had. If that commits before
+ * `rehydrate()`'s own read (a real, reproduced race — write-order
+ * serialization above does not help, since `getItem()` isn't part of that
+ * queue at all), `rehydrate()` faithfully restores this now-just-erased
+ * snapshot into memory: hydration "succeeds", into emptiness, every pending
+ * mutation and cached read from the previous session gone with no error
+ * anywhere. Suppressing writes until hydration is known to have finished — see
+ * `markPersistHydrated`, called once by `offlineBoot.ts` right after
+ * `rehydrate()` resolves — closes that window: the only snapshots that ever
+ * reach disk are ones taken *after* this device's own history was restored
+ * into memory first.
+ */
+let hydrated = false;
+
+/** Called once by `offlineBoot.ts` right after `useOfflineStore.persist.rehydrate()` settles. */
+export function markPersistHydrated(): void {
+  hydrated = true;
+}
+
 export const indexedDbPersistStorage: PersistStorageLike<PersistedOfflineState> = {
   getItem: async () => {
     try {
@@ -226,19 +275,25 @@ export const indexedDbPersistStorage: PersistStorageLike<PersistedOfflineState> 
       return null;
     }
   },
-  setItem: async (_name, value) => {
-    try {
-      await writePersistedOfflineState(value.state);
-    } catch (error) {
-      console.error('[offline] Falha ao gravar no IndexedDB; a alteração ficou só em memória.', error);
-    }
+  setItem: (_name, value) => {
+    if (!hydrated) return Promise.resolve();
+    return enqueueWrite(async () => {
+      try {
+        await writePersistedOfflineState(value.state);
+      } catch (error) {
+        console.error('[offline] Falha ao gravar no IndexedDB; a alteração ficou só em memória.', error);
+      }
+    });
   },
-  removeItem: async () => {
-    try {
-      await Promise.all([clearStore('outbox'), clearStore('meta')]);
-    } catch (error) {
-      console.error('[offline] Falha ao limpar o IndexedDB.', error);
-    }
+  removeItem: () => {
+    if (!hydrated) return Promise.resolve();
+    return enqueueWrite(async () => {
+      try {
+        await Promise.all([clearStore('outbox'), clearStore('meta')]);
+      } catch (error) {
+        console.error('[offline] Falha ao limpar o IndexedDB.', error);
+      }
+    });
   },
 };
 

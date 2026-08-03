@@ -23,6 +23,7 @@
 import { flushQueueIfPending } from './offlineSync';
 import {
   exportIndexedDbToLegacyLocalStorage,
+  markPersistHydrated,
   migrateLegacyLocalStorageToIndexedDb,
 } from './offlineDbStorage';
 import {
@@ -76,12 +77,51 @@ async function runBootSequence(): Promise<void> {
     console.error('[offline] Falha ao reconciliar o motor de armazenamento offline.', error);
   }
 
+  // `rehydrate()` below replaces the *whole* store with whatever it reads
+  // from storage (zustand persist's `set(diskState, true)`). The read itself
+  // is asynchronous, and — this was the actual bug, reproduced by
+  // cold-starting behind a mocked slow network — `useOfflineStore.ts`'s own
+  // `setOnline(isNetworkOnline())` call at module load runs synchronously,
+  // long before this `await` settles, on the store's still-pristine,
+  // not-yet-restored `cache`/`queue`/... . Persist's write subscription fires
+  // on *that* `setState` exactly like any other, and unless something stops
+  // it, `{ cache: {}, queue: [], ... }` gets written straight over whatever
+  // the *previous* session had — silently, permanently, before `rehydrate()`
+  // even gets a chance to read the *old* value back. See
+  // `markPersistHydrated` (`offlineDbStorage.ts`) — every `setItem` before
+  // this call is now a no-op for exactly this reason, closing the window at
+  // its actual source rather than papering over the symptom here.
+  //
+  // The subscription below is what is left once that source is closed: a
+  // defense-in-depth for a write this module cannot see coming from a screen
+  // that, unlike `TermsGate`/`App.tsx`'s `fetchMe`/`fetchState`, was never
+  // audited to wait for `offlineReady` before touching `cache`. Tracking the
+  // state as it was *just before* each notification (zustand's subscribe
+  // callback gets both) and merging it back after `rehydrate()` resolves
+  // means such a write — if one ever slips through — is recovered rather than
+  // silently lost, without touching what `rehydrate()` itself restores for
+  // every other field (`queue`, `activeSession`, ...).
+  let latestCache = useOfflineStore.getState().cache;
+  let latestLastSyncAt = useOfflineStore.getState().lastSyncAt;
+  const unsubscribe = useOfflineStore.subscribe((_state, previousState) => {
+    latestCache = previousState.cache;
+    latestLastSyncAt = previousState.lastSyncAt;
+  });
   try {
     await useOfflineStore.persist.rehydrate();
   } catch (error) {
     // Same tradeoff as above: an app running on `initialState` (empty queue,
     // no active session) beats one stuck showing the loading screen forever.
     console.error('[offline] Falha ao hidratar o estado offline.', error);
+  } finally {
+    unsubscribe();
+    markPersistHydrated();
+  }
+  if (Object.keys(latestCache).length > 0 || Object.keys(latestLastSyncAt).length > 0) {
+    useOfflineStore.setState((state) => ({
+      cache: { ...state.cache, ...latestCache },
+      lastSyncAt: { ...state.lastSyncAt, ...latestLastSyncAt },
+    }));
   }
 }
 

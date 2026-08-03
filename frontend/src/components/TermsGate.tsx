@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { termsApi } from '../api/terms';
-import { isConnectivityError } from '../lib/offline';
 import { getErrorMessage } from '../api/client';
+import { hasCache, isConnectivityError, offlineReady, patchCacheLocally, readThrough, resourceKeyForRequest } from '../lib/offline';
 import type { TermsStatus } from '../types';
+
+const TERMS_KEY = resourceKeyForRequest('/terms');
 
 interface TermsGateProps {
   /** Only gate authenticated users — the login screen must stay reachable. */
@@ -54,26 +56,51 @@ export function TermsGate({ active, children }: TermsGateProps) {
     let canceled = false;
     setIsChecking(true);
     setLoadError(null);
-    termsApi.get()
-      .then((data) => {
-        if (!canceled) setStatus(data);
-      })
-      .catch((error: unknown) => {
-        if (canceled) return;
-        // Being offline is not consent, but it is also not a reason to lock
-        // someone out of a workout they can do without the server. A response
-        // from the server, on the other hand, means the check really ran and its
-        // failure must not be treated as an acceptance — otherwise a 500 would
-        // silently open the app to someone who never agreed to anything.
-        if (isConnectivityError(error)) {
-          setStatus({ current_version: '', accepted: true });
-          return;
-        }
-        setLoadError('Não foi possível verificar o termo de uso. Verifique sua conexão e tente de novo.');
-      })
-      .finally(() => {
-        if (!canceled) setIsChecking(false);
+    // Waits for `offlineReady` before touching the cache at all: this effect
+    // runs on mount regardless of `useOfflineStore`'s own hydration (nothing
+    // upstream gates it on `isHydrated` the way `App.tsx`'s `ProtectedRoute`
+    // gates the screens behind it), so reading the cache any earlier can
+    // catch it mid-rehydration — a real snapshot from IndexedDB with this
+    // device's accepted status is written into memory microtasks later, but
+    // this effect had already read the store as empty and moved on to
+    // awaiting the network, same as before this cache-first fix existed.
+    void offlineReady.then(() => {
+      if (canceled) return;
+      // Cache-first, same as every other screen in the app (see
+      // `readThrough`): a device that already accepted the current terms
+      // must not sit on "Carregando..." behind a live round-trip just to be
+      // told what it already knows — the original version of this effect
+      // awaited `termsApi.get()` directly, which is exactly the "aguarde"
+      // bug the local-first slice exists to remove, and it gated *every*
+      // protected screen, not just nutrition's.
+      setIsChecking(!hasCache(TERMS_KEY));
+      void readThrough<TermsStatus>({
+        resourceKey: TERMS_KEY,
+        fetcher: () => termsApi.get(),
+        apply: (data) => {
+          if (canceled) return;
+          setStatus(data);
+          setIsChecking(false);
+        },
+        onError: (error, hadCache) => {
+          if (canceled) return;
+          setIsChecking(false);
+          // The cached status (if any) is already on screen; a background
+          // revalidation failing is silent, same as `useOnboardingStore`.
+          if (hadCache) return;
+          // Being offline is not consent, but it is also not a reason to lock
+          // someone out of a workout they can do without the server. A response
+          // from the server, on the other hand, means the check really ran and its
+          // failure must not be treated as an acceptance — otherwise a 500 would
+          // silently open the app to someone who never agreed to anything.
+          if (isConnectivityError(error)) {
+            setStatus({ current_version: '', accepted: true });
+            return;
+          }
+          setLoadError('Não foi possível verificar o termo de uso. Verifique sua conexão e tente de novo.');
+        },
       });
+    });
     return () => {
       canceled = true;
     };
@@ -92,7 +119,13 @@ export function TermsGate({ active, children }: TermsGateProps) {
     setError(null);
     try {
       await termsApi.accept(status.current_version);
-      setStatus({ ...status, accepted: true, accepted_at: new Date().toISOString() });
+      const accepted = { ...status, accepted: true, accepted_at: new Date().toISOString() };
+      setStatus(accepted);
+      // Without this, the next cold start reads the pre-acceptance snapshot
+      // first (cache-first — see the effect above) and flashes this whole
+      // screen again for the instant it takes the background revalidation to
+      // correct it.
+      patchCacheLocally(TERMS_KEY, accepted);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {

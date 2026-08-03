@@ -18,6 +18,7 @@ import {
   setSyncing,
   writeCache,
 } from './offlineStore';
+import { collectReconcilerDependents, runLocalIdReconcilers } from './local/remap';
 import { normalizePath, normalizeRoute } from './requestPath';
 import {
   dependentMutationsOf,
@@ -235,7 +236,10 @@ export function flushQueueIfPending(): void {
  * instead of a trickle of "not found" nobody asked for.
  */
 function failMutationAndDependents(mutation: PendingMutation, reason: string): void {
-  const dependents = dependentMutationsOf(mutation);
+  // Workout's own dependents (bespoke — see `dependentMutationsOf`'s comment)
+  // plus whatever any registered `LocalIdReconciler` (nutrition food logs,
+  // and any entity added after it) considers dependent on this create.
+  const dependents = [...dependentMutationsOf(mutation), ...collectReconcilerDependents(mutation)];
   moveToFailed(mutation, reason);
   if (dependents.length === 0) return;
   const explanation = `Não foi possível enviar: o início deste treino falhou (${reason}).`;
@@ -271,6 +275,12 @@ async function runFlush(): Promise<void> {
           // untouched rather than silently discarded.
           failMutationAndDependents(mutation, conflict.message);
         }
+        // Same idea, generalized: any entity outside the workout session that
+        // registered itself via `registerLocalIdReconciler` (nutrition food
+        // logs today) gets the same "swap the negative id for the real one,
+        // everywhere it was written" treatment, before the next queued
+        // mutation (an edit or delete still addressing the local id) is replayed.
+        runLocalIdReconcilers(mutation, result);
       } catch (error) {
         if (isConnectivityError(error)) {
           // A timeout is not proof the write failed — the server may well have
