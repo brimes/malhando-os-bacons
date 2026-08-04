@@ -106,7 +106,7 @@ export function LoginPage() {
           {[
             { icon: '💪', text: 'Registre seus treinos e progresso' },
             { icon: '🥗', text: 'Acompanhe sua nutrição diária' },
-            { icon: '⌚', text: 'Sincronize com Galaxy Watch 7' },
+            { icon: '⌚', text: 'Integração com smartwatch' },
             { icon: '📊', text: 'Dashboard completo de performance' },
           ].map((f) => (
             <div key={f.text} className="flex items-center gap-3 text-zinc-300">

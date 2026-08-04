@@ -21,7 +21,9 @@ export function ProfilePage() {
       <Header title="Perfil" />
       <div className="px-4 py-6 pb-24 space-y-6">
         {/* User info */}
-        <Card className="flex items-center gap-4">
+        {/* O cartão inteiro abre os dados: o alvo de toque é o nome, mas mirar
+            só no texto num aparelho é frustrante. */}
+        <Card className="flex items-center gap-4" onClick={() => navigate('/profile/dados')}>
           {user?.avatar_url ? (
             <img
               src={user.avatar_url}
@@ -35,7 +37,7 @@ export function ProfilePage() {
               </span>
             </div>
           )}
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-bold text-white text-lg">{user?.name}</p>
             <p className="text-sm text-zinc-400">{user?.email}</p>
             <p className="text-xs text-zinc-600 mt-1">
@@ -44,6 +46,7 @@ export function ProfilePage() {
                 : '—'}
             </p>
           </div>
+          <span className="shrink-0 text-zinc-600">›</span>
         </Card>
 
         {state?.profile?.training_experience && (
@@ -117,7 +120,7 @@ export function ProfilePage() {
             {[
               { icon: '💪', label: 'Registro de treinos', desc: 'Log de exercícios com séries, reps e carga' },
               { icon: '🥗', label: 'Controle nutricional', desc: 'Macros diários com plano personalizado' },
-              { icon: '⌚', label: 'Galaxy Watch 7', desc: 'Sincronização de passos e dados de saúde' },
+              { icon: '⌚', label: 'Smartwatch', desc: 'Sincronização de passos e dados de saúde' },
               { icon: '📊', label: 'Dashboard', desc: 'Visão geral cruzada de treino e nutrição' },
             ].map((f) => (
               <div key={f.label} className="flex items-center gap-3">

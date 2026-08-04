@@ -67,6 +67,30 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		 FROM workout_sets ws JOIN workouts w ON w.id = ws.workout_id WHERE w.user_id = $1`, userID,
 	).Scan(&resp.WorkoutStats.TotalSets, &resp.WorkoutStats.TotalVolume)
 
+	// Sequência: dias consecutivos treinados até hoje. O campo existia no
+	// modelo e ninguém o calculava, então a tela mostrava zero para sempre.
+	//
+	// A contagem parte de hoje ou de ontem — quem treinou ontem e ainda não
+	// treinou hoje não perdeu a sequência, ela só não avançou. Descartar o dia
+	// corrente zeraria a sequência de todo mundo toda madrugada.
+	//
+	// Dias distintos, não treinos: dois treinos no mesmo dia contam um. A
+	// diferença entre a data e um contador sequencial é constante enquanto os
+	// dias forem consecutivos, e é isso que o GROUP BY agrupa.
+	h.db.Pool.QueryRow(ctx,
+		`WITH dias AS (
+		   SELECT DISTINCT date::date AS dia FROM workouts
+		   WHERE user_id = $1 AND status = 'completed' AND date::date <= $2::date
+		 ), blocos AS (
+		   SELECT dia, dia - (ROW_NUMBER() OVER (ORDER BY dia))::int AS bloco FROM dias
+		 ), atual AS (
+		   SELECT bloco, COUNT(*) AS tamanho, MAX(dia) AS fim FROM blocos GROUP BY bloco
+		 )
+		 SELECT COALESCE((SELECT tamanho FROM atual
+		   WHERE fim >= $2::date - 1 ORDER BY fim DESC LIMIT 1), 0)`,
+		userID, today,
+	).Scan(&resp.WorkoutStats.Streak)
+
 	// Weekly workouts
 	wRows, err := h.db.Pool.Query(ctx,
 		`SELECT id, user_id, name, date, notes, created_at FROM workouts

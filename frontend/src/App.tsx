@@ -8,6 +8,7 @@ import { useOfflineStore } from './lib/offlineStore';
 // timers — see that module's own comment for why this is imported from here
 // and not from `lib/offlineBoot.ts`).
 import './lib/local/nutritionSync';
+import { registerAndroidBackButton } from './lib/androidBackButton';
 import { BottomNav } from './components/BottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TermsGate } from './components/TermsGate';
@@ -20,6 +21,7 @@ import { NutritionPage } from './pages/Nutrition';
 import { NutritionPlanPage } from './pages/NutritionPlan';
 import { FoodLogPage } from './pages/FoodLog';
 import { ProfilePage } from './pages/Profile';
+import { ProfileDataPage } from './pages/ProfileData';
 import { OnboardingPage } from './pages/Onboarding';
 import { WorkoutHistoryPage } from './pages/WorkoutHistory';
 import { NutritionHistoryPage } from './pages/NutritionHistory';
@@ -53,6 +55,11 @@ function ProtectedRoute({ children, allowIncomplete = false }: { children: React
 export default function App() {
   const { isAuthenticated, user, fetchMe } = useAuthStore();
   const { state: onboarding, fetchState, reset } = useOnboardingStore();
+
+  // Uma vez só, no ciclo de vida do app: sem isto o voltar do Android encerra
+  // o app em vez de voltar uma tela. No navegador é inofensivo — o evento
+  // nunca dispara.
+  useEffect(() => { registerAndroidBackButton(); }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -159,6 +166,15 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile/dados"
+              element={
+                <ProtectedRoute>
+                  <ProfileDataPage />
                 </ProtectedRoute>
               }
             />
