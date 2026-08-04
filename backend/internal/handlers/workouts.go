@@ -39,6 +39,39 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 		day = &parsed
 	}
 
+	// ?from=&to= devolve a janela inteira de uma vez. O app local-first mantém
+	// uma janela deslizante no aparelho e a substitui a cada pull — sem isto
+	// seriam dezenas de requisições, uma por dia, para montar o histórico.
+	var from, to *time.Time
+	rawFrom := strings.TrimSpace(r.URL.Query().Get("from"))
+	rawTo := strings.TrimSpace(r.URL.Query().Get("to"))
+	if rawFrom != "" || rawTo != "" {
+		if rawFrom == "" || rawTo == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "from and to must be sent together"})
+			return
+		}
+		parsedFrom, err := time.Parse("2006-01-02", rawFrom)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "from must be YYYY-MM-DD"})
+			return
+		}
+		parsedTo, err := time.Parse("2006-01-02", rawTo)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to must be YYYY-MM-DD"})
+			return
+		}
+		if parsedTo.Before(parsedFrom) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "to must not be before from"})
+			return
+		}
+		// Teto para uma requisição não virar varredura do histórico inteiro.
+		if parsedTo.Sub(parsedFrom) > 90*24*time.Hour {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "range must not exceed 90 days"})
+			return
+		}
+		from, to = &parsedFrom, &parsedTo
+	}
+
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT w.id, w.user_id, w.name, w.date, w.notes, w.training_plan_day_id, w.duration_minutes,
 		 w.status, w.started_at, w.finished_at, w.client_session_id, w.created_at,
@@ -46,9 +79,13 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 		 FROM workouts w
 		 WHERE w.user_id = $1 AND w.status = 'completed'
 		   AND ($2::date IS NULL OR w.date::date = $2::date)
+		   AND ($3::date IS NULL OR w.date::date >= $3::date)
+		   AND ($4::date IS NULL OR w.date::date <= $4::date)
 		 ORDER BY w.date DESC
-		 LIMIT CASE WHEN $2::date IS NULL THEN 50 ELSE 100 END`,
-		userID, day,
+		 LIMIT CASE WHEN $3::date IS NOT NULL THEN 500
+		             WHEN $2::date IS NULL THEN 50
+		             ELSE 100 END`,
+		userID, day, from, to,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch workouts"})

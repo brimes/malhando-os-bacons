@@ -13,6 +13,13 @@ export const workoutsApi = {
     return data;
   },
 
+  // A janela inteira numa requisição. Sem isto, manter 60 dias no aparelho
+  // seriam 60 chamadas — uma por dia. Teto de 90 dias no servidor.
+  listRange: async (from: string, to: string, signal?: AbortSignal): Promise<Workout[]> => {
+    const { data } = await apiClient.get<Workout[]>('/workouts', { params: { from, to }, signal });
+    return data;
+  },
+
   get: async (id: number): Promise<Workout> => {
     const { data } = await apiClient.get<Workout>(`/workouts/${id}`);
     return data;

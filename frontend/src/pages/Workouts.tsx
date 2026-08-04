@@ -4,11 +4,11 @@ import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { PlanWeekCard } from '../components/PlanWeekCard';
-import { trainingPlansApi } from '../api/trainingPlans';
-import { workoutsApi } from '../api/workouts';
 import { computePlanWeekProgress } from '../lib/planProgress';
 import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
-import type { TrainingPlan, Workout } from '../types';
+import { useLocalAll } from '../lib/local/useLocal';
+import { pullTrainingPlans, trainingPlansCache } from '../lib/local/repo/trainingPlans';
+import { pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
 
 function lastDoneLabel(lastDoneAt: number | null) {
   if (lastDoneAt === null) return 'ainda não feito';
@@ -19,51 +19,32 @@ function lastDoneLabel(lastDoneAt: number | null) {
 
 export function WorkoutsPage() {
   const navigate = useNavigate();
-  const [plans, setPlans] = useState<TrainingPlan[]>([]);
-  // Detail of the plan being tracked: the list endpoint carries no days, and the
-  // days (with `last_done_at`) are what "o treino da vez" is computed from.
-  const [detail, setDetail] = useState<TrainingPlan | null>(null);
-  const [history, setHistory] = useState<Workout[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Lê do aparelho e desenha na hora; a rede só revalida em segundo plano. Antes
+  // esta tela esperava duas requisições em série para mostrar qualquer coisa, e
+  // com internet lenta isso era o app "demorando para abrir".
+  const plans = useLocalAll(trainingPlansCache);
+  const history = useLocalAll(workoutsCache);
+  const [isLoading, setIsLoading] = useState(!trainingPlansCache.isLoaded());
   // Sessions finished with no signal live only in the queue; re-render when it moves.
   const queue = useOfflineStore((state) => state.queue);
 
   useEffect(() => {
     let alive = true;
-    // Every GET below falls back to the local snapshot when the request dies, so
-    // the screen fills in offline; the catch only fires when this device has never
-    // seen the resource at all.
-    trainingPlansApi.list()
-      .then(async (list) => {
-        if (!alive) return;
-        setPlans(list);
-        // No fallback to the first plan on purpose: the server's own "próximo
-        // treino" (dashboard.go's fillTrainingSummary) only ever looks at
-        // `p.active`, and picking a different plan here would show progress
-        // and a "comece por aqui" for a plan the dashboard has no opinion on.
-        const tracked = list.find((plan) => plan.active);
-        if (!tracked) return;
-        // Fetching it here also warms the cache, so the highlight keeps working
-        // on the next visit with no connection.
-        const full = await trainingPlansApi.get(tracked.id).catch(() => null);
-        if (alive && full) setDetail(full);
-      })
-      .catch(() => undefined)
-      .finally(() => { if (alive) setIsLoading(false); });
-
-    workoutsApi.list()
-      .then((workouts) => { if (alive) setHistory(workouts); })
-      .catch(() => undefined);
-
+    void trainingPlansCache.ensureLoaded().then(() => { if (alive) setIsLoading(false); });
+    // Revalidação: não bloqueia nada da tela, que já desenhou do local.
+    void pullTrainingPlans();
+    void pullWorkouts();
     return () => { alive = false; };
   }, []);
 
   const trackedPlan = plans.find((plan) => plan.active) ?? null;
+  // O detalhe (com os dias) e o resumo convivem no mesmo store — `rememberPlan`
+  // preserva `days` quando a listagem, que não os traz, chega por cima.
+  const detail = trackedPlan?.days?.length ? trackedPlan : null;
   const progress = useMemo(() => {
     if (!trackedPlan) return null;
     return computePlanWeekProgress({
-      // The detail wins when it is loaded: it is the only copy that has the days.
-      plan: detail?.id === trackedPlan.id ? detail : trackedPlan,
+      plan: detail ?? trackedPlan,
       workouts: history,
       pending: pendingCompletedWorkouts(queue),
     });

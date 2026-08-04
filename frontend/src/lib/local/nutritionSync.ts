@@ -17,11 +17,17 @@ import { offlineReady } from '../offlineBoot';
 import { pullFoodLogs } from './repo/foodLogs';
 import { pullPersonalFoods } from './repo/foodItems';
 import { pullNutritionPlans } from './repo/nutritionPlans';
+import { pullTrainingPlans } from './repo/trainingPlans';
+import { pullWorkouts } from './repo/workouts';
 
 const PUSH_INTERVAL_MS = 60_000;
 const FOOD_LOGS_PULL_INTERVAL_MS = 5 * 60_000;
 const NUTRITION_PLANS_PULL_INTERVAL_MS = 15 * 60_000;
 const FOOD_ITEMS_PULL_INTERVAL_MS = 30 * 60_000;
+// Treino muda com a mesma frequência que a comida — a pessoa registra e quer
+// ver refletido. O plano muda raramente, então acompanha o ritmo do cardápio.
+const WORKOUTS_PULL_INTERVAL_MS = 5 * 60_000;
+const TRAINING_PLANS_PULL_INTERVAL_MS = 15 * 60_000;
 
 let started = false;
 
@@ -73,6 +79,8 @@ export function startNutritionSync(): void {
   schedule(() => { if (hasSession()) void pullFoodLogs(); }, FOOD_LOGS_PULL_INTERVAL_MS);
   schedule(() => { if (hasSession()) void pullNutritionPlans(); }, NUTRITION_PLANS_PULL_INTERVAL_MS);
   schedule(() => { if (hasSession()) void pullPersonalFoods(); }, FOOD_ITEMS_PULL_INTERVAL_MS);
+  schedule(() => { if (hasSession()) void pullWorkouts(); }, WORKOUTS_PULL_INTERVAL_MS);
+  schedule(() => { if (hasSession()) void pullTrainingPlans(); }, TRAINING_PLANS_PULL_INTERVAL_MS);
 }
 
 // Started as a side effect of import — `App.tsx` imports this module for
