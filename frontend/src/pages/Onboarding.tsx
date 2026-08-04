@@ -48,7 +48,9 @@ export function OnboardingPage() {
   if (state?.goal?.conditioning_focus && !state.goal.target_six_minute_walk_meters) goalMetrics.push({ label: 'Referência', value: 'Condicionamento' });
 
   return (
-    <main className="min-h-screen bg-zinc-950 px-5 py-8 text-white">
+    // Sem Header nem BottomNav: o inset precisa vir daqui, senão o topo fica
+    // sob a Dynamic Island no iOS (no Android o padding nativo cobria tudo).
+    <main className="min-h-screen bg-zinc-950 px-5 py-8 text-white pt-safe pb-safe">
       <div className="mx-auto max-w-lg">
         <header className="mb-8">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-primary-400">Seu ponto de partida</p>

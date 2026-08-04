@@ -88,7 +88,11 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+    // pt-safe/pb-safe aqui porque esta tela não tem Header nem BottomNav, que
+    // são quem carrega o inset nas demais. No Android isso passava despercebido:
+    // o padding vem do nativo e cobre o app inteiro. No iOS só ganha quem pede,
+    // e sem isto o logo fica embaixo da Dynamic Island.
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6 pt-safe pb-safe">
       <div className="w-full max-w-sm">
         {/* Logo / Branding */}
         <div className="text-center mb-12">

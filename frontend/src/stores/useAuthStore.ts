@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { apiClient, getErrorMessage } from '../api/client';
+import { apiClient, getErrorMessage, registerUnauthorizedHandler } from '../api/client';
 import { clearOfflineData, isConnectivityError } from '../lib/offline';
 import type { User, AuthResponse } from '../types';
 
@@ -105,3 +105,11 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Um 401 zera a sessão pelo mesmo caminho do logout manual — que preserva a
+// fila offline e descarta só o cache de leitura. O `ProtectedRoute` reage ao
+// estado e leva para o login sem recarregar a página.
+registerUnauthorizedHandler(() => {
+  if (!useAuthStore.getState().isAuthenticated) return;
+  useAuthStore.getState().logout();
+});

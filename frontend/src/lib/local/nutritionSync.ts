@@ -36,28 +36,43 @@ function schedule(fn: () => void, intervalMs: number): void {
  * intervals — nothing here is per-component, it runs for the app's whole
  * lifetime once boot calls this.
  */
+/**
+ * Sem sessão não há o que sincronizar, e tentar é ativamente daninho: o
+ * servidor responde 401, o app derruba a sessão e manda para o login. Na tela
+ * de login isso vira ciclo — foi o que fazia a tela piscar no iOS, onde não
+ * dava nem para digitar a senha. O token é lido do localStorage, a mesma fonte
+ * que o interceptor usa, para não depender do store de autenticação aqui.
+ */
+function hasSession(): boolean {
+  return typeof localStorage !== 'undefined' && !!localStorage.getItem('mob_token');
+}
+
 export function startNutritionSync(): void {
   if (started) return;
   started = true;
 
+  const push = () => {
+    if (hasSession()) flushQueueIfPending();
+  };
+
   // Push: reconnect and foreground.
   onNetworkStatusChange((online) => {
-    if (online) flushQueueIfPending();
+    if (online) push();
   });
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') flushQueueIfPending();
+      if (document.visibilityState === 'visible') push();
     });
   }
-  setInterval(() => flushQueueIfPending(), PUSH_INTERVAL_MS);
+  setInterval(push, PUSH_INTERVAL_MS);
 
   // Pull: one sliding-window/full-set refetch per collection. Each pull
   // function is its own guard (offline, backgrounded, outbox non-empty) — the
   // rule "nunca rode push ou pull enquanto o probe estiver negativo" is
   // enforced there via `isNetworkOnline()`, not here.
-  schedule(() => void pullFoodLogs(), FOOD_LOGS_PULL_INTERVAL_MS);
-  schedule(() => void pullNutritionPlans(), NUTRITION_PLANS_PULL_INTERVAL_MS);
-  schedule(() => void pullPersonalFoods(), FOOD_ITEMS_PULL_INTERVAL_MS);
+  schedule(() => { if (hasSession()) void pullFoodLogs(); }, FOOD_LOGS_PULL_INTERVAL_MS);
+  schedule(() => { if (hasSession()) void pullNutritionPlans(); }, NUTRITION_PLANS_PULL_INTERVAL_MS);
+  schedule(() => { if (hasSession()) void pullPersonalFoods(); }, FOOD_ITEMS_PULL_INTERVAL_MS);
 }
 
 // Started as a side effect of import — `App.tsx` imports this module for

@@ -99,6 +99,17 @@ function buildResponse<T>(config: InternalAxiosRequestConfig, status: number, da
 }
 
 /**
+ * Chamado quando o servidor recusa o token. Fica como callback registrado em
+ * vez de o interceptor importar o store de autenticação, que importaria este
+ * arquivo de volta.
+ */
+let onUnauthorized: (() => void) | null = null;
+
+export function registerUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler;
+}
+
+/**
  * Stand-in body for a write that got queued. Callers expect the created entity
  * back, so the request body is echoed with a negative id — negative ids are the
  * marker for "exists only on this device yet".
@@ -225,7 +236,11 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('mob_token');
       localStorage.removeItem('mob_user');
-      window.location.href = '/login';
+      // Nada de `window.location.href` aqui. No WebView do Capacitor isso é
+      // navegação de página inteira: o app reinicia, torna a pedir algo sem
+      // token, toma 401 de novo e recarrega — a tela pisca e não dá para
+      // sequer digitar a senha. Quem redireciona é o roteador, sem recarregar.
+      onUnauthorized?.();
       return Promise.reject(error);
     }
 

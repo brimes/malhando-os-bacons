@@ -52,7 +52,9 @@ export function DashboardPage() {
   });
 
   return (
-    <div className="px-4 py-6 space-y-6 pb-24">
+    // Esta é a única aba sem Header, então o inset do topo precisa vir daqui.
+    // No Android não se notava: o padding vem do nativo e cobre o app todo.
+    <div className="px-4 py-6 space-y-6 pb-24 pt-safe">
       {/* Only renders when offline or with something pending. */}
       <div className="-mx-4 -mt-3"><SyncBanner /></div>
       {/* Greeting */}
