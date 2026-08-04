@@ -11,6 +11,7 @@ import { CompensationCard } from '../components/CompensationCard';
 import type { ActiveWorkout, DashboardData } from '../types';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { todayLocalDate } from '../lib/date';
+import { readCache, resourceKeyForRequest } from '../lib/offline';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -21,10 +22,25 @@ export function DashboardPage() {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
 
   useEffect(() => {
+    const params = { date: todayLocalDate() };
+    // O snapshot de hoje que já está no aparelho desenha a tela na hora; a
+    // requisição continua e substitui quando chegar. Sem isto, a tela inicial
+    // vira spinner inteiro enquanto a rede não responde — que é o que o dono
+    // sentia como "o app demorando para abrir".
+    //
+    // Este agregado ainda é calculado no servidor (sequência, treino da vez,
+    // desempenho da semana), então isto é stale-while-revalidate sobre o cache
+    // de resposta, não leitura de entidade local como no resto.
+    const cached = readCache<DashboardData>(resourceKeyForRequest('/dashboard', params));
+    if (cached) {
+      setData(cached);
+      setIsLoading(false);
+    }
+
     // Keyed by date so the offline cache does not serve yesterday's
     // aggregate (nutrition, steps, workout of the day) forever — a bare
     // `get:/dashboard` key would never expire on its own.
-    apiClient.get<DashboardData>('/dashboard', { params: { date: todayLocalDate() } })
+    apiClient.get<DashboardData>('/dashboard', { params })
       .then((res) => setData(res.data))
       .catch(console.error)
       .finally(() => setIsLoading(false));

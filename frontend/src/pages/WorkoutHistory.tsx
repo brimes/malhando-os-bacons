@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
 import { workoutsApi } from '../api/workouts';
 import { invalidateCacheByPrefix } from '../lib/offline';
+import { listByDate, workoutsCache } from '../lib/local/repo/workouts';
 import { getErrorMessage } from '../api/client';
 import type { Workout, WorkoutCalendarData } from '../types';
 
@@ -43,8 +44,19 @@ export function WorkoutHistoryPage() {
     }
     setSelectedDate(date);
     setDayWorkouts(null);
-    setIsLoadingDay(true);
     setError(null);
+
+    // Dentro da janela sincronizada, o dia sai do aparelho na hora — sem
+    // spinner e sem rede. A requisição continua existindo para dia mais antigo
+    // que a janela, que nunca esteve aqui.
+    await workoutsCache.ensureLoaded();
+    const local = listByDate(date);
+    if (local.length) {
+      setDayWorkouts(local);
+      return;
+    }
+
+    setIsLoadingDay(true);
     try {
       setDayWorkouts(await workoutsApi.list(date));
     } catch (requestError) {
@@ -63,8 +75,11 @@ export function WorkoutHistoryPage() {
       // workout. Dropping the snapshots keeps it from reappearing and being
       // deleted a second time — the duplicate would 404 on replay.
       invalidateCacheByPrefix('get:/workouts');
+      // O mesmo vale para a base local, que agora é de onde a tela lê: sem
+      // isto o treino apagado reapareceria no próximo render.
+      await workoutsCache.remove(workout.id);
       const [remaining] = await Promise.all([
-        selectedDate ? workoutsApi.list(selectedDate) : Promise.resolve([]),
+        selectedDate ? Promise.resolve(listByDate(selectedDate)) : Promise.resolve([]),
         loadMonth(),
       ]);
       setDayWorkouts(remaining);

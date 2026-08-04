@@ -8,6 +8,7 @@ import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
 import { applyChecklistLocally, findCachedPlanDay, isNetworkOnline, onWorkoutIdRemap, storeLocalActiveWorkout } from '../lib/offline';
+import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
 
 export function TrainingPlanDayPage() {
@@ -35,6 +36,17 @@ export function TrainingPlanDayPage() {
     setNotFound(false);
 
     (async () => {
+      // O aparelho primeiro: se o plano já está aqui, a tela desenha sem
+      // esperar rede nenhuma. Só quando ele não está é que a requisição
+      // importa para o primeiro render.
+      await trainingPlansCache.ensureLoaded();
+      const local = getPlan(Number(planId));
+      const localDay = local?.days?.find((item) => item.id === numericDayId) ?? null;
+      if (!cancelled && local && localDay) {
+        setPlan(local);
+        setDay(localDay);
+      }
+
       // Both requests fire together — neither waits on the other. `active()`
       // pre-fills the checklist for an open session on this same day, entirely
       // independent of the plan fetch, and with the client's default timeout a
@@ -43,7 +55,10 @@ export function TrainingPlanDayPage() {
       const [active, planResult] = await Promise.all([
         workoutsApi.active().catch(() => null),
         trainingPlansApi.get(Number(planId))
-          .then((result) => {
+          .then(async (result) => {
+            // Guarda para a próxima visita — é o que faz abrir um plano uma vez
+            // com internet deixá-lo disponível offline depois.
+            await rememberPlan(result);
             const found = result.days?.find((item) => item.id === numericDayId) ?? null;
             return found ? { plan: result, day: found } : null;
           })
@@ -52,8 +67,8 @@ export function TrainingPlanDayPage() {
           .catch(() => null),
       ]);
 
-      let planData: TrainingPlan | null = planResult?.plan ?? null;
-      let dayData: TrainingPlanDay | null = planResult?.day ?? null;
+      let planData: TrainingPlan | null = planResult?.plan ?? local ?? null;
+      let dayData: TrainingPlanDay | null = planResult?.day ?? localDay ?? null;
 
       if (!dayData) {
         const cached = findCachedPlanDay(numericDayId);

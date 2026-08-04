@@ -5,10 +5,11 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { PlanWeekCard } from '../components/PlanWeekCard';
 import { trainingPlansApi } from '../api/trainingPlans';
-import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
 import { computePlanWeekProgress } from '../lib/planProgress';
 import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
+import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
+import { listWorkouts, pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
 import type { TrainingPlan, Workout } from '../types';
 
 const ADJUST_POLL_MS = 2000;
@@ -40,10 +41,25 @@ export function TrainingPlanDetailPage() {
 
   useEffect(() => {
     if (!id) return;
-    // Both reads fall back to the local snapshot when the network is gone, which
-    // is what lets this screen answer "o que falta essa semana?" inside the gym.
-    trainingPlansApi.get(Number(id)).then(setPlan).catch(() => undefined).finally(() => setIsLoading(false));
-    workoutsApi.list().then(setHistory).catch(() => undefined);
+    let alive = true;
+    // Aparelho primeiro: desenha com o que já está aqui e revalida depois. É o
+    // que faz esta tela responder "o que falta essa semana?" dentro da academia
+    // sem esperar rede que pode não vir.
+    void Promise.all([trainingPlansCache.ensureLoaded(), workoutsCache.ensureLoaded()]).then(() => {
+      if (!alive) return;
+      const local = getPlan(Number(id));
+      if (local) setPlan(local);
+      setHistory(listWorkouts());
+      setIsLoading(false);
+    });
+
+    trainingPlansApi.get(Number(id))
+      .then(async (fresh) => { await rememberPlan(fresh); if (alive) setPlan(fresh); })
+      .catch(() => undefined)
+      .finally(() => { if (alive) setIsLoading(false); });
+    void pullWorkouts().then(() => { if (alive) setHistory(listWorkouts()); });
+
+    return () => { alive = false; };
   }, [id]);
 
   // The week and the day that is due are derived here instead of read from the
