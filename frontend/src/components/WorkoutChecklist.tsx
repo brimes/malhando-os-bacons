@@ -46,7 +46,7 @@ function BotaoVerMovimento({ exercise }: { exercise: TrainingPlanExercise }) {
       >
         {aberto ? 'Ocultar movimento' : 'Ver movimento'}
       </button>
-      {aberto && <ExerciseVideoPlayer video={exercise.video} className="mt-2 aspect-square" />}
+      {aberto && <ExerciseVideoPlayer video={exercise.video} className="mt-2 aspect-square w-full bg-zinc-900 object-cover" />}
     </div>
   );
 }

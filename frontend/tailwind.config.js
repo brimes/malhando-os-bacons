@@ -36,6 +36,10 @@ export default {
         'slide-up': 'slideUp 0.3s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        // Para a troca de fase no treino guiado: o painel que entra cresce um
+        // pouco em vez de simplesmente trocar de conteúdo. Curto de propósito —
+        // isto acontece a cada série, e animação longa vira espera.
+        'scale-in': 'scaleIn 0.22s cubic-bezier(0.2, 0.8, 0.3, 1)',
       },
       keyframes: {
         slideUp: {
@@ -45,6 +49,10 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.92)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
         },
       },
     },

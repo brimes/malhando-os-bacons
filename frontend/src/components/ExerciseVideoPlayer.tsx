@@ -74,7 +74,11 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
       playsInline
       preload="auto"
       onError={() => setFalhou(true)}
-      className={`w-full rounded-2xl bg-zinc-900 object-cover ${className}`}
+      // Sem tamanho nem `object-*` aqui de propósito: um lugar quer o vídeo
+      // preenchendo a largura, outro quer ele cabendo na altura que sobrou.
+      // Definir os dois aqui faria as classes brigarem pela ordem do CSS — não
+      // pela ordem em que aparecem no `className`, que é o que se esperaria.
+      className={`rounded-2xl ${className}`}
     />
   );
 }

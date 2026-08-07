@@ -43,6 +43,42 @@ const timerPanel = {
   rest_done: { box: 'bg-sky-900/60 ring-2 ring-sky-500 animate-pulse', label: 'text-sky-300', value: 'text-sky-100' },
 } as const;
 
+/**
+ * O alvo da série — repetições, ou tempo quando o exercício é por duração.
+ *
+ * Aparece em dois tamanhos porque muda de papel conforme a fase: durante o
+ * esforço divide a linha com o cronômetro e é referência de canto de olho;
+ * no descanso sobe sozinho acima do cronômetro grande, que é quando a pessoa
+ * está de fato lendo quantas repetições vêm.
+ */
+function AlvoDaSerie({ exercise, grande = false }: { exercise: TrainingPlanExercise; grande?: boolean }) {
+  const porTempo = exercise.tracking_type === 'time';
+  const valor = porTempo ? formatClock(exercise.duration_seconds ?? 0) : String(exercise.reps);
+  const rotulo = porTempo ? 'de execução' : 'repetições';
+  return (
+    <div className={`rounded-2xl bg-primary-950 ring-1 ring-primary-800 ${grande ? 'px-5 py-3' : 'px-3 py-3'}`}>
+      <p className={`font-black tabular-nums text-primary-200 ${grande ? 'text-4xl' : 'text-3xl'}`}>{valor}</p>
+      <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary-400">{rotulo}</p>
+    </div>
+  );
+}
+
+/** O cronômetro compacto que divide a linha com o alvo, no preparo e na execução. */
+function CronometroCompacto({ fase, valor }: { fase: 'countdown' | 'executing'; valor: string }) {
+  const cores = timerPanel[fase];
+  return (
+    // `key` na fase para o painel remontar ao passar de "Prepare-se" para
+    // "Executando": sem isso a cor e o rótulo trocariam secamente no lugar, que
+    // é justamente a transição que a pessoa mais vê — uma por série.
+    <div key={fase} className={`animate-scale-in rounded-2xl px-3 py-3 ${cores.box}`}>
+      <p className={`text-3xl font-black tabular-nums ${cores.value}`}>{valor}</p>
+      <p className={`mt-0.5 text-[11px] font-bold uppercase tracking-wide ${cores.label}`}>
+        {fase === 'countdown' ? 'Prepare-se' : 'Executando'}
+      </p>
+    </div>
+  );
+}
+
 function formatClock(totalSeconds: number) {
   const safe = Math.max(0, totalSeconds);
   const minutes = Math.floor(safe / 60);
@@ -750,113 +786,135 @@ export function WorkoutSessionPage() {
   const countdownLeft = settings.countdown_seconds - elapsed;
   const executionLeft = plannedDuration - elapsed;
   const restLeft = restSeconds - elapsed;
+  const emDescanso = phase === 'resting' || phase === 'rest_done';
 
   return (
     <>
-      <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
-      <div className="space-y-4 px-4 py-5 pb-32">
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+      {/* Altura fixa de viewport, em coluna, com os botões ancorados no rodapé.
+          Antes a página crescia com o conteúdo e o botão de avançar caía abaixo
+          da dobra — numa tela que a pessoa usa de pé, no meio da série, com o
+          celular apoiado. Aqui só o miolo rola, se precisar; a ação principal
+          está sempre à mão.
 
-        <div>
+          `dvh` e não `vh` porque no Android a barra de endereço do WebView
+          entra e sai, e `vh` congela na altura maior — o rodapé ficaria fora da
+          tela justamente quando a barra aparece. */}
+      <div className="flex h-[100dvh] flex-col">
+        <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
+
+        <div className="shrink-0 px-4 pt-3">
+          {error && <div className="mb-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
           <div className="flex items-center justify-between text-xs text-zinc-500">
             <span>{doneSets} de {totalSets} séries</span>
             <span>{pendingExercises.length} exercício{pendingExercises.length === 1 ? '' : 's'} restante{pendingExercises.length === 1 ? '' : 's'}</span>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800">
             <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${totalSets ? (doneSets / totalSets) * 100 : 0}%` }} />
           </div>
         </div>
 
-        <Card className="text-center">
-          <p className="text-xs uppercase tracking-wide text-primary-400">
+        {/* O miolo. `min-h-0` é o que permite ele encolher dentro do flex — sem
+            isso o conteúdo empurra a coluna e o rodapé sai da tela de novo. */}
+        <div className="flex min-h-0 flex-1 flex-col px-4 pt-3 text-center">
+          <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary-400">
             Série {currentSetNumber} de {currentExercise.sets}
           </p>
-          <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
-          {/* The rep target is what you check mid-set, so it gets its own block. */}
-          <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
-            {isTimed ? (
-              <>
-                <span className="text-3xl font-black tabular-nums text-primary-200">{formatClock(plannedDuration)}</span>
-                <span className="text-sm font-semibold text-primary-400">de execução</span>
-              </>
-            ) : (
-              <>
-                <span className="text-4xl font-black tabular-nums text-primary-200">{currentExercise.reps}</span>
-                <span className="text-sm font-semibold uppercase tracking-wide text-primary-400">repetições</span>
-              </>
-            )}
-          </div>
+          <h2 className="shrink-0 text-xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
 
-          {phase === 'countdown' && (
-            <div className={`mt-5 rounded-2xl px-4 py-5 ${timerPanel.countdown.box}`}>
-              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.countdown.label}`}>Prepare-se</p>
-              <p className={`mt-1 text-7xl font-black tabular-nums ${timerPanel.countdown.value}`}>{Math.max(0, countdownLeft)}</p>
+          {/* Duas leituras da mesma tela, conforme o que a pessoa está fazendo.
+              Durante o esforço o que importa é ver o movimento, então o vídeo
+              fica com toda a folga e cronômetro e alvo dividem uma linha acima.
+              No descanso não há movimento para conferir: o vídeo sai e o
+              cronômetro assume, porque aí ele é a única coisa que interessa. */}
+          {emDescanso ? (
+            <div key="descanso" className="flex min-h-0 flex-1 animate-scale-in flex-col justify-center gap-3">
+              <div className="flex shrink-0 justify-center">
+                <AlvoDaSerie exercise={currentExercise} grande />
+              </div>
+              {/* Maior que na fase de esforço: aqui o descanso é a única coisa
+                  acontecendo, e o espaço que o vídeo deixou vago é dele. Deixar
+                  o painel pequeno abriria um vazio no meio da tela. */}
+              <div className={`shrink-0 rounded-2xl px-4 py-8 ${phase === 'rest_done' ? timerPanel.rest_done.box : timerPanel.resting.box}`}>
+                <p className={`text-xs font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
+                <p className={`mt-1 text-7xl font-black tabular-nums ${phase === 'rest_done' ? timerPanel.rest_done.value : timerPanel.resting.value}`}>
+                  {phase === 'rest_done' ? '0:00' : formatClock(restLeft)}
+                </p>
+                {phase === 'rest_done' && <p className="mt-1 text-sm font-semibold text-sky-200">Pronto para a próxima série</p>}
+              </div>
             </div>
-          )}
+          ) : (
+            // `justify-center` só faz efeito quando não há vídeo — com ele, o
+            // player já consome a folga. Sem, centra o cronômetro em vez de
+            // deixá-lo grudado no topo com um vazio embaixo.
+            <div key="esforco" className="mt-2 flex min-h-0 flex-1 animate-fade-in flex-col justify-center gap-2">
+              <div className="grid shrink-0 grid-cols-2 gap-2">
+                <CronometroCompacto
+                  fase={phase === 'countdown' ? 'countdown' : 'executing'}
+                  valor={
+                    phase === 'countdown'
+                      ? String(Math.max(0, countdownLeft))
+                      : isTimed && plannedDuration > 0
+                        ? formatClock(executionLeft)
+                        : formatClock(elapsed)
+                  }
+                />
+                <AlvoDaSerie exercise={currentExercise} />
+              </div>
+              {/* Absorve toda a folga que sobrar, em vez de ter altura própria:
+                  é o único elemento aqui que pode encolher sem perder função,
+                  então é ele que se ajusta ao aparelho.
 
-          {phase === 'executing' && (
-            <div className={`mt-5 rounded-2xl px-4 py-5 ${timerPanel.executing.box}`}>
-              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.executing.label}`}>Executando</p>
-              <p className={`mt-1 text-6xl font-black tabular-nums ${timerPanel.executing.value}`}>
-                {isTimed && plannedDuration > 0 ? formatClock(executionLeft) : formatClock(elapsed)}
-              </p>
-            </div>
-          )}
-
-          {(phase === 'resting' || phase === 'rest_done') && (
-            <div className={`mt-5 rounded-2xl px-4 py-5 ${phase === 'rest_done' ? timerPanel.rest_done.box : timerPanel.resting.box}`}>
-              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
-              <p className={`mt-1 text-6xl font-black tabular-nums ${phase === 'rest_done' ? timerPanel.rest_done.value : timerPanel.resting.value}`}>
-                {phase === 'rest_done' ? '0:00' : formatClock(restLeft)}
-              </p>
-              {phase === 'rest_done' && <p className="mt-2 text-sm font-semibold text-sky-200">Pronto para a próxima série</p>}
+                  `h-full w-auto` em vez de largura cheia: o vídeo é quadrado, e
+                  esticá-lo na largura deixava duas faixas cinza nas laterais.
+                  Assim o elemento tem exatamente o tamanho da imagem. */}
+              <div className="flex min-h-0 flex-1 items-center justify-center">
+                <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-auto object-contain" />
+              </div>
+              {currentExercise.notes && (
+                <p className="line-clamp-2 shrink-0 text-[11px] leading-snug text-zinc-500">{currentExercise.notes}</p>
+              )}
             </div>
           )}
 
           {!isTimed && (
-            <div className="mt-6 border-t border-zinc-800 pt-4">
-              <label className="block text-xs uppercase tracking-wide text-zinc-500">Peso usado (kg)</label>
-              <div className="mt-2 flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => stepWeight(-2.5)}
-                  className="h-11 w-11 rounded-xl bg-zinc-800 text-xl font-bold text-white"
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.5}
-                  placeholder="0"
-                  value={weightText}
-                  // Selecting on focus makes the first digit replace the old value
-                  // instead of being appended to it.
-                  onFocus={(event) => event.target.select()}
-                  onChange={(event) => setWeightText(event.target.value)}
-                  className="w-24 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-center text-lg font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => stepWeight(2.5)}
-                  className="h-11 w-11 rounded-xl bg-zinc-800 text-xl font-bold text-white"
-                >
-                  +
-                </button>
-              </div>
-              {currentExercise.last_weight_kg ? (
-                <p className="mt-2 text-xs text-zinc-600">Última vez: {currentExercise.last_weight_kg} kg</p>
-              ) : null}
+            <div className="mt-2 flex shrink-0 items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => stepWeight(-2.5)}
+                className="h-10 w-10 shrink-0 rounded-xl bg-zinc-800 text-xl font-bold text-white"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                // O peso da última vez vira o placeholder: informa a mesma coisa
+                // que a linha "última vez" informava, sem gastar uma linha.
+                placeholder={currentExercise.last_weight_kg ? String(currentExercise.last_weight_kg) : '0'}
+                value={weightText}
+                // Selecting on focus makes the first digit replace the old value
+                // instead of being appended to it.
+                onFocus={(event) => event.target.select()}
+                onChange={(event) => setWeightText(event.target.value)}
+                className="w-20 rounded-xl border border-zinc-700 bg-zinc-800 px-2 py-2 text-center text-lg font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+              />
+              <span className="shrink-0 text-xs text-zinc-500">kg</span>
+              <button
+                type="button"
+                onClick={() => stepWeight(2.5)}
+                className="h-10 w-10 shrink-0 rounded-xl bg-zinc-800 text-xl font-bold text-white"
+              >
+                +
+              </button>
             </div>
           )}
-        </Card>
+        </div>
 
-        {currentExercise.notes && (
-          <Card className="text-xs leading-relaxed text-zinc-500">{currentExercise.notes}</Card>
-        )}
-
-        <div className="space-y-2">
+        {/* Rodapé ancorado. `pb-24` livra a barra de navegação, que é fixa e
+            flutua por cima de tudo. */}
+        <div className="shrink-0 space-y-2 px-4 pb-24 pt-3">
           {phase === 'executing' && !isTimed && (
             <Button fullWidth size="lg" onClick={() => recordSet(elapsed)} isLoading={isBusy}>Próximo</Button>
           )}
@@ -877,12 +935,16 @@ export function WorkoutSessionPage() {
             </Button>
           )}
 
+          {/* As quatro ações secundárias em duas linhas rasas. Finalizar e
+              descartar viraram texto: são saídas, não o caminho normal, e
+              ocupavam dois botões inteiros logo abaixo do que se aperta a cada
+              série. */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={goBack}
               disabled={isBusy || completedSets.length === 0}
-              className="rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+              className="rounded-xl bg-zinc-800 py-2.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
             >
               ← Voltar série
             </button>
@@ -890,15 +952,17 @@ export function WorkoutSessionPage() {
               type="button"
               onClick={() => setShowPostpone(true)}
               disabled={pendingExercises.length < 2}
-              className="rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+              className="rounded-xl bg-zinc-800 py-2.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
             >
               Adiar exercício
             </button>
           </div>
-          <button type="button" onClick={openFinishSheet} className="w-full rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-primary-300">
-            Finalizar treino agora
-          </button>
-          <button type="button" onClick={cancel} className="w-full py-3 text-xs text-red-400">Descartar treino</button>
+          <div className="flex items-center justify-between px-1">
+            <button type="button" onClick={openFinishSheet} className="py-1 text-xs font-semibold text-primary-300">
+              Finalizar treino agora
+            </button>
+            <button type="button" onClick={cancel} className="py-1 text-xs text-red-400">Descartar</button>
+          </div>
         </div>
       </div>
 
