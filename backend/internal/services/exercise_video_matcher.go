@@ -36,6 +36,11 @@ type ExerciseVideoMatcher interface {
 	// EnsureLinks resolve os nomes que ainda não têm vínculo. É idempotente e
 	// pode ser chamada com nomes repetidos ou já resolvidos.
 	EnsureLinks(ctx context.Context, userID int64, names []string) error
+
+	// BackfillKnownNames resolve os nomes já gravados no banco que ainda não
+	// têm vínculo — planos e histórico anteriores a este recurso, e qualquer
+	// nome cuja associação tenha falhado antes.
+	BackfillKnownNames(ctx context.Context) error
 }
 
 const candidatosPorExercicio = 10
@@ -130,6 +135,54 @@ func (m *exerciseVideoMatcher) EnsureLinks(ctx context.Context, userID int64, na
 			return err
 		}
 	}
+	return nil
+}
+
+// BackfillKnownNames resolve o que já está no banco e ainda não tem vínculo.
+//
+// Sem isto, o recurso só valeria para planos criados depois dele: os exercícios
+// que a pessoa já treina ficariam sem vídeo até ela gerar um plano novo, que é
+// exatamente o contrário do que se espera ao instalar a atualização.
+//
+// Roda no boot. Converge numa passada porque a recusa também é gravada — a
+// segunda execução encontra tudo resolvido e não passa de um SELECT. Sem
+// usuário associado, então usa o crédito compartilhado.
+func (m *exerciseVideoMatcher) BackfillKnownNames(ctx context.Context) error {
+	rows, err := m.db.Pool.Query(ctx,
+		`SELECT nome FROM (
+		     SELECT DISTINCT exercise_name AS nome FROM training_plan_exercises
+		     UNION
+		     SELECT DISTINCT exercise_name AS nome FROM workout_sets
+		 ) nomes
+		 WHERE nome <> '' AND NOT EXISTS (
+		     SELECT 1 FROM exercise_video_links v WHERE v.exercise_name = nomes.nome
+		 )
+		 ORDER BY nome`)
+	if err != nil {
+		return fmt.Errorf("listar nomes sem vínculo: %w", err)
+	}
+	defer rows.Close()
+
+	var nomes []string
+	for rows.Next() {
+		var nome string
+		if err := rows.Scan(&nome); err != nil {
+			return err
+		}
+		nomes = append(nomes, nome)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(nomes) == 0 {
+		return nil
+	}
+
+	slog.Info("associando vídeos de exercícios já existentes", "nomes", len(nomes))
+	if err := m.EnsureLinks(ctx, 0, nomes); err != nil {
+		return err
+	}
+	slog.Info("associação de vídeos concluída", "nomes", len(nomes))
 	return nil
 }
 

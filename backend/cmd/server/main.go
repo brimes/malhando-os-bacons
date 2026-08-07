@@ -105,6 +105,18 @@ func main() {
 
 	handler := routes.Setup(database, resolver, videoSigner, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins, cfg.PhotoDir)
 
+	// Associa os vídeos dos exercícios que já estão no banco. Fora da subida do
+	// servidor, numa goroutine: chama o assistente e leva dezenas de segundos,
+	// e nada disso pode atrasar o app ficar disponível. Converge numa passada —
+	// a partir daí é um SELECT que não acha nada.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		if err := services.NewExerciseVideoMatcher(database, resolver).BackfillKnownNames(ctx); err != nil {
+			slog.Error("falha ao associar vídeos dos exercícios existentes", "error", err)
+		}
+	}()
+
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
 		Handler:      handler,
