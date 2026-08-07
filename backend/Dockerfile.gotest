@@ -1,0 +1,5 @@
+# Só para rodar test/vet/gofmt: não há Go no host, e bind mount monta o módulo
+# incompleto. O código entra pelo build context, que é o que funciona.
+FROM golang:1.22-alpine
+WORKDIR /src
+COPY . .

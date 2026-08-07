@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { LlmSettingsSection } from '../components/LlmSettingsSection';
 import { SyncStatusPanel } from '../components/SyncStatus';
+import { ExerciseVideoSettings } from '../components/ExerciseVideoSettings';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { getErrorMessage } from '../api/client';
 import type { TrainingSettings } from '../types';
@@ -100,6 +101,8 @@ export function SettingsPage() {
           <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Dados e sincronização</h3>
           <SyncStatusPanel />
         </div>
+
+        <ExerciseVideoSettings />
 
         <div>
           <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Durante o treino</h3>

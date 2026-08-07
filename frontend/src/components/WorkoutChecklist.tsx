@@ -1,4 +1,8 @@
+import { useState } from 'react';
 import { Card } from './Card';
+import { ExerciseVideoPlayer } from './ExerciseVideoPlayer';
+import { temVideoLocal } from '../lib/videos/videoStore';
+import { isNetworkOnline } from '../lib/offline';
 import type { TrainingPlanExercise } from '../types';
 
 export interface ChecklistEntry {
@@ -14,6 +18,37 @@ function formatTarget(exercise: TrainingPlanExercise) {
     return seconds >= 60 && seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`;
   }
   return `${exercise.reps} reps`;
+}
+
+/**
+ * O vídeo do movimento, atrás de um toque.
+ *
+ * Não fica aberto porque esta lista é compacta de propósito — a pessoa varre
+ * dez exercícios de olho, e dez vídeos 720×720 tocando ao mesmo tempo
+ * transformariam a varredura num rolamento infinito, além de gastar bateria
+ * animando o que ninguém está olhando.
+ *
+ * O botão só aparece quando há vídeo para mostrar: com o arquivo no aparelho,
+ * ou com rede para buscá-lo. Offline e sem o arquivo, oferecer o toque seria
+ * prometer o que não se pode entregar.
+ */
+function BotaoVerMovimento({ exercise }: { exercise: TrainingPlanExercise }) {
+  const [aberto, setAberto] = useState(false);
+  if (!exercise.video) return null;
+  if (!temVideoLocal(exercise.video.catalog_name) && !isNetworkOnline()) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setAberto((atual) => !atual)}
+        className="text-xs font-semibold text-primary-400"
+      >
+        {aberto ? 'Ocultar movimento' : 'Ver movimento'}
+      </button>
+      {aberto && <ExerciseVideoPlayer video={exercise.video} className="mt-2 aspect-square" />}
+    </div>
+  );
 }
 
 /**
@@ -113,6 +148,8 @@ export function WorkoutChecklist({ exercises, state, onChange, lockedFor }: {
                     })}
                   </div>
                 )}
+
+                <BotaoVerMovimento exercise={exercise} />
 
                 {exercise.notes && <p className="mt-2 text-xs leading-relaxed text-zinc-500">{exercise.notes}</p>}
 

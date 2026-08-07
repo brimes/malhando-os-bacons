@@ -25,6 +25,47 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 - **Provider de LLM resolvido por usuário** (`services.GeneratorResolver`): chave própria quando existe, crédito compartilhado quando não. A chave nunca volta em JSON nem entra em log, e nunca é enfileirada offline (a fila é localStorage em texto puro).
 - **Aviso de IA só no termo de aceite.** Repetir em cada tela vira ruído que se para de ler.
 
+## Vídeos de exercício
+
+- **Os nomes não batem, e é esse o problema.** `exercise_name` é texto livre do
+  Gemini; o catálogo do bucket tem 963 nomes fixos. Medido contra o banco real:
+  **2 de 32** casavam exatamente. Todo o resto desta seção existe por causa disso.
+- **Casamento aproximado sozinho é perigoso**, não só impreciso. Uma versão por
+  semelhança de texto ligou `Supino Reto com Barra` a `Supino com barra
+  declinado` e `Crucifixo Invertido no Pec Deck` (posterior de ombro) a `Voador
+  no pec deck` (peitoral) — com pontuação alta, porque a palavra que distingue
+  (`reto`, `invertido`) é a que toda normalização descarta. Daí o
+  **associador em dois estágios** (`exercise_catalog.go` + `exercise_video_matcher.go`):
+  peneira determinística para ~10 candidatos, e o LLM escolhe entre eles vendo a
+  palavra que distingue, com permissão de recusar todos. Recusar é resposta certa
+  com frequência: vídeo errado engana quem está com peso na mão.
+- **`exercise_video_links` é cache global por nome**, não por usuário nem por
+  plano. O vocabulário do assistente se repete, então resolver uma vez serve
+  todo mundo — e vale para `workout_sets` e para planos anteriores à migration.
+  A recusa **também** é gravada; sem isso, todo plano repagaria a mesma pergunta.
+- **O app baixa o catálogo inteiro** (~95 MB), não só os do treino. Some toda a
+  lógica de ciclo de vida, e corrigir um vínculo depois não custa download: o
+  arquivo já está no aparelho, só o apontamento muda. `Directory.Data`, nunca
+  `Cache` — o sistema limpa `Cache` justamente quando a pessoa está offline.
+- **O disco é o índice.** `readdir` devolve nome, tamanho e URI; não existe lista
+  paralela do que foi baixado, porque ela poderia discordar do disco. Arquivo
+  abaixo de 1 KB é apagado em vez de indexado: um 403 vira arquivo pequeno
+  gravado com sucesso, e o app acharia que tem o vídeo.
+- **Assina uma vez, no download; nunca na reprodução.** Assinatura V4 escrita
+  sobre a stdlib (`gcs_signer.go`) — é RSA-SHA256 sobre uma string montada por
+  regra pública, e `cloud.google.com/go/storage` traria uma árvore enorme para
+  isso. Erro de escape ou de ordenação ali **não quebra teste nenhum**: aparece
+  como 403 na hora de baixar. Para conferir sem baixar chave, dá para assinar via
+  IAM `signBlob` (você tem `serviceAccountTokenCreator` na conta) e baixar de verdade.
+- **A credencial é opcional de propósito.** Sem `EXERCISE_VIDEO_CREDENTIALS` o
+  backend sobe igual e os endpoints de vídeo respondem 503. É o que permite
+  deployar o backend antes de aplicar o secret, que é manual e fora do workflow.
+- **O nome do arquivo em disco é o nome com percent-encoding**, não hash:
+  reversível, sem colisão, 117 bytes no pior caso. O nome do catálogo em si
+  nunca é alterado em ponto nenhum — há teste dos dois lados para isso.
+- `backend/Dockerfile.gotest` existe só para rodar `go test`/`vet`/`gofmt`, já que
+  não há Go no host e bind mount monta o módulo incompleto.
+
 ## Deploy
 
 Push em `main` dispara o workflow (`.github/workflows/deploy.yml`) num runner self-hosted, filtrado por `backend/**`, `k8s/**` e o próprio workflow — mudança só de frontend não deploya. `k8s/secret.yml` é template e **não** é aplicado pelo workflow; precisa de `kubectl apply` manual. API em `https://mob-api.brimes.net`.

@@ -41,6 +41,22 @@ type TrainingPlanExercise struct {
 	RestSeconds     int      `json:"rest_seconds"`
 	Notes           string   `json:"notes"`
 	LastWeightKg    *float64 `json:"last_weight_kg,omitempty"`
+	// Video é nil quando não há vídeo para este exercício — porque o vínculo
+	// ainda não foi resolvido, ou porque foi resolvido como "não existe".
+	// O app trata os dois casos igual: mostra o exercício sem vídeo.
+	Video *ExerciseVideo `json:"video,omitempty"`
+}
+
+// ExerciseVideo é o apontamento para o vídeo demonstrativo no bucket.
+//
+// CatalogName é o nome no catálogo, que pode ser diferente de ExerciseName — é
+// justamente por serem vocabulários distintos que existe a tabela de vínculo.
+// Os dois caminhos vêm juntos porque quem escolhe o formato é o aparelho: iOS
+// leva mp4 (o WKWebView antigo não toca WebM), Android leva webm.
+type ExerciseVideo struct {
+	CatalogName string `json:"catalog_name"`
+	WebM        string `json:"webm"`
+	MP4         string `json:"mp4"`
 }
 
 type TrainingPlanInput struct {

@@ -599,9 +599,16 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 			 WHERE d.id=$1`, *planDayID).Scan(&active.DayName, &planID); err == nil {
 			active.PlanID = &planID
 		}
+		// Traz o vídeo demonstrativo junto: é nesta tela, com a pessoa prestes
+		// a executar a série, que ele serve para alguma coisa. LEFT porque a
+		// maioria dos nomes não tem vínculo e o exercício vale sem vídeo.
 		rows, err := h.db.Pool.Query(r.Context(),
-			`SELECT id, exercise_name, sets, reps, tracking_type, duration_seconds, rest_seconds, notes, last_weight_kg
-			 FROM training_plan_exercises WHERE plan_day_id=$1 ORDER BY exercise_order`, *planDayID)
+			`SELECT e.id, e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds,
+			        e.rest_seconds, e.notes, e.last_weight_kg,
+			        v.catalog_name, v.object_webm, v.object_mp4
+			 FROM training_plan_exercises e
+			 LEFT JOIN exercise_video_links v ON v.exercise_name = e.exercise_name
+			 WHERE e.plan_day_id=$1 ORDER BY e.exercise_order`, *planDayID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load exercises"})
 			return
@@ -610,9 +617,11 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		active.Exercises = []models.TrainingPlanExercise{}
 		for rows.Next() {
 			var exercise models.TrainingPlanExercise
+			var catalogo, webm, mp4 *string
 			if err := rows.Scan(&exercise.ID, &exercise.ExerciseName, &exercise.Sets, &exercise.Reps,
 				&exercise.TrackingType, &exercise.DurationSeconds, &exercise.RestSeconds,
-				&exercise.Notes, &exercise.LastWeightKg); err == nil {
+				&exercise.Notes, &exercise.LastWeightKg, &catalogo, &webm, &mp4); err == nil {
+				exercise.Video = montarVideo(catalogo, webm, mp4)
 				active.Exercises = append(active.Exercises, exercise)
 			}
 		}

@@ -72,6 +72,24 @@ export interface TrainingPlanExercise {
   rest_seconds: number;
   notes: string;
   last_weight_kg?: number;
+  video?: ExerciseVideo;
+}
+
+/**
+ * Apontamento para o vídeo demonstrativo do exercício no bucket.
+ *
+ * Ausente quando não há vídeo — o nome que o assistente escreveu não existe no
+ * catálogo, ou o vínculo ainda não foi resolvido. A tela trata os dois casos
+ * igual: mostra o exercício sem vídeo.
+ *
+ * `catalog_name` costuma ser diferente de `exercise_name`: são vocabulários
+ * distintos, e é justamente por isso que existe a tabela de vínculo no
+ * servidor. Aqui ele serve como chave do arquivo local.
+ */
+export interface ExerciseVideo {
+  catalog_name: string;
+  webm: string;
+  mp4: string;
 }
 
 export interface TrainingPlanDay {

@@ -9,6 +9,7 @@ import { useOfflineStore } from './lib/offlineStore';
 // and not from `lib/offlineBoot.ts`).
 import './lib/local/nutritionSync';
 import { registerAndroidBackButton } from './lib/androidBackButton';
+import { iniciarSincronizacaoDeVideos } from './lib/videos/videoSync';
 import { BottomNav } from './components/BottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TermsGate } from './components/TermsGate';
@@ -60,6 +61,13 @@ export default function App() {
   // o app em vez de voltar uma tela. No navegador é inofensivo — o evento
   // nunca dispara.
   useEffect(() => { registerAndroidBackButton(); }, []);
+
+  // Carrega o índice dos vídeos já baixados (do disco, não da rede) e, em
+  // Wi-Fi, completa o acervo em segundo plano. Só depois de haver sessão: os
+  // endpoints de vídeo são autenticados, e um 401 aqui derrubaria a sessão.
+  useEffect(() => {
+    if (isAuthenticated) iniciarSincronizacaoDeVideos();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (isAuthenticated) {

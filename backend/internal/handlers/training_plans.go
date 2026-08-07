@@ -24,10 +24,47 @@ const automaticPlanTimeout = 15 * time.Minute
 type TrainingPlanHandler struct {
 	db       *db.DB
 	resolver services.GeneratorResolver
+	matcher  services.ExerciseVideoMatcher
 }
 
 func NewTrainingPlanHandler(database *db.DB, resolver services.GeneratorResolver) *TrainingPlanHandler {
-	return &TrainingPlanHandler{db: database, resolver: resolver}
+	return &TrainingPlanHandler{
+		db:       database,
+		resolver: resolver,
+		matcher:  services.NewExerciseVideoMatcher(database, resolver),
+	}
+}
+
+// associarVideosEmSegundoPlano liga os nomes de exercício do plano ao catálogo
+// de vídeos, fora da requisição.
+//
+// Fora porque a associação pode chamar o assistente, e um plano manual é criado
+// numa requisição síncrona: fazer a pessoa esperar por um vídeo demonstrativo
+// para receber o plano que ela acabou de montar inverte as prioridades. O plano
+// vale sem vídeo; o vínculo aparece na próxima leitura.
+//
+// O contexto é novo de propósito: o da requisição é cancelado assim que a
+// resposta sai, e a associação morreria no meio.
+func (h *TrainingPlanHandler) associarVideosEmSegundoPlano(userID int64, plan *models.TrainingPlan) {
+	nomes := make([]string, 0, 32)
+	for _, day := range plan.Days {
+		for _, exercise := range day.Exercises {
+			nomes = append(nomes, exercise.ExerciseName)
+		}
+	}
+	if len(nomes) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := h.matcher.EnsureLinks(ctx, userID, nomes); err != nil {
+			// Já registrado com detalhe pelo associador. O plano continua
+			// válido: os nomes seguem sem vínculo e a próxima geração tenta
+			// de novo, porque nada foi gravado para eles.
+			slog.Warn("plano criado sem vínculos de vídeo", "plan_id", plan.ID, "user_id", userID)
+		}
+	}()
 }
 
 // assistantFor builds the assistant on the credentials of this user: their own
@@ -101,18 +138,28 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 		if err := rows.Scan(&day.ID, &day.DayNumber, &day.Name, &day.Focus, &day.Instructions, &day.LastDoneAt); err != nil {
 			continue
 		}
+		// O LEFT JOIN traz o vídeo demonstrativo quando o nome já foi
+		// associado ao catálogo. É LEFT porque a maioria dos nomes não casa
+		// com o catálogo e o exercício vale sem vídeo — um INNER esconderia
+		// o exercício inteiro.
 		exerciseRows, err := h.db.Pool.Query(r.Context(),
-			`SELECT id, exercise_name, sets, reps, tracking_type, duration_seconds, rest_seconds, notes, last_weight_kg
-			 FROM training_plan_exercises WHERE plan_day_id = $1 ORDER BY exercise_order`, day.ID)
+			`SELECT e.id, e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds,
+			        e.rest_seconds, e.notes, e.last_weight_kg,
+			        v.catalog_name, v.object_webm, v.object_mp4
+			 FROM training_plan_exercises e
+			 LEFT JOIN exercise_video_links v ON v.exercise_name = e.exercise_name
+			 WHERE e.plan_day_id = $1 ORDER BY e.exercise_order`, day.ID)
 		if err != nil {
 			continue
 		}
 		day.Exercises = []models.TrainingPlanExercise{}
 		for exerciseRows.Next() {
 			var exercise models.TrainingPlanExercise
+			var catalogo, webm, mp4 *string
 			if err := exerciseRows.Scan(&exercise.ID, &exercise.ExerciseName, &exercise.Sets, &exercise.Reps,
 				&exercise.TrackingType, &exercise.DurationSeconds, &exercise.RestSeconds, &exercise.Notes,
-				&exercise.LastWeightKg); err == nil {
+				&exercise.LastWeightKg, &catalogo, &webm, &mp4); err == nil {
+				exercise.Video = montarVideo(catalogo, webm, mp4)
 				day.Exercises = append(day.Exercises, exercise)
 			}
 		}
@@ -353,6 +400,7 @@ func (h *TrainingPlanHandler) create(ctx context.Context, userID int64, input mo
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	h.associarVideosEmSegundoPlano(userID, &plan)
 	return &plan, nil
 }
 

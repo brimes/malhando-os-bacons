@@ -85,7 +85,25 @@ func main() {
 	// The configured provider is the shared credit: users who saved their own
 	// Gemini key run on it instead, which the resolver decides per user.
 	resolver := services.NewGeneratorResolver(database, generator, cfg.GeminiModel)
-	handler := routes.Setup(database, resolver, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins, cfg.PhotoDir)
+
+	// O assinador dos vídeos é opcional: sem credencial o backend sobe igual,
+	// os endpoints de vídeo respondem 503 e o app segue sem vídeo. Sem isso,
+	// deployar o backend antes de aplicar o secret — que é manual, fora do
+	// workflow — derrubaria a API inteira por causa de um recurso acessório.
+	var videoSigner *services.GCSSigner
+	if cfg.ExerciseVideoCredentials == "" {
+		slog.Warn("vídeos de exercício desativados: EXERCISE_VIDEO_CREDENTIALS não configurado")
+	} else if videoSigner, err = services.NewGCSSigner(
+		cfg.ExerciseVideoBucket, cfg.ExerciseVideoCredentials, 7*24*time.Hour); err != nil {
+		// Credencial presente porém inválida é erro de configuração e precisa
+		// aparecer, mas ainda não é motivo para o app inteiro ficar fora do ar.
+		slog.Error("credencial dos vídeos de exercício inválida", "error", err)
+		videoSigner = nil
+	} else {
+		slog.Info("vídeos de exercício ativos", "bucket", cfg.ExerciseVideoBucket)
+	}
+
+	handler := routes.Setup(database, resolver, videoSigner, cfg.JWTSecret, cfg.GoogleClientID, cfg.AllowedOrigins, cfg.PhotoDir)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),

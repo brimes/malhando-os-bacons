@@ -7,6 +7,7 @@ import { workoutsApi } from '../api/workouts';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
 import { WorkoutChat } from '../components/WorkoutChat';
+import { ExerciseVideoPlayer } from '../components/ExerciseVideoPlayer';
 import { getErrorMessage } from '../api/client';
 import {
   dropQueuedMutations,
@@ -669,6 +670,10 @@ export function WorkoutSessionPage() {
               Exercício {exercises.length - pendingExercises.length + 1} de {exercises.length}
             </p>
             <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+            {/* Aqui é onde o vídeo serve para alguma coisa: a pessoa está
+                prestes a executar e ainda dá tempo de conferir o movimento.
+                Não renderiza nada quando não há vídeo. */}
+            <ExerciseVideoPlayer video={currentExercise.video} className="mt-3 aspect-square" />
             <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
               {currentExercise.tracking_type === 'time' ? (
                 <>

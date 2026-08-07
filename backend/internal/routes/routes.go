@@ -12,7 +12,9 @@ import (
 // Setup wires the routes. The generator resolver, rather than a ready-made
 // assistant, is what gets injected: which credentials each call runs on is only
 // known once the user is.
-func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, googleClientID, allowedOrigins, photoDir string) http.Handler {
+// videoSigner pode ser nil: sem credencial configurada os endpoints de vídeo
+// respondem 503 e o resto da API funciona normalmente.
+func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, googleClientID, allowedOrigins, photoDir string) http.Handler {
 	mux := http.NewServeMux()
 
 	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID)
@@ -28,6 +30,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	termsHandler := handlers.NewTermsHandler(database)
 	llmSettingsHandler := handlers.NewLLMSettingsHandler(database)
 	workoutChatHandler := handlers.NewWorkoutChatHandler(database, resolver)
+	exerciseVideoHandler := handlers.NewExerciseVideoHandler(database, videoSigner)
 
 	auth := middleware.AuthMiddleware(jwtSecret)
 
@@ -90,6 +93,12 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, jwtSecret, goog
 	mux.HandleFunc("GET /api/training-plans/{id}", chain(trainingPlanHandler.Get, auth))
 	mux.HandleFunc("POST /api/training-plans/{id}/adjust", chain(trainingPlanHandler.Adjust, auth))
 	mux.HandleFunc("DELETE /api/training-plans/{id}", chain(trainingPlanHandler.Delete, auth))
+
+	// Vídeos demonstrativos de exercício. Autenticados: quem paga o egress do
+	// bucket é o dono do projeto, e um endpoint aberto que devolve URL assinada
+	// é um proxy de download para qualquer um.
+	mux.HandleFunc("GET /api/exercise-videos/catalog", chain(exerciseVideoHandler.Catalog, auth))
+	mux.HandleFunc("POST /api/exercise-videos/urls", chain(exerciseVideoHandler.SignURLs, auth))
 
 	// Nutrition routes
 	mux.HandleFunc("GET /api/nutrition/plans", chain(nutritionHandler.ListPlans, auth))

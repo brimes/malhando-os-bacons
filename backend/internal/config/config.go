@@ -27,6 +27,16 @@ type Config struct {
 	// backend would write into the container's ephemeral filesystem and lose
 	// every photo on the next deploy.
 	PhotoDir string
+	// ExerciseVideoBucket e ExerciseVideoCredentials dão acesso ao bucket
+	// privado dos vídeos de exercício. A credencial é o JSON de uma service
+	// account com leitura só nesse bucket, e chega pelo secret do k8s.
+	//
+	// Ambos são opcionais de propósito: sem eles o backend sobe igual e os
+	// endpoints de vídeo respondem 503, o app não mostra vídeo e todo o resto
+	// funciona. É o que permite deployar o backend antes de o secret existir —
+	// o secret é aplicado à mão, fora do workflow.
+	ExerciseVideoBucket      string
+	ExerciseVideoCredentials string
 }
 
 func Load() (*Config, error) {
@@ -48,6 +58,9 @@ func Load() (*Config, error) {
 		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
 		MigrationsDir:      getEnv("MIGRATIONS_DIR", "/app/migrations"),
 		PhotoDir:           getEnv("PHOTO_DIR", "/data/photos"),
+
+		ExerciseVideoBucket:      getEnv("EXERCISE_VIDEO_BUCKET", "malhando-os-bacons-exercicios"),
+		ExerciseVideoCredentials: getEnv("EXERCISE_VIDEO_CREDENTIALS", ""),
 	}
 
 	return cfg, nil
