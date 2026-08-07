@@ -17,7 +17,7 @@ import { offlineReady } from '../offlineBoot';
 import { pullFoodLogs } from './repo/foodLogs';
 import { pullPersonalFoods } from './repo/foodItems';
 import { pullNutritionPlans } from './repo/nutritionPlans';
-import { pullTrainingPlans } from './repo/trainingPlans';
+import { migrarFormatoDosPlanos, pullTrainingPlans } from './repo/trainingPlans';
 import { pullWorkouts } from './repo/workouts';
 
 const PUSH_INTERVAL_MS = 60_000;
@@ -81,6 +81,12 @@ export function startNutritionSync(): void {
   schedule(() => { if (hasSession()) void pullPersonalFoods(); }, FOOD_ITEMS_PULL_INTERVAL_MS);
   schedule(() => { if (hasSession()) void pullWorkouts(); }, WORKOUTS_PULL_INTERVAL_MS);
   schedule(() => { if (hasSession()) void pullTrainingPlans(); }, TRAINING_PLANS_PULL_INTERVAL_MS);
+
+  // Uma vez só, e antes de qualquer tela ler: um plano guardado no aparelho
+  // continua válido quando o servidor ganha um campo novo em exercício, então
+  // nada o rebuscaria e ele ficaria sem o campo para sempre. Ver
+  // `VERSAO_FORMATO_PLANO` em `repo/trainingPlans.ts`.
+  if (hasSession()) void migrarFormatoDosPlanos();
 }
 
 // Started as a side effect of import — `App.tsx` imports this module for

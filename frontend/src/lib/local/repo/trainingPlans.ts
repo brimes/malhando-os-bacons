@@ -12,6 +12,7 @@ import { trainingPlansApi } from '../../../api/trainingPlans';
 import type { TrainingPlan } from '../../../types';
 import { isNetworkOnline } from '../../offline';
 import { offlineReady } from '../../offlineBoot';
+import { getRecord, putRecord } from '../../localDb';
 import { EntityCache } from '../entityStore';
 import { hasPendingMutationsFor } from './shared';
 
@@ -78,14 +79,54 @@ export async function pullTrainingPlans(): Promise<void> {
     const plans = await trainingPlansApi.list();
     await trainingPlansCache.upsertMany(plans.map(mergePreservingDays));
 
-    const tracked = plans.find((plan) => plan.active);
-    if (tracked) {
-      const detail = await trainingPlansApi.get(tracked.id);
-      await rememberPlan(detail);
+    // Detalhe de TODOS os planos ativos, não só do primeiro. `find` devolvia
+    // um só, e quem tem mais de um plano ativo ficava com os demais presos na
+    // versão que estava no aparelho — eles só atualizavam se a pessoa abrisse
+    // cada um na mão.
+    for (const plano of plans.filter((plan) => plan.active)) {
+      await rememberPlan(await trainingPlansApi.get(plano.id));
     }
   } catch {
     // Best-effort: o próximo tick agendado tenta de novo.
   } finally {
     if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Versão do formato do plano guardado no aparelho.
+ *
+ * Serve para uma coisa só: quando o servidor passa a devolver um campo novo em
+ * exercício já existente, o plano no aparelho continua válido — e por isso
+ * ninguém o rebusca — mas sem o campo. Foi o que aconteceu com os vídeos: o
+ * vínculo nasceu no servidor para planos que já estavam no aparelho, e o app
+ * não tinha por que notar.
+ *
+ * Subir este número força uma releitura dos detalhes na próxima abertura.
+ * 1 → 2: exercícios passaram a ter `video`.
+ */
+const VERSAO_FORMATO_PLANO = 2;
+const CHAVE_VERSAO = 'training_plans_format_version';
+
+/**
+ * Rebusca os detalhes uma única vez quando o formato guardado ficou para trás.
+ *
+ * Não apaga nada: `rememberPlan` sobrescreve campo a campo, então uma sessão
+ * offline em andamento e os dias guardados continuam de pé mesmo se isto falhar
+ * no meio. Falhando, a versão não é gravada e a próxima abertura tenta de novo.
+ */
+export async function migrarFormatoDosPlanos(): Promise<void> {
+  const guardado = await getRecord<{ key: string; value: number }>('meta', CHAVE_VERSAO);
+  if ((guardado?.value ?? 1) >= VERSAO_FORMATO_PLANO) return;
+  if (!isNetworkOnline()) return;
+
+  try {
+    const plans = await trainingPlansApi.list();
+    for (const plano of plans) {
+      await rememberPlan(await trainingPlansApi.get(plano.id));
+    }
+    await putRecord('meta', { key: CHAVE_VERSAO, value: VERSAO_FORMATO_PLANO });
+  } catch {
+    // Sem gravar a versão: a próxima abertura tenta de novo.
   }
 }
