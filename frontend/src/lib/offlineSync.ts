@@ -64,6 +64,11 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   /^\/nutrition\/photos/,
   /^\/nutrition\/suggestion/,
   /^\/nutrition\/cheat-day/,
+  // Avaliação do resultado: pedir a análise é uma chamada viva ao assistente,
+  // e aplicá-la reescreve os planos a partir de uma proposta que só existe no
+  // servidor. Replayed meia hora depois, o "confirmar" chegaria sem ninguém
+  // olhando o que estava sendo confirmado.
+  /^\/progress-reviews/,
   // Never queue the user's own API key: the queue is persisted in localStorage
   // in clear text, so an offline save would leave a third-party credential
   // sitting on the device indefinitely. The server also validates the key

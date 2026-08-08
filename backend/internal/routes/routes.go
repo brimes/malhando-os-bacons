@@ -31,6 +31,9 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	llmSettingsHandler := handlers.NewLLMSettingsHandler(database)
 	workoutChatHandler := handlers.NewWorkoutChatHandler(database, resolver)
 	exerciseVideoHandler := handlers.NewExerciseVideoHandler(database, videoSigner)
+	// Recebe os dois handlers de plano porque aplicar a avaliação reusa a
+	// reconciliação in-place deles — é ela que preserva o histórico treinado.
+	progressReviewHandler := handlers.NewProgressReviewHandler(database, resolver, trainingPlanHandler, nutritionHandler)
 
 	auth := middleware.AuthMiddleware(jwtSecret)
 
@@ -138,6 +141,14 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /api/results", chain(resultsHandler.List, auth))
 	mux.HandleFunc("POST /api/results", chain(resultsHandler.Save, auth))
 	mux.HandleFunc("DELETE /api/results/{id}", chain(resultsHandler.Delete, auth))
+
+	// Avaliação do resultado. `latest` é literal e tem precedência sobre
+	// `{id}` no mux do Go 1.22, então as duas rotas convivem.
+	mux.HandleFunc("POST /api/progress-reviews", chain(progressReviewHandler.Create, auth))
+	mux.HandleFunc("GET /api/progress-reviews/latest", chain(progressReviewHandler.Latest, auth))
+	mux.HandleFunc("GET /api/progress-reviews/{id}", chain(progressReviewHandler.Get, auth))
+	mux.HandleFunc("POST /api/progress-reviews/{id}/apply", chain(progressReviewHandler.Apply, auth))
+	mux.HandleFunc("POST /api/progress-reviews/{id}/discard", chain(progressReviewHandler.Discard, auth))
 
 	// Dashboard
 	mux.HandleFunc("GET /api/dashboard", chain(dashboardHandler.Get, auth))

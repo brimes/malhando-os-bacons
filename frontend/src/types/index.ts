@@ -696,3 +696,105 @@ export interface SaveBodyMeasurementInput {
   chest_cm?: number | null;
   notes?: string;
 }
+
+/**
+ * Avaliação do resultado: a leitura do período contra o objetivo e, quando o
+ * histórico justifica, a alteração de plano já pronta esperando confirmação.
+ * Nada é escrito até a pessoa confirmar.
+ */
+export interface ProgressReview {
+  id: number;
+  /** `pending` é a análise rodando — a mesma linha é o job. */
+  status: 'pending' | 'ready' | 'applied' | 'discarded' | 'failed';
+  period_start: string;
+  period_end: string;
+  performance: string;
+  goal_assessment: string;
+  goal_status: 'on_track' | 'needs_change' | 'at_risk';
+  /** Ausente quando não há o que mudar naquele plano — o caso comum. */
+  training_change?: ProgressReviewTrainingChange;
+  nutrition_change?: ProgressReviewNutritionChange;
+  applied_training: boolean;
+  applied_nutrition: boolean;
+  error?: string;
+  created_at: string;
+  applied_at?: string;
+}
+
+export interface ProgressReviewTrainingChange {
+  plan_id: number;
+  plan_name: string;
+  summary: string;
+  /** O plano que será gravado se confirmado, e `current_plan` o que ele substitui. */
+  plan: ProposedTrainingPlan;
+  current_plan: ProposedTrainingPlan;
+}
+
+export interface ProgressReviewNutritionChange {
+  plan_id: number;
+  plan_name: string;
+  summary: string;
+  plan: ProposedNutritionPlan;
+  current_plan: ProposedNutritionPlan;
+}
+
+// Os tipos abaixo espelham TrainingPlanInput/NutritionPlanInput do backend, que
+// são as formas SEM id — uma proposta ainda não existe no banco. Por isso não
+// dá para reaproveitar TrainingPlan/NutritionPlan aqui.
+export interface ProposedTrainingPlan {
+  name: string;
+  description: string;
+  target_date: string;
+  days_per_week: number;
+  session_duration_minutes: number;
+  days: ProposedTrainingDay[];
+}
+
+export interface ProposedTrainingDay {
+  name: string;
+  focus: string;
+  instructions: string;
+  exercises: ProposedTrainingExercise[];
+}
+
+export interface ProposedTrainingExercise {
+  exercise_name: string;
+  sets: number;
+  reps: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number | null;
+  rest_seconds: number;
+  notes: string;
+}
+
+export interface ProposedNutritionPlan {
+  name: string;
+  calories_target: number;
+  protein_target: number;
+  carbs_target: number;
+  fat_target: number;
+  rationale: string;
+  meals: ProposedNutritionMeal[];
+}
+
+export interface ProposedNutritionMeal {
+  meal_type: MealType;
+  name: string;
+  suggested_at?: string | null;
+  notes: string;
+  items: ProposedNutritionMealItem[];
+}
+
+export interface ProposedNutritionMealItem {
+  food_name: string;
+  quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface ApplyProgressReviewInput {
+  apply_training: boolean;
+  apply_nutrition: boolean;
+}

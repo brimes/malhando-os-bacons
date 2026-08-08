@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -85,6 +86,7 @@ function SeriesCard({ series }: { series: MetricSeries }) {
 }
 
 export function ResultsPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState<ResultsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -171,6 +173,19 @@ export function ResultsPage() {
             {data?.series.map((series) => <SeriesCard key={series.key} series={series} />)}
           </div>
         )}
+
+        <Card onClick={() => navigate('/results/review')} className="border-primary-900 bg-primary-950/30">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🧭</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-white">Avaliar o resultado</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+                O assistente lê treinos, alimentação e medições do período e compara com o seu objetivo.
+              </p>
+            </div>
+            <span className="text-lg text-zinc-600">›</span>
+          </div>
+        </Card>
 
         {data && data.conditioning.length > 0 && (
           <div>

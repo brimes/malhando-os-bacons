@@ -49,6 +49,10 @@ const NON_CACHEABLE_GET_PATHS: RegExp[] = [
   /^\/nutrition\/photos\//,
   /^\/nutrition\/cheat-day/,
   /^\/training-plans\/jobs\//,
+  // A avaliação é vários parágrafos de texto mais dois planos inteiros em
+  // JSON. Guardar isso no cache come justamente o orçamento de localStorage de
+  // que a fila de escritas depende, e a tela não abre offline de qualquer jeito.
+  /^\/progress-reviews/,
   /^\/chat(\/|$)/,
   // The chat screen refuses to open offline anyway, so a cached history would
   // only take up room that the pending queue needs more. `-?` covers a
