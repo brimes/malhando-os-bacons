@@ -38,8 +38,8 @@ func NewProgressReviewHandler(database *db.DB, resolver services.GeneratorResolv
 }
 
 const progressReviewColumns = `id, status, period_start, period_end, performance, goal_assessment,
-	 goal_status, training_plan_id, training_summary, training_proposal,
-	 nutrition_plan_id, nutrition_summary, nutrition_proposal,
+	 goal_status, training_plan_id, training_summary, training_proposal, training_proposal_error,
+	 nutrition_plan_id, nutrition_summary, nutrition_proposal, nutrition_proposal_error,
 	 applied_training, applied_nutrition, error, created_at, applied_at`
 
 // Create starts an evaluation. It answers 202 with the row and runs the
@@ -267,12 +267,13 @@ func (h *ProgressReviewHandler) run(reviewID, userID int64, reviewContext string
 		return
 	}
 
-	trainingPlanID, trainingProposal := h.proposeTraining(ctx, userID, reviewContext, analysis.TrainingChange)
-	nutritionPlanID, nutritionProposal := h.proposeNutrition(ctx, userID, reviewContext, analysis.NutritionChange)
+	trainingPlanID, trainingProposal, trainingFailure := h.proposeTraining(ctx, userID, reviewContext, analysis.TrainingChange)
+	nutritionPlanID, nutritionProposal, nutritionFailure := h.proposeNutrition(ctx, userID, reviewContext, analysis.NutritionChange)
 
-	// A change whose plan could not be generated is dropped, not surfaced as a
-	// summary with nothing behind it: the person would confirm a change that
-	// has no plan to write.
+	// A summary with no plan behind it cannot be offered for confirmation —
+	// there would be nothing to write. But it is not silently dropped either:
+	// the failure travels in its own field so the screen says what happened
+	// instead of reporting that the plans were found adequate.
 	trainingSummary := analysis.TrainingChange.Summary
 	if trainingProposal == nil {
 		trainingSummary = ""
@@ -281,92 +282,118 @@ func (h *ProgressReviewHandler) run(reviewID, userID int64, reviewContext string
 	if nutritionProposal == nil {
 		nutritionSummary = ""
 	}
+	// The assistant judged the route has to change and produced no change at
+	// all — the contradiction the repair pass in the assistant exists to
+	// prevent. It can still get here if that pass also failed, and the screen
+	// has to be told rather than left to invent an explanation.
+	if analysis.GoalStatus != "on_track" && trainingProposal == nil && nutritionProposal == nil &&
+		trainingFailure == "" && nutritionFailure == "" {
+		trainingFailure = "o assistente apontou que a rota precisa mudar, mas não chegou a uma alteração concreta de plano"
+	}
 
 	if _, err := h.db.Pool.Exec(context.Background(),
 		`UPDATE progress_reviews SET status='ready', performance=$2, goal_assessment=$3, goal_status=$4,
-		 training_plan_id=$5, training_summary=$6, training_proposal=$7,
-		 nutrition_plan_id=$8, nutrition_summary=$9, nutrition_proposal=$10, updated_at=NOW()
+		 training_plan_id=$5, training_summary=$6, training_proposal=$7, training_proposal_error=$8,
+		 nutrition_plan_id=$9, nutrition_summary=$10, nutrition_proposal=$11, nutrition_proposal_error=$12,
+		 context_snapshot=$13, updated_at=NOW()
 		 WHERE id=$1`,
 		reviewID, analysis.Performance, analysis.GoalAssessment, analysis.GoalStatus,
-		trainingPlanID, trainingSummary, trainingProposal,
-		nutritionPlanID, nutritionSummary, nutritionProposal); err != nil {
+		trainingPlanID, trainingSummary, trainingProposal, trainingFailure,
+		nutritionPlanID, nutritionSummary, nutritionProposal, nutritionFailure,
+		reviewContext); err != nil {
 		fail("failed to save the evaluation", err)
 	}
 }
 
+// proposalAttempts is 2 because the rewrite can fail for reasons that pass on a
+// second try: the plan assistants validate their own output (calorie range,
+// macro coherence, exercise limits) and reject a bad draft, which is a retry,
+// not a dead end.
+const proposalAttempts = 2
+
 // proposeTraining returns the plan the assistant would write, without writing
-// it. A failure is not fatal to the evaluation: the analysis is worth reading
-// on its own, and the change simply does not get offered.
+// it. The third return value is why there is no plan, empty when there was
+// nothing to propose in the first place — the caller stores it so the screen
+// never has to guess.
 func (h *ProgressReviewHandler) proposeTraining(ctx context.Context, userID int64, reviewContext string,
-	change models.ProgressReviewProposal) (*int64, []byte) {
+	change models.ProgressReviewProposal) (*int64, []byte, string) {
 	if !change.Needed {
-		return nil, nil
+		return nil, nil, ""
 	}
 	var planID int64
 	if h.db.Pool.QueryRow(ctx,
 		`SELECT id FROM training_plans WHERE user_id=$1 AND active=true AND kind='regular' LIMIT 1`,
 		userID).Scan(&planID) != nil {
-		return nil, nil
+		return nil, nil, "não há plano de treino ativo para alterar"
 	}
 	current, err := h.training.loadPlanInput(ctx, planID, userID)
 	if err != nil {
 		slog.Warn("progress review: could not load training plan", "user_id", userID, "error", err)
-		return nil, nil
+		return nil, nil, "não foi possível ler o plano de treino atual"
 	}
-	adjusted, err := h.training.assistantFor(ctx, userID).Adjust(ctx, reviewContext, *current, change.Instructions)
-	if err != nil {
-		slog.Warn("progress review: training proposal failed", "user_id", userID, "error", err)
-		return nil, nil
+
+	assistant := h.training.assistantFor(ctx, userID)
+	for attempt := 1; attempt <= proposalAttempts; attempt++ {
+		adjusted, adjustErr := assistant.Adjust(ctx, reviewContext, *current, change.Instructions)
+		if adjustErr != nil {
+			slog.Warn("progress review: training proposal failed", "user_id", userID,
+				"attempt", attempt, "error", adjustErr)
+			continue
+		}
+		encoded, marshalErr := json.Marshal(models.ProposedTrainingChange{
+			PlanID:      planID,
+			PlanName:    current.Name,
+			Summary:     change.Summary,
+			Plan:        *adjusted,
+			CurrentPlan: *current,
+		})
+		if marshalErr == nil {
+			return &planID, encoded, ""
+		}
 	}
-	encoded, err := json.Marshal(models.ProposedTrainingChange{
-		PlanID:      planID,
-		PlanName:    current.Name,
-		Summary:     change.Summary,
-		Plan:        *adjusted,
-		CurrentPlan: *current,
-	})
-	if err != nil {
-		return nil, nil
-	}
-	return &planID, encoded
+	return nil, nil, "o assistente indicou uma mudança no treino, mas não conseguiu montar o plano ajustado"
 }
 
 func (h *ProgressReviewHandler) proposeNutrition(ctx context.Context, userID int64, reviewContext string,
-	change models.ProgressReviewProposal) (*int64, []byte) {
+	change models.ProgressReviewProposal) (*int64, []byte, string) {
 	if !change.Needed {
-		return nil, nil
+		return nil, nil, ""
 	}
 	var planID int64
 	if h.db.Pool.QueryRow(ctx,
 		`SELECT id FROM nutrition_plans WHERE user_id=$1 AND active=true LIMIT 1`, userID).Scan(&planID) != nil {
-		return nil, nil
+		return nil, nil, "não há plano nutricional ativo para alterar"
 	}
 	current, err := h.nutrition.loadNutritionPlanInput(ctx, planID, userID)
 	if err != nil {
 		slog.Warn("progress review: could not load nutrition plan", "user_id", userID, "error", err)
-		return nil, nil
+		return nil, nil, "não foi possível ler o plano nutricional atual"
 	}
 	energy, daysPerWeek, err := h.nutrition.loadEnergyProfile(ctx, userID)
 	if err != nil {
-		return nil, nil
+		return nil, nil, "complete seu perfil para que a nutrição possa ser recalculada"
 	}
-	adjusted, err := h.nutrition.planAssistantFor(ctx, userID).
-		Adjust(ctx, reviewContext, energy, daysPerWeek, *current, change.Instructions)
-	if err != nil {
-		slog.Warn("progress review: nutrition proposal failed", "user_id", userID, "error", err)
-		return nil, nil
+
+	assistant := h.nutrition.planAssistantFor(ctx, userID)
+	for attempt := 1; attempt <= proposalAttempts; attempt++ {
+		adjusted, adjustErr := assistant.Adjust(ctx, reviewContext, energy, daysPerWeek, *current, change.Instructions)
+		if adjustErr != nil {
+			slog.Warn("progress review: nutrition proposal failed", "user_id", userID,
+				"attempt", attempt, "error", adjustErr)
+			continue
+		}
+		encoded, marshalErr := json.Marshal(models.ProposedNutritionChange{
+			PlanID:      planID,
+			PlanName:    current.Name,
+			Summary:     change.Summary,
+			Plan:        *adjusted,
+			CurrentPlan: *current,
+		})
+		if marshalErr == nil {
+			return &planID, encoded, ""
+		}
 	}
-	encoded, err := json.Marshal(models.ProposedNutritionChange{
-		PlanID:      planID,
-		PlanName:    current.Name,
-		Summary:     change.Summary,
-		Plan:        *adjusted,
-		CurrentPlan: *current,
-	})
-	if err != nil {
-		return nil, nil
-	}
-	return &planID, encoded
+	return nil, nil, "o assistente indicou uma mudança na nutrição, mas não conseguiu montar o plano ajustado"
 }
 
 // snapshotPlan archives the plan about to be overwritten. Applying reconciles
@@ -403,8 +430,9 @@ func (h *ProgressReviewHandler) load(ctx context.Context, userID, reviewID int64
 		`SELECT `+progressReviewColumns+` FROM progress_reviews WHERE id=$1 AND user_id=$2`,
 		reviewID, userID,
 	).Scan(&review.ID, &review.Status, &periodStart, &periodEnd, &review.Performance,
-		&review.GoalAssessment, &review.GoalStatus, &trainingPlanID, &trainingSummary, &trainingProposal,
-		&nutritionPlanID, &nutritionSummary, &nutritionProposal,
+		&review.GoalAssessment, &review.GoalStatus, &trainingPlanID, &trainingSummary,
+		&trainingProposal, &review.TrainingProposalError,
+		&nutritionPlanID, &nutritionSummary, &nutritionProposal, &review.NutritionProposalError,
 		&review.AppliedTraining, &review.AppliedNutrition, &review.Error,
 		&review.CreatedAt, &review.AppliedAt); err != nil {
 		return nil, err

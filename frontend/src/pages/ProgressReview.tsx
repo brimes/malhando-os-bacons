@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { progressReviewsApi } from '../api/progressReviews';
+import { ProgressReviewChat } from '../components/ProgressReviewChat';
 import { getErrorMessage } from '../api/client';
 import { nutritionDiffLines, trainingDiffLines, type DiffLine } from '../lib/planDiff';
 import type { ProgressReview } from '../types';
@@ -163,8 +164,8 @@ export function ProgressReviewPage() {
     setError(null);
     try {
       setReview(await progressReviewsApi.apply(review.id, {
-        apply_training: applyTraining && !!review.training_change,
-        apply_nutrition: applyNutrition && !!review.nutrition_change,
+        apply_training: applyTraining && trainingIsReal,
+        apply_nutrition: applyNutrition && nutritionIsReal,
       }));
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -188,8 +189,31 @@ export function ProgressReviewPage() {
 
   const trainingChange = review?.training_change;
   const nutritionChange = review?.nutrition_change;
-  const hasProposal = review?.status === 'ready' && (!!trainingChange || !!nutritionChange);
-  const nothingSelected = !(applyTraining && trainingChange) && !(applyNutrition && nutritionChange);
+
+  // O assistente às vezes devolve o plano reescrito idêntico e usa o resumo para
+  // dar um conselho ("mantenha as metas e registre todo dia"). Isso é orientação,
+  // não alteração: oferecer "confirmar e atualizar" para um plano que não muda
+  // faria a pessoa aprovar um nada e achar que resolveu alguma coisa.
+  const trainingLines = useMemo(
+    () => (trainingChange ? trainingDiffLines(trainingChange.current_plan, trainingChange.plan) : []),
+    [trainingChange],
+  );
+  const nutritionLines = useMemo(
+    () => (nutritionChange ? nutritionDiffLines(nutritionChange.current_plan, nutritionChange.plan) : []),
+    [nutritionChange],
+  );
+  const trainingIsReal = !!trainingChange && trainingLines.length > 0;
+  const nutritionIsReal = !!nutritionChange && nutritionLines.length > 0;
+  const advice = [
+    trainingChange && !trainingIsReal ? trainingChange.summary : '',
+    nutritionChange && !nutritionIsReal ? nutritionChange.summary : '',
+  ].filter(Boolean);
+
+  const hasProposal = review?.status === 'ready' && (trainingIsReal || nutritionIsReal);
+  const nothingSelected = !(applyTraining && trainingIsReal) && !(applyNutrition && nutritionIsReal);
+  const proposalError = [review?.training_proposal_error, review?.nutrition_proposal_error]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <>
@@ -264,22 +288,22 @@ export function ProgressReviewPage() {
                   </p>
                 </div>
 
-                {trainingChange && (
+                {trainingIsReal && trainingChange && (
                   <ChangeCard
                     title={`Treino — ${trainingChange.plan_name}`}
                     summary={trainingChange.summary}
-                    lines={trainingDiffLines(trainingChange.current_plan, trainingChange.plan)}
+                    lines={trainingLines}
                     selected={applyTraining}
                     disabled={isApplying}
                     onToggle={() => setApplyTraining((value) => !value)}
                   />
                 )}
 
-                {nutritionChange && (
+                {nutritionIsReal && nutritionChange && (
                   <ChangeCard
                     title={`Nutrição — ${nutritionChange.plan_name}`}
                     summary={nutritionChange.summary}
-                    lines={nutritionDiffLines(nutritionChange.current_plan, nutritionChange.plan)}
+                    lines={nutritionLines}
                     selected={applyNutrition}
                     disabled={isApplying}
                     onToggle={() => setApplyNutrition((value) => !value)}
@@ -302,12 +326,49 @@ export function ProgressReviewPage() {
               </div>
             )}
 
-            {review.status === 'ready' && !hasProposal && (
+            {/*
+              Só se afirma que está tudo bem quando o próprio veredito diz isso.
+              Antes esta era a única mensagem possível na ausência de proposta, e
+              ela aparecia embaixo de um "Precisa de ajuste" — dizendo à pessoa
+              que os planos estavam adequados logo depois de explicar por que não
+              estavam.
+            */}
+            {advice.length > 0 && (
+              <Card>
+                <h2 className="text-xs uppercase tracking-wide text-zinc-500">Recomendações</h2>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Orientação para seguir o plano que você já tem — não há alteração a confirmar aqui.
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {advice.map((text) => (
+                    <li key={text} className="flex gap-2 text-sm leading-relaxed text-zinc-300">
+                      <span className="text-primary-500">•</span>
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+
+            {review.status === 'ready' && !hasProposal && advice.length === 0 && !proposalError
+              && review.goal_status === 'on_track' && (
               <Card className="border-emerald-900">
                 <p className="text-sm leading-relaxed text-zinc-300">
                   Nenhuma alteração proposta: o assistente considerou que os planos atuais continuam adequados ao
                   seu objetivo.
                 </p>
+              </Card>
+            )}
+
+            {review.status === 'ready' && !hasProposal && proposalError && (
+              <Card className="border-amber-900 bg-amber-950/20">
+                <h2 className="text-sm font-bold text-amber-300">A alteração não ficou pronta</h2>
+                <p className="mt-1 text-sm leading-relaxed text-zinc-300">{proposalError}</p>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                  Seus planos continuam como estavam. Vale refazer a avaliação — ou perguntar abaixo o que
+                  mudar, e aplicar você mesmo pelo ajuste do plano.
+                </p>
+                <Button fullWidth className="mt-3" isLoading={isStarting} onClick={start}>Avaliar de novo</Button>
               </Card>
             )}
 
@@ -330,6 +391,8 @@ export function ProgressReviewPage() {
                 </p>
               </Card>
             )}
+
+            <ProgressReviewChat reviewId={review.id} />
 
             <Button fullWidth variant="secondary" isLoading={isStarting} onClick={start} className="mt-2">
               Fazer uma nova avaliação

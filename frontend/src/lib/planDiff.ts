@@ -63,7 +63,22 @@ export function trainingDiffLines(current: ProposedTrainingPlan, proposed: Propo
       }
     }
   }
-  return lines;
+  return withDetailFallback(lines, current, proposed);
+}
+
+/**
+ * A lista acima só enxerga o que dá para nomear: dias, exercícios e volume. Um
+ * plano pode voltar do assistente com descanso, observação ou instrução
+ * diferente e produzir zero linhas — e aí `lines.length === 0` mentiria dizendo
+ * que nada muda. A comparação bruta fecha esse buraco: se o JSON difere e nada
+ * foi nomeado, é ajuste de detalhe, e a tela precisa saber que existe.
+ *
+ * Nenhuma linha com o JSON idêntico é a resposta certa: o assistente reescreveu
+ * o plano igual, então não há o que confirmar.
+ */
+function withDetailFallback<T>(lines: DiffLine[], current: T, proposed: T): DiffLine[] {
+  if (lines.length > 0 || JSON.stringify(current) === JSON.stringify(proposed)) return lines;
+  return [{ kind: 'changed', text: 'Ajustes de detalhe (descanso, observações ou instruções)' }];
 }
 
 /** "3x12" para carga, "3x45s" para exercício por tempo. */
@@ -114,7 +129,7 @@ export function nutritionDiffLines(current: ProposedNutritionPlan, proposed: Pro
       lines.push({ kind: 'removed', text: `Refeição removida: ${meal.name}` });
     }
   }
-  return lines;
+  return withDetailFallback(lines, current, proposed);
 }
 
 function pushTargetDiff(lines: DiffLine[], label: string, before: number, after: number, unit: string) {

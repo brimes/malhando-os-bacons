@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { apiClient } from './client';
-import type { ApplyProgressReviewInput, ProgressReview } from '../types';
+import type {
+  ApplyProgressReviewInput,
+  ProgressReview,
+  ProgressReviewChatResponse,
+  ProgressReviewMessage,
+} from '../types';
 
 export const progressReviewsApi = {
   /**
@@ -38,5 +43,15 @@ export const progressReviewsApi = {
 
   discard: async (id: number): Promise<ProgressReview> => (
     await apiClient.post<ProgressReview>(`/progress-reviews/${id}/discard`)
+  ).data,
+
+  chat: async (id: number): Promise<ProgressReviewMessage[]> => (
+    await apiClient.get<ProgressReviewMessage[]>(`/progress-reviews/${id}/chat`)
+  ).data,
+
+  // Roda contra o assistente ao vivo (o backend dá até 90s), bem acima do
+  // timeout padrão do cliente, que é dimensionado para CRUD.
+  ask: async (id: number, message: string): Promise<ProgressReviewChatResponse> => (
+    await apiClient.post<ProgressReviewChatResponse>(`/progress-reviews/${id}/chat`, { message }, { timeout: 95000 })
   ).data,
 };

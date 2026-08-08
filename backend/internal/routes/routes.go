@@ -149,6 +149,8 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /api/progress-reviews/{id}", chain(progressReviewHandler.Get, auth))
 	mux.HandleFunc("POST /api/progress-reviews/{id}/apply", chain(progressReviewHandler.Apply, auth))
 	mux.HandleFunc("POST /api/progress-reviews/{id}/discard", chain(progressReviewHandler.Discard, auth))
+	mux.HandleFunc("GET /api/progress-reviews/{id}/chat", chain(progressReviewHandler.ChatList, auth))
+	mux.HandleFunc("POST /api/progress-reviews/{id}/chat", chain(progressReviewHandler.ChatSend, auth))
 
 	// Dashboard
 	mux.HandleFunc("GET /api/dashboard", chain(dashboardHandler.Get, auth))

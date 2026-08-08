@@ -714,6 +714,13 @@ export interface ProgressReview {
   /** Ausente quando não há o que mudar naquele plano — o caso comum. */
   training_change?: ProgressReviewTrainingChange;
   nutrition_change?: ProgressReviewNutritionChange;
+  /**
+   * Preenchido quando o assistente disse que aquele plano tinha que mudar e a
+   * reescrita não saiu. Sem isso a tela não distingue "não há o que mudar" de
+   * "havia o que mudar e falhou" — e afirmava que estava tudo bem nos dois.
+   */
+  training_proposal_error?: string;
+  nutrition_proposal_error?: string;
   applied_training: boolean;
   applied_nutrition: boolean;
   error?: string;
@@ -797,4 +804,17 @@ export interface ProposedNutritionMealItem {
 export interface ApplyProgressReviewInput {
   apply_training: boolean;
   apply_nutrition: boolean;
+}
+
+export interface ProgressReviewMessage {
+  id: number;
+  review_id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
+export interface ProgressReviewChatResponse {
+  user_message: ProgressReviewMessage;
+  message: ProgressReviewMessage;
 }
