@@ -35,9 +35,21 @@ public class MainActivity extends BridgeActivity {
             // is not always covered by the status bar inset.
             Insets bars = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            // The keyboard inset is deliberately excluded: the window already
-            // resizes for it, and adding it here would shift the layout twice.
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+
+            // The keyboard has to be padded for here too. It used to be left out,
+            // on the assumption that the window resizes for it on its own — it
+            // does not, once edge-to-edge is enforced, and returning CONSUMED
+            // below means nothing downstream ever hears about the IME either. The
+            // measured result on device was the keyboard drawn straight over the
+            // page: the field being typed into stayed hidden underneath it.
+            //
+            // max, not sum: while the keyboard is up it covers the navigation bar,
+            // so the IME inset already includes that height. Adding them would
+            // leave a gap the size of the nav bar above the keyboard.
+            Insets ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+            int bottom = Math.max(bars.bottom, ime.bottom);
+
+            view.setPadding(bars.left, bars.top, bars.right, bottom);
             return WindowInsetsCompat.CONSUMED;
         });
     }
