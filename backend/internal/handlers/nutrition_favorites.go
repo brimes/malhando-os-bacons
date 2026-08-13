@@ -31,7 +31,8 @@ func groupKeyFor(foodItemID *int64, foodName string) string {
 // then the rest of the history, also alphabetically. times_logged and
 // last_logged_at stay in the payload (the screen still shows them, and
 // nothing else sorts by them anymore), just not in ORDER BY. Capped at 50
-// rows — beyond that the person searches instead.
+// rows, escolhidas por uso — ver o comentário sobre `selected` no fim da
+// consulta para por que o corte não pode ser alfabético.
 //
 // The group_key expression here is SQL for the same rule groupKeyFor applies
 // in Go, and is written to match migration 017's translate() call
@@ -71,16 +72,37 @@ combined AS (
 	       0 AS times_logged, NULL::timestamptz AS last_logged_at, f.id AS favorite_id
 	FROM nutrition_favorites f
 	WHERE f.user_id = $1 AND NOT EXISTS (SELECT 1 FROM history h WHERE h.group_key = f.group_key)
+),
+-- Quem entra na lista e como ela é exibida são duas perguntas diferentes, e
+-- misturá-las escondia comida.
+--
+-- O corte era alfabético: ordenava por nome e pegava as 50 primeiras. Passando
+-- de 50 alimentos distintos, tudo do fim do alfabeto sumia — e sumia em
+-- silêncio, de um dia para o outro, bastando registrar algo que ordenasse
+-- antes. Foi assim que "Pão" desapareceu depois de meses aparecendo.
+--
+-- O "então a pessoa busca" que justificava o limite não cobre esse caso: a
+-- busca (SearchFoods) só enxerga food_items, e comida registrada como texto
+-- livre não tem linha lá. Fora da lista, ela fica inalcançável pelos dois
+-- caminhos.
+--
+-- Agora o corte é por uso: as 50 mais recentes, favoritos sempre dentro. O que
+-- a pessoa come de verdade não cai fora, porque comer de novo a traz de volta
+-- para o topo do critério. A exibição continua alfabética, favoritos em bloco,
+-- que é como ela foi pedida.
+selected AS (
+	SELECT * FROM combined
+	ORDER BY (favorite_id IS NOT NULL) DESC, last_logged_at DESC NULLS LAST
+	LIMIT 50
 )
 SELECT group_key, food_item_id, food_name, quantity_g, meal_type, calories, protein_g, carbs_g, fat_g,
        times_logged, last_logged_at, favorite_id
-FROM combined
+FROM selected
 ORDER BY
 	(favorite_id IS NOT NULL) DESC,
 	lower(translate(trim(food_name),
 	       'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
-	       'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC')) ASC
-LIMIT 50`
+	       'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC')) ASC`
 
 // GetLogHistory answers the "+ Log" screen's default view (nothing typed
 // yet): what this person has actually eaten before, favorites pinned to the
