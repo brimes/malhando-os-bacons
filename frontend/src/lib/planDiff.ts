@@ -15,6 +15,19 @@ export interface DiffLine {
 }
 
 /**
+ * Coleção que pode chegar `null`, e chega.
+ *
+ * `TrainingPlanInput.Days` e `NutritionPlanInput.Meals` são slices em Go, e
+ * slice nil serializa como `null`, não como `[]`. Um plano nutricional criado
+ * pelo caminho manual não tem cardápio nenhum — a tela de avaliação quebrava
+ * inteira nesse caso, com o ErrorBoundary no lugar da análise, porque aqui se
+ * chamava `.map` direto no `null`.
+ */
+function lista<T>(value: T[] | null | undefined): T[] {
+  return value ?? [];
+}
+
+/**
  * O diff é por NOME, não por posição. O assistente devolve o plano inteiro
  * reescrito e pode reordenar exercícios sem que nada tenha mudado de verdade;
  * comparar posição a posição transformaria uma troca de ordem numa lista de
@@ -22,15 +35,17 @@ export interface DiffLine {
  */
 export function trainingDiffLines(current: ProposedTrainingPlan, proposed: ProposedTrainingPlan): DiffLine[] {
   const lines: DiffLine[] = [];
-  const dayCount = Math.max(current.days.length, proposed.days.length);
+  const currentDays = lista(current.days);
+  const proposedDays = lista(proposed.days);
+  const dayCount = Math.max(currentDays.length, proposedDays.length);
 
   for (let index = 0; index < dayCount; index += 1) {
-    const before = current.days[index];
-    const after = proposed.days[index];
+    const before = currentDays[index];
+    const after = proposedDays[index];
     const label = after?.name ?? before?.name ?? `Dia ${index + 1}`;
 
     if (!before) {
-      lines.push({ kind: 'added', text: `Novo dia: ${label} (${after.exercises.length} exercícios)` });
+      lines.push({ kind: 'added', text: `Novo dia: ${label} (${lista(after.exercises).length} exercícios)` });
       continue;
     }
     if (!after) {
@@ -41,10 +56,10 @@ export function trainingDiffLines(current: ProposedTrainingPlan, proposed: Propo
       lines.push({ kind: 'changed', text: `${before.name} passa a se chamar ${after.name}` });
     }
 
-    const beforeByName = new Map(before.exercises.map((exercise) => [exercise.exercise_name, exercise]));
-    const afterByName = new Map(after.exercises.map((exercise) => [exercise.exercise_name, exercise]));
+    const beforeByName = new Map(lista(before.exercises).map((exercise) => [exercise.exercise_name, exercise]));
+    const afterByName = new Map(lista(after.exercises).map((exercise) => [exercise.exercise_name, exercise]));
 
-    for (const exercise of after.exercises) {
+    for (const exercise of lista(after.exercises)) {
       const previous = beforeByName.get(exercise.exercise_name);
       if (!previous) {
         lines.push({ kind: 'added', text: `${label}: entra ${exercise.exercise_name} (${volumeOf(exercise)})` });
@@ -57,7 +72,7 @@ export function trainingDiffLines(current: ProposedTrainingPlan, proposed: Propo
         });
       }
     }
-    for (const exercise of before.exercises) {
+    for (const exercise of lista(before.exercises)) {
       if (!afterByName.has(exercise.exercise_name)) {
         lines.push({ kind: 'removed', text: `${label}: sai ${exercise.exercise_name}` });
       }
@@ -96,18 +111,18 @@ export function nutritionDiffLines(current: ProposedNutritionPlan, proposed: Pro
   pushTargetDiff(lines, 'Carboidrato', current.carbs_target, proposed.carbs_target, 'g');
   pushTargetDiff(lines, 'Gordura', current.fat_target, proposed.fat_target, 'g');
 
-  const beforeMeals = new Map(current.meals.map((meal) => [meal.name, meal]));
-  const afterMeals = new Map(proposed.meals.map((meal) => [meal.name, meal]));
+  const beforeMeals = new Map(lista(current.meals).map((meal) => [meal.name, meal]));
+  const afterMeals = new Map(lista(proposed.meals).map((meal) => [meal.name, meal]));
 
-  for (const meal of proposed.meals) {
+  for (const meal of lista(proposed.meals)) {
     const previous = beforeMeals.get(meal.name);
     if (!previous) {
       lines.push({ kind: 'added', text: `Nova refeição: ${meal.name} (${caloriesOf(meal)} kcal)` });
       continue;
     }
-    const beforeItems = new Map(previous.items.map((item) => [item.food_name, item]));
-    const afterItems = new Map(meal.items.map((item) => [item.food_name, item]));
-    for (const item of meal.items) {
+    const beforeItems = new Map(lista(previous.items).map((item) => [item.food_name, item]));
+    const afterItems = new Map(lista(meal.items).map((item) => [item.food_name, item]));
+    for (const item of lista(meal.items)) {
       const before = beforeItems.get(item.food_name);
       if (!before) {
         lines.push({ kind: 'added', text: `${meal.name}: entra ${item.food_name} (${round(item.quantity_g)}g)` });
@@ -118,13 +133,13 @@ export function nutritionDiffLines(current: ProposedNutritionPlan, proposed: Pro
         });
       }
     }
-    for (const item of previous.items) {
+    for (const item of lista(previous.items)) {
       if (!afterItems.has(item.food_name)) {
         lines.push({ kind: 'removed', text: `${meal.name}: sai ${item.food_name}` });
       }
     }
   }
-  for (const meal of current.meals) {
+  for (const meal of lista(current.meals)) {
     if (!afterMeals.has(meal.name)) {
       lines.push({ kind: 'removed', text: `Refeição removida: ${meal.name}` });
     }
@@ -142,7 +157,7 @@ function pushTargetDiff(lines: DiffLine[], label: string, before: number, after:
 }
 
 function caloriesOf(meal: ProposedNutritionMeal): number {
-  return round(meal.items.reduce((total, item) => total + item.calories, 0));
+  return round(lista(meal.items).reduce((total, item) => total + item.calories, 0));
 }
 
 function round(value: number): number {

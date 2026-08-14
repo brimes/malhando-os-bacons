@@ -754,14 +754,15 @@ export interface ProposedTrainingPlan {
   target_date: string;
   days_per_week: number;
   session_duration_minutes: number;
-  days: ProposedTrainingDay[];
+  /** `null` quando o plano veio sem dias: slice nil em Go serializa assim, não como []. */
+  days: ProposedTrainingDay[] | null;
 }
 
 export interface ProposedTrainingDay {
   name: string;
   focus: string;
   instructions: string;
-  exercises: ProposedTrainingExercise[];
+  exercises: ProposedTrainingExercise[] | null;
 }
 
 export interface ProposedTrainingExercise {
@@ -781,7 +782,8 @@ export interface ProposedNutritionPlan {
   carbs_target: number;
   fat_target: number;
   rationale: string;
-  meals: ProposedNutritionMeal[];
+  /** `null` num plano manual, que não tem cardápio nenhum. */
+  meals: ProposedNutritionMeal[] | null;
 }
 
 export interface ProposedNutritionMeal {
@@ -789,7 +791,7 @@ export interface ProposedNutritionMeal {
   name: string;
   suggested_at?: string | null;
   notes: string;
-  items: ProposedNutritionMealItem[];
+  items: ProposedNutritionMealItem[] | null;
 }
 
 export interface ProposedNutritionMealItem {
