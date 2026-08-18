@@ -24,6 +24,8 @@ interface NutritionState {
   error: string | null;
   logHistory: FoodLogHistoryEntry[];
   isLoadingHistory: boolean;
+  /** Resultado da busca no histórico — separado de `logHistory`, que é a lista padrão. */
+  historyResults: FoodLogHistoryEntry[];
 
   fetchPlans: () => Promise<void>;
   createPlan: (input: CreateNutritionPlanInput) => Promise<void>;
@@ -32,6 +34,12 @@ interface NutritionState {
   updateLog: (id: number, input: UpdateFoodLogInput, date?: string) => Promise<void>;
   deleteLog: (id: number, date?: string) => Promise<void>;
   searchFoods: (query: string) => Promise<void>;
+  /**
+   * Busca no histórico da pessoa, no servidor. A tela filtrava localmente a
+   * lista já cortada em 50, então comida registrada há tempo era inalcançável
+   * — nem pela lista, nem por `searchFoods`, que só enxerga o catálogo.
+   */
+  searchHistory: (query: string) => Promise<void>;
   clearSearch: () => void;
   fetchPersonalFoods: () => Promise<void>;
   createFood: (input: CreateFoodItemInput) => Promise<FoodItem>;
@@ -64,6 +72,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   error: null,
   logHistory: [],
   isLoadingHistory: false,
+  historyResults: [],
 
   fetchPlans: async () => {
     set({ isLoading: !hasCache(plansKey()), error: null });
@@ -196,7 +205,26 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     }
   },
 
-  clearSearch: () => set({ searchResults: [] }),
+  searchHistory: async (query: string) => {
+    const termo = query.trim();
+    if (!termo) {
+      set({ historyResults: [] });
+      return;
+    }
+    if (!isNetworkOnline()) {
+      // Offline a lista padrão em cache ainda serve, e a tela cai no filtro
+      // local sobre ela — pior que a busca do servidor, melhor que um erro.
+      set({ historyResults: [] });
+      return;
+    }
+    try {
+      set({ historyResults: await nutritionApi.getLogHistory(termo) });
+    } catch {
+      set({ historyResults: [] });
+    }
+  },
+
+  clearSearch: () => set({ searchResults: [], historyResults: [] }),
 
   fetchPersonalFoods: async () => {
     set({ isLoading: !hasCache(personalFoodsKey()), error: null });

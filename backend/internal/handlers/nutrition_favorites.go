@@ -90,8 +90,18 @@ combined AS (
 -- a pessoa come de verdade não cai fora, porque comer de novo a traz de volta
 -- para o topo do critério. A exibição continua alfabética, favoritos em bloco,
 -- que é como ela foi pedida.
+-- $2 é o texto buscado, já normalizado, ou NULL quando a tela abriu sem nada
+-- digitado. Com busca, o corte por uso continua valendo, mas só entre o que
+-- casa — é isso que torna alcançável a comida que ficou fora das 50 mais
+-- recentes. Sem esta cláusula, buscar "estrogonofe" não achava nada: a busca de
+-- alimentos (SearchFoods) só enxerga food_items, e comida registrada como texto
+-- livre não tem linha lá.
 selected AS (
 	SELECT * FROM combined
+	WHERE $2::text IS NULL
+	   OR lower(translate(trim(food_name),
+	        'áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+	        'aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC')) LIKE '%' || $2 || '%'
 	ORDER BY (favorite_id IS NOT NULL) DESC, last_logged_at DESC NULLS LAST
 	LIMIT 50
 )
@@ -115,7 +125,14 @@ func (h *NutritionHandler) GetLogHistory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rows, err := h.db.Pool.Query(r.Context(), historyQuery, userID)
+	// `q` vazio é NULL, não string vazia: LIKE '%%' casaria com tudo e
+	// devolveria a lista inteira como se fosse resultado de busca.
+	var busca *string
+	if termo := normalizeSearchText(r.URL.Query().Get("q")); termo != "" {
+		busca = &termo
+	}
+
+	rows, err := h.db.Pool.Query(r.Context(), historyQuery, userID, busca)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch log history"})
 		return

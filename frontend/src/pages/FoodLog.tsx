@@ -162,6 +162,8 @@ export function FoodLogPage() {
     searchFoods,
     searchResults,
     isSearching,
+    searchHistory,
+    historyResults,
     clearSearch,
     logHistory,
     isLoadingHistory,
@@ -202,11 +204,18 @@ export function FoodLogPage() {
   useEffect(() => {
     clearTimeout(searchTimeout.current);
     if (query.trim().length >= 2) {
-      searchTimeout.current = setTimeout(() => searchFoods(query.trim()), 400);
+      searchTimeout.current = setTimeout(() => {
+        const termo = query.trim();
+        // As duas fontes são consultadas juntas: o catálogo (food_items) e o
+        // histórico da pessoa. Só o segundo alcança o que ela registrou
+        // digitando, que não tem linha no catálogo.
+        searchFoods(termo);
+        searchHistory(termo);
+      }, 400);
     } else {
       clearSearch();
     }
-  }, [query, searchFoods, clearSearch]);
+  }, [query, searchFoods, searchHistory, clearSearch]);
 
   const sortedHistory = useMemo(() => sortHistory(logHistory), [logHistory]);
   const favorites = useMemo(() => sortedHistory.filter((e) => e.favorite_id), [sortedHistory]);
@@ -215,10 +224,15 @@ export function FoodLogPage() {
   const trimmedQuery = query.trim();
   const isSearchingQuery = trimmedQuery.length > 0;
   const normalizedQuery = trimmedQuery.toLowerCase();
-  const matchingHistory = useMemo(
+  // A busca do servidor varre o histórico inteiro; o filtro local só cobre a
+  // lista padrão, que vem cortada em 50. Ele continua aqui como resposta
+  // imediata enquanto o servidor não voltou, e como única resposta offline —
+  // mas quando o servidor responde, é ele que manda.
+  const localMatches = useMemo(
     () => sortedHistory.filter((e) => e.food_name.toLowerCase().includes(normalizedQuery)),
     [sortedHistory, normalizedQuery]
   );
+  const matchingHistory = historyResults.length > 0 ? historyResults : localMatches;
 
   const openFromFoodItem = (food: FoodItem) => {
     setSubmitError(null);

@@ -83,8 +83,14 @@ export const nutritionApi = {
   // default view — cached like any other GET, which is what makes it useful
   // offline (see NON_CACHEABLE_GET_PATHS' comment for the paths deliberately
   // excluded from that).
-  getLogHistory: async (): Promise<FoodLogHistoryEntry[]> => {
-    const { data } = await apiClient.get<FoodLogHistoryEntry[]>('/nutrition/logs/history');
+  // Sem `query`, é a lista padrão da tela de registrar. Com `query`, é uma
+  // busca no histórico inteiro da pessoa — o único caminho até a comida
+  // registrada como texto livre, que não existe em `food_items` e por isso é
+  // invisível para `searchFoods`.
+  getLogHistory: async (query?: string): Promise<FoodLogHistoryEntry[]> => {
+    const { data } = await apiClient.get<FoodLogHistoryEntry[]>('/nutrition/logs/history', {
+      params: query ? { q: query } : undefined,
+    });
     return data;
   },
 

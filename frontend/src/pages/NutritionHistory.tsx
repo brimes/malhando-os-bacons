@@ -4,9 +4,11 @@ import { Card } from '../components/Card';
 import { OriginBadge } from '../components/OriginBadge';
 import { MonthlyCalendar } from '../components/MonthlyCalendar';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
+import { CopyFoodLogModal } from '../components/CopyFoodLogModal';
 import { nutritionApi } from '../api/nutrition';
 import { isNetworkOnline } from '../lib/offline';
 import {
+  createFoodLog,
   dateKey,
   foodLogsCache,
   isDateSynced,
@@ -56,6 +58,7 @@ export function NutritionHistoryPage() {
   // would make the calendar and the diary fight over the same slot.
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingLog, setEditingLog] = useState<FoodLog | null>(null);
+  const [copyingLog, setCopyingLog] = useState<FoodLog | null>(null);
 
   // Local-first: every log this device has ever pulled or written offline,
   // filtered per render. Re-renders on its own whenever a pull or the outbox
@@ -140,11 +143,30 @@ export function NutritionHistoryPage() {
 
   const openDay = (date: string) => {
     setEditingLog(null);
+    setCopyingLog(null);
     setSelectedDate((current) => (current === date ? null : date));
   };
 
   const handleSaveEdit = async (id: number, input: UpdateFoodLogInput) => {
     await updateFoodLog(id, input);
+  };
+
+  // Passa pelo repositório local, não pela API direto: a cópia aparece na hora
+  // no calendário e no dia de destino, e sobrevive a estar sem internet — a
+  // mesma fila que qualquer outro registro usa.
+  const handleCopy = async (log: FoodLog, date: string, mealType: MealType) => {
+    await createFoodLog({
+      food_item_id: log.food_item_id,
+      food_name: log.food_name,
+      quantity_g: log.quantity_g,
+      meal_type: mealType,
+      date,
+      calories: log.calories,
+      protein_g: log.protein_g,
+      carbs_g: log.carbs_g,
+      fat_g: log.fat_g,
+      origin: log.origin,
+    });
   };
 
   const byMeal = dayLogs.reduce<Partial<Record<MealType, FoodLog[]>>>((acc, log) => {
@@ -198,7 +220,8 @@ export function NutritionHistoryPage() {
                       <div className="space-y-2">
                         {logs.map((log) => (
                           <Card key={log.id} className="py-3">
-                            <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setEditingLog(log)}>
+                            <div className="flex items-center gap-2">
+                            <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setEditingLog(log)}>
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium text-white">
                                   {log.food_name}
@@ -213,6 +236,15 @@ export function NutritionHistoryPage() {
                                 </p>
                               </div>
                             </button>
+                            <button
+                              type="button"
+                              aria-label={`Copiar ${log.food_name} para outro dia`}
+                              onClick={() => setCopyingLog(log)}
+                              className="shrink-0 rounded-lg border border-zinc-700 px-2.5 py-2 text-xs text-zinc-400 active:bg-zinc-800"
+                            >
+                              Copiar
+                            </button>
+                            </div>
                           </Card>
                         ))}
                       </div>
@@ -232,6 +264,14 @@ export function NutritionHistoryPage() {
           log={editingLog}
           onClose={() => setEditingLog(null)}
           onSave={handleSaveEdit}
+        />
+      )}
+
+      {copyingLog && (
+        <CopyFoodLogModal
+          log={copyingLog}
+          onClose={() => setCopyingLog(null)}
+          onCopy={(date, mealType) => handleCopy(copyingLog, date, mealType)}
         />
       )}
     </>
