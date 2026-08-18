@@ -63,6 +63,9 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   /^\/nutrition\/plans\/\d+\/adjust/,
   /^\/nutrition\/photos/,
   /^\/nutrition\/suggestion/,
+  // Conversa viva com o assistente para montar um registro: replayed depois,
+  // chegaria uma pergunta sem ninguém para responder.
+  /^\/nutrition\/logs\/assistant/,
   /^\/nutrition\/cheat-day/,
   // Avaliação do resultado: pedir a análise é uma chamada viva ao assistente,
   // e aplicá-la reescreve os planos a partir de uma proposta que só existe no

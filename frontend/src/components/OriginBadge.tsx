@@ -11,6 +11,9 @@ const ORIGIN_LABELS: Partial<Record<FoodLog['origin'], string>> = {
   photo_label: 'Foto',
   plan: 'Plano',
   cheat_day: 'Dia do lixo',
+  // Procedência, não aviso de IA: diz que os números vieram de uma descrição
+  // conversada, que é o que a pessoa precisa reconhecer ao reler o histórico.
+  assistant: 'Conversa',
 };
 
 export function OriginBadge({ origin }: { origin: FoodLog['origin'] }) {

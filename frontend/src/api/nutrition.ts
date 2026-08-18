@@ -9,6 +9,8 @@ import type {
   FoodLogHistoryEntry,
   LabelAnalysis,
   NutritionCalendarData,
+  NutritionLogAssistantMessage,
+  NutritionLogDraft,
   NutritionFavorite,
   NutritionPlan,
   NutritionPlanJob,
@@ -138,6 +140,18 @@ export const nutritionApi = {
     // Runs synchronously against the coach (backend allows it up to 60s) —
     // the default client timeout is sized for plain CRUD, not this.
     const { data } = await apiClient.get<NutritionSuggestion>('/nutrition/suggestion', { timeout: 60000 });
+    return data;
+  },
+
+  // Modo IA da tela de registrar. A conversa inteira vai a cada turno: não há
+  // thread no servidor, ela é efêmera e morre com a tela. Timeout próprio,
+  // como as outras chamadas que rodam contra o assistente ao vivo.
+  logAssistant: async (
+    messages: NutritionLogAssistantMessage[],
+  ): Promise<NutritionLogDraft> => {
+    const { data } = await apiClient.post<NutritionLogDraft>(
+      '/nutrition/logs/assistant', { messages }, { timeout: 65000 },
+    );
     return data;
   },
 

@@ -242,7 +242,8 @@ export interface FoodLog {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
-  origin: 'manual' | 'plan' | 'photo_plate' | 'photo_label' | 'cheat_day';
+  /** `assistant` é o registro que nasceu da conversa do modo IA (migration 026). */
+  origin: 'manual' | 'plan' | 'photo_plate' | 'photo_label' | 'cheat_day' | 'assistant';
   client_log_id?: string;
   photo_id?: number;
   date: string;
@@ -819,4 +820,32 @@ export interface ProgressReviewMessage {
 export interface ProgressReviewChatResponse {
   user_message: ProgressReviewMessage;
   message: ProgressReviewMessage;
+}
+
+/**
+ * Um turno do modo IA de registrar refeição. `entries` só vem com
+ * `complete: true`, e nada foi gravado: a lista vai para conferência e é a
+ * pessoa que manda registrar — mesma regra da estimativa por foto.
+ */
+export interface NutritionLogDraft {
+  reply: string;
+  complete: boolean;
+  entries: NutritionLogDraftEntry[];
+}
+
+export interface NutritionLogDraftEntry {
+  food_name: string;
+  quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  meal_type: MealType;
+  /** AAAA-MM-DD, resolvida pelo assistente a partir de "ontem à noite" e afins. */
+  date: string;
+}
+
+export interface NutritionLogAssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }

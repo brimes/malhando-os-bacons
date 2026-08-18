@@ -5,10 +5,16 @@ import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { getErrorMessage } from '../api/client';
+import { FoodLogAssistant } from '../components/FoodLogAssistant';
 import { isNetworkOnline } from '../lib/offline';
 import { createFoodLog } from '../lib/local/repo/foodLogs';
 import { todayLocalDate } from '../lib/date';
-import type { FoodItem, FoodLogHistoryEntry, MealType } from '../types';
+import type {
+  FoodItem,
+  FoodLogHistoryEntry,
+  MealType,
+  NutritionLogDraftEntry,
+} from '../types';
 import { MEAL_TYPE_LABELS } from '../types';
 
 /**
@@ -176,6 +182,7 @@ export function FoodLogPage() {
 
   const [selection, setSelection] = useState<Selection | null>(null);
   const [manualMode, setManualMode] = useState(false);
+  const [aiMode, setAiMode] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Selection form (catalog food, past registration or favorite).
@@ -354,12 +361,42 @@ export function FoodLogPage() {
     }
   };
 
-  const showList = !selection && !manualMode;
+  // Registra tudo que o assistente propôs, cada item no dia e na refeição que
+  // ele identificou — é para isso que a data viaja em cada entrada em vez de
+  // uma só para o conjunto: "comi pizza ontem à noite e um lanche hoje" são
+  // dois dias numa conversa só.
+  const registrarDoAssistente = async (entries: NutritionLogDraftEntry[]) => {
+    for (const entry of entries) {
+      await createFoodLog({
+        food_name: entry.food_name,
+        meal_type: entry.meal_type,
+        quantity_g: entry.quantity_g,
+        date: entry.date,
+        origin: 'assistant',
+        calories: entry.calories,
+        protein_g: entry.protein_g,
+        carbs_g: entry.carbs_g,
+        fat_g: entry.fat_g,
+      });
+    }
+    navigate('/nutrition');
+  };
+
+  const showList = !selection && !manualMode && !aiMode;
 
   return (
     <>
       <Header title="Registrar Alimento" showBack />
       <div className="px-4 py-4 pb-24 space-y-4">
+        {aiMode && (
+          <>
+            <button type="button" onClick={() => setAiMode(false)} className="text-sm text-zinc-500">
+              ← Voltar para a busca
+            </button>
+            <FoodLogAssistant onRegistrar={registrarDoAssistente} />
+          </>
+        )}
+
         {showList && (
           <>
             <div className="relative">
@@ -378,13 +415,22 @@ export function FoodLogPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={openManual}
-              className="w-full rounded-2xl border border-dashed border-zinc-700 px-4 py-3 text-center text-sm font-semibold text-primary-400"
-            >
-              + Criar do zero
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setSubmitError(null); setAiMode(true); }}
+                className="rounded-2xl border border-primary-800 bg-primary-950/30 px-4 py-3 text-center text-sm font-semibold text-primary-300"
+              >
+                Descrever conversando
+              </button>
+              <button
+                type="button"
+                onClick={openManual}
+                className="rounded-2xl border border-dashed border-zinc-700 px-4 py-3 text-center text-sm font-semibold text-primary-400"
+              >
+                + Criar do zero
+              </button>
+            </div>
 
             {favoriteError && <p className="text-xs text-red-400">{favoriteError}</p>}
 
