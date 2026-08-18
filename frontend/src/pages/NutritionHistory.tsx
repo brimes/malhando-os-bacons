@@ -10,6 +10,7 @@ import { isNetworkOnline } from '../lib/offline';
 import {
   createFoodLog,
   dateKey,
+  deleteFoodLog,
   foodLogsCache,
   isDateSynced,
   isRangeSynced,
@@ -264,6 +265,7 @@ export function NutritionHistoryPage() {
           log={editingLog}
           onClose={() => setEditingLog(null)}
           onSave={handleSaveEdit}
+          onDelete={deleteFoodLog}
         />
       )}
 

@@ -206,7 +206,7 @@ export function NutritionPage() {
       </div>
 
       {editingLog && (
-        <EditFoodLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={handleSaveEdit} />
+        <EditFoodLogModal log={editingLog} onClose={() => setEditingLog(null)} onSave={handleSaveEdit} onDelete={deleteFoodLog} />
       )}
 
       {menuMeal && (() => {

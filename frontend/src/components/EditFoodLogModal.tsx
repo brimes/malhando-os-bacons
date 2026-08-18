@@ -41,9 +41,19 @@ interface EditFoodLogModalProps {
   log: FoodLog;
   onClose: () => void;
   onSave: (id: number, input: UpdateFoodLogInput) => Promise<void>;
+  /**
+   * Opcional para não obrigar quem não tem o que fazer com isso. Onde vem
+   * preenchido, é o único caminho para apagar um registro que não é de hoje:
+   * o `×` da tela do dia só alcança o dia de hoje, e o histórico não tinha
+   * nada equivalente — buraco que só apareceu quando passou a ser fácil
+   * registrar em dia passado (copiar, e o modo IA resolvendo "ontem à noite").
+   */
+  onDelete?: (id: number) => Promise<void>;
 }
 
-export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps) {
+export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLogModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [name, setName] = useState(log.food_name);
   const [mealType, setMealType] = useState<MealType>(log.meal_type);
   const [quantity, setQuantity] = useState(String(log.quantity_g));
@@ -238,6 +248,50 @@ export function EditFoodLogModal({ log, onClose, onSave }: EditFoodLogModalProps
               Cancelar
             </button>
           </div>
+
+          {onDelete && (
+            <div className="border-t border-zinc-800 pt-3">
+              {confirmarExclusao ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      setError(null);
+                      try {
+                        await onDelete(log.id);
+                        onClose();
+                      } catch (deleteError) {
+                        setError(getErrorMessage(deleteError));
+                        setIsDeleting(false);
+                        setConfirmarExclusao(false);
+                      }
+                    }}
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {isDeleting ? 'Apagando...' : 'Apagar de verdade'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => setConfirmarExclusao(false)}
+                    className="shrink-0 px-3 text-xs text-zinc-500"
+                  >
+                    Não
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmarExclusao(true)}
+                  className="w-full py-2 text-sm font-medium text-red-400"
+                >
+                  Apagar registro
+                </button>
+              )}
+            </div>
+          )}
         </form>
       </div>
     </div>
