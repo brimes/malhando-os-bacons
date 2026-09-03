@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient, getErrorMessage, registerUnauthorizedHandler } from '../api/client';
-import { clearOfflineData, isConnectivityError } from '../lib/offline';
+import { clearOfflineData, discardPendingWrites, isConnectivityError } from '../lib/offline';
 import type { User, AuthResponse } from '../types';
 
 interface AuthState {
@@ -15,6 +15,7 @@ interface AuthState {
 	register: (name: string, email: string, password: string) => Promise<void>;
 	loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
+  deleteAccount: (password: string) => Promise<void>;
   clearError: () => void;
   fetchMe: () => Promise<void>;
 }
@@ -77,6 +78,23 @@ export const useAuthStore = create<AuthState>()(
         // shared device the next login must not inherit either of them.
         clearOfflineData();
         set({ token: null, user: null, isAuthenticated: false });
+      },
+
+      // Apagar a conta é o único caminho que descarta a fila offline junto: ela
+      // guarda escritas destinadas a uma conta que deixou de existir, e o
+      // servidor as recusaria uma a uma para sempre.
+      deleteAccount: async (password: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          await apiClient.delete('/auth/me', { data: { password } });
+        } catch (err) {
+          set({ error: getErrorMessage(err), isLoading: false });
+          throw err;
+        }
+        localStorage.removeItem('mob_token');
+        clearOfflineData();
+        discardPendingWrites();
+        set({ token: null, user: null, isAuthenticated: false, isLoading: false });
       },
 
       clearError: () => set({ error: null }),

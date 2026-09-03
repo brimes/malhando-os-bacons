@@ -26,6 +26,7 @@ export {
   isLocalId,
   dropQueuedMutations,
   clearOfflineData,
+  discardPendingWrites,
   readLocalActiveSession,
   writeLocalActiveSession,
 } from './offlineStore';

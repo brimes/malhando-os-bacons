@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { DeleteAccountModal } from '../components/DeleteAccountModal';
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, logout, deleteAccount } = useAuthStore();
   const { state, isLoading, resetObjective } = useOnboardingStore();
+  const [isDeleteOpen, setDeleteOpen] = useState(false);
 
   const redefineObjective = async () => {
     if (!window.confirm('Deseja apagar a conversa atual e definir um novo objetivo?')) return;
@@ -139,8 +142,27 @@ export function ProfilePage() {
           Sair da conta
         </Button>
 
+        {/* Excluir a conta fica aqui, visível, e não escondido atrás de um
+            e-mail de suporte: a Apple exige o caminho dentro do app, e quem
+            quer sair não deveria ter de caçar como. */}
+        <button
+          type="button"
+          onClick={() => setDeleteOpen(true)}
+          className="w-full py-2 text-center text-sm text-zinc-500 underline underline-offset-4"
+        >
+          Excluir minha conta
+        </button>
+
         <p className="pt-2 text-center text-xs text-zinc-700">MOB versão 0.1.0</p>
       </div>
+
+      {isDeleteOpen && (
+        <DeleteAccountModal
+          hasPassword={!user?.google_id}
+          onClose={() => setDeleteOpen(false)}
+          onConfirm={deleteAccount}
+        />
+      )}
     </>
   );
 }

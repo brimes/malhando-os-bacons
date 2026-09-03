@@ -17,7 +17,7 @@ import (
 func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, googleClientID, allowedOrigins, photoDir string) http.Handler {
 	mux := http.NewServeMux()
 
-	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID)
+	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID, photoDir)
 	workoutHandler := handlers.NewWorkoutHandler(database)
 	sessionHandler := handlers.NewWorkoutSessionHandler(database)
 	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
@@ -42,6 +42,9 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/auth/google", authHandler.GoogleLogin)
 	mux.HandleFunc("GET /api/auth/me", chain(authHandler.Me, auth))
+	// Excluir a conta de dentro do app é exigência da Apple (5.1.1(v)) para
+	// quem deixa criar conta. Apaga de verdade: cascata no banco e as fotos.
+	mux.HandleFunc("DELETE /api/auth/me", chain(authHandler.DeleteAccount, auth))
 
 	// Onboarding routes
 	mux.HandleFunc("GET /api/onboarding", chain(onboardingHandler.Get, auth))

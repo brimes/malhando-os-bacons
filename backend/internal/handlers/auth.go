@@ -5,8 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/mail"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -20,10 +24,13 @@ type AuthHandler struct {
 	db             *db.DB
 	jwtSecret      string
 	googleClientID string
+	// photoDir is here only so deleting an account can delete the meal photos
+	// too: they live on disk, outside every cascade the database performs.
+	photoDir string
 }
 
-func NewAuthHandler(database *db.DB, jwtSecret, googleClientID string) *AuthHandler {
-	return &AuthHandler{db: database, jwtSecret: jwtSecret, googleClientID: googleClientID}
+func NewAuthHandler(database *db.DB, jwtSecret, googleClientID, photoDir string) *AuthHandler {
+	return &AuthHandler{db: database, jwtSecret: jwtSecret, googleClientID: googleClientID, photoDir: photoDir}
 }
 
 type googleTokenInfo struct {
@@ -152,6 +159,64 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, user)
+}
+
+// DeleteAccount erases the account and everything hanging off it. Apple requires
+// this path to exist inside the app (guideline 5.1.1(v)) for any app that lets
+// someone create an account, and the LGPD requires the deletion to be real.
+//
+// The row is what carries the data away: every table that references
+// `users(id)` does so with ON DELETE CASCADE, so a single DELETE takes profile,
+// plans, workouts, sets, food logs and chats with it. The photos are the
+// exception — they are files, and no cascade reaches them.
+func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+
+	var req models.DeleteAccountRequest
+	// An empty body is fine for a Google account, which has no password.
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	var passwordHash *string
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT password_hash FROM users WHERE id = $1`, userID,
+	).Scan(&passwordHash); err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
+		return
+	}
+	// A stolen phone with an open session is the threat here, so the password is
+	// asked for again. An account created through Google has none to ask for;
+	// there the confirmation in the app is what stands.
+	if passwordHash != nil {
+		if bcrypt.CompareHashAndPassword([]byte(*passwordHash), []byte(req.Password)) != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "senha incorreta"})
+			return
+		}
+	}
+
+	if _, err := h.db.Pool.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, userID); err != nil {
+		slog.Error("failed to delete account", "user_id", userID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to delete account"})
+		return
+	}
+
+	// After the row, never before: a failed DELETE would otherwise leave a live
+	// account whose photos are gone. Orphan files are recoverable by a sweep;
+	// deleted photos under a surviving account are not.
+	if h.photoDir != "" {
+		dir := filepath.Join(h.photoDir, strconv.FormatInt(userID, 10))
+		if err := os.RemoveAll(dir); err != nil {
+			slog.Error("account deleted but its photos remain on disk", "user_id", userID, "dir", dir, "error", err)
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AuthHandler) upsertUser(ctx context.Context, info *googleTokenInfo) (*models.User, error) {

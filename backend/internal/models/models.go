@@ -158,6 +158,12 @@ type RegisterRequest struct {
 	Password string `json:"password"`
 }
 
+// DeleteAccountRequest carries the password of whoever is asking. It is empty
+// for accounts created through Google, which have no password to confirm with.
+type DeleteAccountRequest struct {
+	Password string `json:"password"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
