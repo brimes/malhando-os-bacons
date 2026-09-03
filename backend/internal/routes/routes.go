@@ -163,6 +163,11 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /privacidade", legalHandler.Privacy)
 	mux.HandleFunc("GET /privacy", legalHandler.Privacy)
 
+	// Página de suporte: pública pelo mesmo motivo. A App Store exige uma URL de
+	// suporte por versão, e o revisor a abre sem conta.
+	mux.HandleFunc("GET /suporte", legalHandler.Support)
+	mux.HandleFunc("GET /support", legalHandler.Support)
+
 	// Health check. Used by k8s liveness/readiness probes — do not remove or
 	// move behind auth.
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
