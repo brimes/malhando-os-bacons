@@ -29,6 +29,8 @@ export {
   discardPendingWrites,
   readLocalActiveSession,
   writeLocalActiveSession,
+  readDismissedRoutineDays,
+  dismissRoutineDay,
 } from './offlineStore';
 
 export {

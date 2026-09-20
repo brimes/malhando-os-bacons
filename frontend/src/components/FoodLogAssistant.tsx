@@ -14,8 +14,13 @@ const formatarData = (valor: string) =>
   new Date(`${valor.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
 interface FoodLogAssistantProps {
-  /** Grava os registros conferidos. A tela decide para onde ir depois. */
-  onRegistrar: (entries: NutritionLogDraftEntry[]) => Promise<void>;
+  /**
+   * Grava os registros conferidos. A tela decide para onde ir depois.
+   * `descricao` é o que a pessoa digitou na conversa (só as mensagens dela,
+   * concatenadas) — usado pelo fluxo de "Extrapolei hoje" (`Nutrition.tsx`)
+   * para levar o relato do excesso como mensagem inicial do dia do lixo.
+   */
+  onRegistrar: (entries: NutritionLogDraftEntry[], descricao: string) => Promise<void>;
 }
 
 /**
@@ -70,7 +75,8 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
     setIsSaving(true);
     setError(null);
     try {
-      await onRegistrar(entries);
+      const descricao = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n');
+      await onRegistrar(entries, descricao);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
       setIsSaving(false);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -9,6 +9,11 @@ import type { CheatDayMessage, CheatDaySession } from '../types';
 
 export function CheatDayPage() {
   const navigate = useNavigate();
+  // Vinda de "Extrapolei hoje" (Nutrition.tsx): o relato do excesso já contado
+  // ao assistente de registro, para não repetir a mesma descrição duas vezes.
+  const location = useLocation();
+  const initialMessage = (location.state as { initialMessage?: string } | null)?.initialMessage;
+  const sentInitialMessage = useRef(false);
   const [session, setSession] = useState<CheatDaySession | null>(null);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +32,18 @@ export function CheatDayPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
   }, [session?.messages.length, isSending]);
+
+  // Só dispara uma vez, e só numa conversa vazia: sessão de dia do lixo é
+  // única por pessoa (ver CheatDaySession), então chegar aqui com mensagens
+  // já existentes significa reabrir uma conversa em andamento, não começar
+  // uma nova a partir do relato do excesso.
+  useEffect(() => {
+    if (isLoading || sentInitialMessage.current || !initialMessage) return;
+    if ((session?.messages.length ?? 0) > 0) return;
+    sentInitialMessage.current = true;
+    void send(initialMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, session, initialMessage]);
 
   const send = async (text: string) => {
     const content = text.trim();

@@ -290,8 +290,12 @@ export interface FoodLog {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
-  /** `assistant` é o registro que nasceu da conversa do modo IA (migration 026). */
-  origin: 'manual' | 'plan' | 'photo_plate' | 'photo_label' | 'cheat_day' | 'assistant';
+  /**
+   * `assistant` é o registro que nasceu da conversa do modo IA (migration 026).
+   * `routine` é a confirmação de um dia normal destilado do histórico
+   * (migration 031) — estimativa, não medição item a item.
+   */
+  origin: 'manual' | 'plan' | 'photo_plate' | 'photo_label' | 'cheat_day' | 'assistant' | 'routine';
   client_log_id?: string;
   photo_id?: number;
   date: string;
@@ -926,4 +930,47 @@ export interface NutritionLogDraftEntry {
 export interface NutritionLogAssistantMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+/**
+ * "Dia normal" destilado do histórico, sem IA — mesma entrada, mesma saída
+ * sempre (ver `backend/internal/services/nutrition_routine.go`). `enough`
+ * falso significa que ainda não há rotina para propor; `meals` vem vazio
+ * nesse caso.
+ */
+export interface NutritionRoutine {
+  enough: boolean;
+  based_on_days: number;
+  meals: NutritionRoutineMeal[];
+  totals: NutritionRoutineTotals;
+}
+
+export interface NutritionRoutineMeal {
+  meal_type: MealType;
+  items: NutritionRoutineItem[];
+  calories: number;
+}
+
+export interface NutritionRoutineItem {
+  food_item_id?: number;
+  food_name: string;
+  quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  days_seen: number;
+  days_considered: number;
+}
+
+export interface NutritionRoutineTotals {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+/** GET /api/nutrition/missing-days: os últimos 30 dias de calendário sem nenhum food_log. */
+export interface MissingDaysResponse {
+  days: string[];
 }

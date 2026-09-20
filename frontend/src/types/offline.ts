@@ -71,6 +71,12 @@ export interface PersistedOfflineState {
   /** An `ActiveWorkout` from `../types`, kept as `unknown` — see `offlineStore.ts`. */
   activeSession: unknown;
   planDays: Record<number, CacheEntry>;
+  /**
+   * Dates ("dia esquecido") dismissed as not a normal day — see
+   * `offlineStore.ts`. Optional: state persisted before this field existed
+   * has no key for it, and every reader already falls back to `[]`.
+   */
+  dismissedRoutineDays?: string[];
 }
 
 /**

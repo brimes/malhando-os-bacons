@@ -42,8 +42,14 @@ func buildNutritionContext(ctx context.Context, database *db.DB, userID int64) (
 		summary += "Sem plano nutricional ativo no momento. "
 	}
 
+	// bool_and(origin='routine') marks a day where every log came from
+	// confirming the distilled "dia normal" instead of being weighed/typed
+	// one item at a time — a real distinction the assistant must not treat as
+	// a measurement, only as the person's own routine. A day mixing routine
+	// items with a manual or photo entry is not marked: it has at least one
+	// entry someone actually looked at, so it is closer to detailed.
 	rows, err := database.Pool.Query(ctx,
-		`SELECT date::date, SUM(calories), SUM(protein_g), SUM(carbs_g), SUM(fat_g)
+		`SELECT date::date, SUM(calories), SUM(protein_g), SUM(carbs_g), SUM(fat_g), bool_and(origin='routine')
 		 FROM food_logs WHERE user_id=$1 AND date >= CURRENT_DATE - INTERVAL '7 days'
 		 GROUP BY date::date ORDER BY date::date DESC`, userID)
 	if err != nil {
@@ -54,9 +60,14 @@ func buildNutritionContext(ctx context.Context, database *db.DB, userID int64) (
 	for rows.Next() {
 		var date time.Time
 		var calories, protein, carbs, fat float64
-		if rows.Scan(&date, &calories, &protein, &carbs, &fat) == nil {
-			summary += fmt.Sprintf("[%s: %.0fkcal P%.0fg C%.0fg G%.0fg] ",
-				date.Format("2006-01-02"), calories, protein, carbs, fat)
+		var allRoutine bool
+		if rows.Scan(&date, &calories, &protein, &carbs, &fat, &allRoutine) == nil {
+			provenance := ""
+			if allRoutine {
+				provenance = ", estimado a partir da rotina, não medido"
+			}
+			summary += fmt.Sprintf("[%s: %.0fkcal P%.0fg C%.0fg G%.0fg%s] ",
+				date.Format("2006-01-02"), calories, protein, carbs, fat, provenance)
 		}
 	}
 

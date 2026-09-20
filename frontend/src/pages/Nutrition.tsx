@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -6,13 +6,29 @@ import { Button } from '../components/Button';
 import { MacroProgress } from '../components/Chart';
 import { OriginBadge } from '../components/OriginBadge';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
+import { FoodLogAssistant } from '../components/FoodLogAssistant';
+import { RoutinePreviewModal } from '../components/RoutinePreviewModal';
 import { todayLocalDate } from '../lib/date';
 import { dateKey, createFoodLog, deleteFoodLog, foodLogsCache, updateFoodLog } from '../lib/local/repo/foodLogs';
 import { nutritionPlansCache } from '../lib/local/repo/nutritionPlans';
 import { useLocalAll } from '../lib/local/useLocal';
-import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput } from '../types';
+import { dismissRoutineDay, useOfflineStore } from '../lib/offline';
+import { useNutritionStore } from '../stores/useNutritionStore';
+import {
+  MEAL_TYPE_LABELS,
+  type FoodLog,
+  type MealType,
+  type NutritionLogDraftEntry,
+  type NutritionRoutineMeal,
+  type UpdateFoodLogInput,
+} from '../types';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+/** "18/09" — o mesmo formato usado pelo resto da tela de nutrição para uma data solta. */
+function formatDayLabel(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
 
 export function NutritionPage() {
   const navigate = useNavigate();
@@ -21,6 +37,33 @@ export function NutritionPage() {
   // straight from `activePlan.meals` — already loaded with the plan — so
   // opening this never touches the backend.
   const [menuMeal, setMenuMeal] = useState<MealType | null>(null);
+
+  // "Dia normal" (rotina destilada) e "dias esquecidos": contas
+  // determinísticas do servidor, cacheáveis como qualquer GET — ver
+  // useNutritionStore.fetchRoutine/fetchMissingDays.
+  const { routine, missingDays, fetchRoutine, fetchMissingDays, removeMissingDay } = useNutritionStore();
+  useEffect(() => {
+    fetchRoutine();
+    fetchMissingDays();
+  }, [fetchRoutine, fetchMissingDays]);
+
+  // Dispensas de "dia esquecido" ("não foi um dia normal") vivem só neste
+  // aparelho — sem tabela nova, ver offlineStore.ts.
+  const dismissedDays = useOfflineStore((state) => state.dismissedRoutineDays ?? []);
+  const visibleMissingDays = useMemo(
+    () => missingDays.filter((date) => !dismissedDays.includes(date)),
+    [missingDays, dismissedDays]
+  );
+
+  // Pré-visualização do dia normal (hoje ou um dia esquecido) antes de virar
+  // registro — mesmo modal para os dois, só a data/rótulo mudam.
+  const [preview, setPreview] = useState<{ date: string; label: string } | null>(null);
+
+  // "Extrapolei hoje": abre o assistente de conversa já existente para
+  // descrever só o excesso; ao terminar, oferece (nunca cria sozinha) o
+  // treino de compensação do dia do lixo.
+  const [excessMode, setExcessMode] = useState(false);
+  const [compensationOffer, setCompensationOffer] = useState<string | null>(null);
 
   // Local-first: both come straight from IndexedDB (loaded during boot — see
   // `offlineBoot.ts`) and re-render on their own the moment a write, a pull
@@ -68,6 +111,71 @@ export function NutritionPage() {
     await updateFoodLog(id, input);
   };
 
+  // Grava um food_log por item, pelo caminho normal (createFoodLog): funciona
+  // offline e entra na fila igual a qualquer registro. `origin: 'routine'`
+  // marca que o número é a estimativa da rotina, não uma medição do dia.
+  const logRoutineDay = async (date: string, meals: NutritionRoutineMeal[]) => {
+    for (const meal of meals) {
+      for (const item of meal.items) {
+        await createFoodLog({
+          food_item_id: item.food_item_id,
+          food_name: item.food_name,
+          quantity_g: item.quantity_g,
+          meal_type: meal.meal_type,
+          date,
+          origin: 'routine',
+          calories: item.calories,
+          protein_g: item.protein_g,
+          carbs_g: item.carbs_g,
+          fat_g: item.fat_g,
+        });
+      }
+    }
+  };
+
+  const confirmPreview = async (meals: NutritionRoutineMeal[]) => {
+    if (!preview) return;
+    await logRoutineDay(preview.date, meals);
+    if (preview.date !== today) removeMissingDay(preview.date);
+  };
+
+  const openTodayPreview = () => setPreview({ date: today, label: 'hoje' });
+  const openMissingDayPreview = (date: string) => setPreview({ date, label: formatDayLabel(date) });
+
+  const dismissMissingDay = (date: string) => {
+    dismissRoutineDay(date);
+    removeMissingDay(date);
+  };
+
+  // "Extrapolei hoje": se o dia ainda estiver vazio, registra a rotina antes
+  // de abrir a conversa — decisão do dono: oferecer a compensação, nunca
+  // montá-la sozinha, então isso só acontece depois que a pessoa registrar o
+  // excesso e escolher.
+  const startExcessFlow = async () => {
+    if (todayLogs.length === 0 && routine?.enough) {
+      await logRoutineDay(today, routine.meals);
+    }
+    setExcessMode(true);
+  };
+
+  const registrarExcesso = async (entries: NutritionLogDraftEntry[], descricao: string) => {
+    for (const entry of entries) {
+      await createFoodLog({
+        food_name: entry.food_name,
+        meal_type: entry.meal_type,
+        quantity_g: entry.quantity_g,
+        date: entry.date,
+        origin: 'assistant',
+        calories: entry.calories,
+        protein_g: entry.protein_g,
+        carbs_g: entry.carbs_g,
+        fat_g: entry.fat_g,
+      });
+    }
+    setExcessMode(false);
+    setCompensationOffer(descricao.trim() || 'Exagerei hoje.');
+  };
+
   return (
     <>
       <Header
@@ -89,6 +197,80 @@ export function NutritionPage() {
             <span className="text-xs font-medium text-zinc-300">Foto do rótulo</span>
           </button>
         </div>
+
+        {routine?.enough && todayLogs.length === 0 && (
+          <Card className="border-primary-900 bg-primary-950/20">
+            <p className="text-sm font-semibold text-white">Foi um dia normal?</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+              Baseado nos últimos {routine.based_on_days} dias, dá para registrar hoje com um toque.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" onClick={openTodayPreview}>Foi um dia normal</Button>
+              <Button size="sm" variant="secondary" onClick={() => void startExcessFlow()}>Extrapolei hoje</Button>
+            </div>
+          </Card>
+        )}
+
+        {compensationOffer && (
+          <Card className="border-amber-900 bg-amber-950/30">
+            <p className="text-sm font-semibold text-amber-300">Quer montar a compensação?</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
+              O excesso já está registrado. Posso montar um ajuste no treino para compensar — só se você quiser.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  const mensagem = compensationOffer;
+                  setCompensationOffer(null);
+                  navigate('/nutrition/cheat-day', { state: { initialMessage: mensagem } });
+                }}
+              >
+                Montar compensação
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setCompensationOffer(null)}>Agora não</Button>
+            </div>
+          </Card>
+        )}
+
+        {routine && (routine.enough ? visibleMissingDays.length > 0 : missingDays.length > 0) && (
+          <Card>
+            <p className="text-sm font-semibold text-white">Dias esquecidos</p>
+            {routine.enough ? (
+              <>
+                <p className="mt-1 text-xs text-zinc-500">Foi parecido com o normal? Confirme em um toque.</p>
+                <div className="mt-3 space-y-2">
+                  {visibleMissingDays.map((date) => (
+                    <div key={date} className="flex items-center justify-between gap-2 rounded-xl bg-zinc-950 p-3">
+                      <p className="text-sm text-zinc-300">{formatDayLabel(date)}</p>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openMissingDayPreview(date)}
+                          className="rounded-full bg-primary-700 px-3 py-1.5 text-[11px] font-medium text-white"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => dismissMissingDay(date)}
+                          className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] font-medium text-zinc-400"
+                        >
+                          Não foi normal
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Registre uns dias normais para o MOB aprender sua rotina — sem ela não dá para propor o que você
+                costuma comer nesses dias.
+              </p>
+            )}
+          </Card>
+        )}
 
         <button onClick={() => navigate('/nutrition/cheat-day')} className="flex w-full items-center justify-between rounded-2xl border border-amber-900 bg-amber-950/30 px-4 py-3 text-left">
           <div>
@@ -241,6 +423,35 @@ export function NutritionPage() {
           </div>
         );
       })()}
+
+      {preview && routine && (
+        <RoutinePreviewModal
+          dateLabel={preview.label}
+          meals={routine.meals}
+          onClose={() => setPreview(null)}
+          onConfirm={confirmPreview}
+        />
+      )}
+
+      {excessMode && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+          onClick={() => setExcessMode(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white">O que passou do normal?</h3>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+              Conte só o excesso — o resto do dia já foi registrado com base na sua rotina.
+            </p>
+            <div className="mt-3">
+              <FoodLogAssistant onRegistrar={registrarExcesso} />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

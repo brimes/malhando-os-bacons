@@ -65,6 +65,14 @@ interface OfflineStoreState {
    * See `writeLocalPlanDays`.
    */
   planDays: Record<number, CacheEntry>;
+  /**
+   * Dates ("dia esquecido" cards, YYYY-MM-DD) the person said were not a
+   * normal day — "não foi um dia normal" in `Nutrition.tsx`. No server table
+   * backs this (the spec deliberately keeps it local-only), so it lives here
+   * like `activeSession`: durable, outside the prunable `cache`, so it is
+   * never evicted and the same day is never asked about twice on this device.
+   */
+  dismissedRoutineDays: string[];
   isOnline: boolean;
   isSyncing: boolean;
   /**
@@ -87,6 +95,7 @@ const initialState: OfflineStoreState = {
   nextLocalId: -1,
   activeSession: null,
   planDays: {},
+  dismissedRoutineDays: [],
   isOnline: isNetworkOnline(),
   isSyncing: false,
   isHydrated: false,
@@ -132,11 +141,11 @@ const quotaAwareStorage = createJSONStorage<PersistedOfflineState>(() => ({
     // does not touch `queue` or `failed`.
     isEvicting = true;
     try {
-      const { queue, failed, nextLocalId, activeSession, planDays } = useOfflineStore.getState();
+      const { queue, failed, nextLocalId, activeSession, planDays, dismissedRoutineDays } = useOfflineStore.getState();
       try {
         window.localStorage.setItem(
           name,
-          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays }, version: PERSISTED_STATE_VERSION }),
+          JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays, dismissedRoutineDays }, version: PERSISTED_STATE_VERSION }),
         );
         useOfflineStore.setState({ cache: {}, lastSyncAt: {} });
       } catch {
@@ -147,7 +156,7 @@ const quotaAwareStorage = createJSONStorage<PersistedOfflineState>(() => ({
         try {
           window.localStorage.setItem(
             name,
-            JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays: {} }, version: PERSISTED_STATE_VERSION }),
+            JSON.stringify({ state: { cache: {}, lastSyncAt: {}, queue, failed, nextLocalId, activeSession, planDays: {}, dismissedRoutineDays }, version: PERSISTED_STATE_VERSION }),
           );
           useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {} });
         } catch {
@@ -199,6 +208,7 @@ export const useOfflineStore = create<OfflineStoreState>()(
       nextLocalId: state.nextLocalId,
       activeSession: state.activeSession,
       planDays: state.planDays,
+      dismissedRoutineDays: state.dismissedRoutineDays,
     }),
     // `offlineBoot.ts` calls `.persist.rehydrate()` itself, after reconciling
     // whichever storage engine the flag selects (migrating localStorage into
@@ -308,6 +318,20 @@ export function readLocalActiveSession<T = unknown>(): T | null {
 /** Overwrites the session slot. `null` means "no session running right now". */
 export function writeLocalActiveSession(session: unknown): void {
   useOfflineStore.setState({ activeSession: session ?? null });
+}
+
+/** Dates ("YYYY-MM-DD") dismissed from the "dias esquecidos" card on this device. */
+export function readDismissedRoutineDays(): string[] {
+  return useOfflineStore.getState().dismissedRoutineDays ?? [];
+}
+
+/** Idempotent: dismissing the same date twice is a no-op, not a duplicate entry. */
+export function dismissRoutineDay(date: string): void {
+  useOfflineStore.setState((state) => {
+    const current = state.dismissedRoutineDays ?? [];
+    if (current.includes(date)) return state;
+    return { dismissedRoutineDays: [...current, date] };
+  });
 }
 
 /**
@@ -506,10 +530,14 @@ export function setOnline(isOnline: boolean): void {
  * days around after logout would let whoever signs in next on this device see
  * (and offline-start) a stranger's workout day.
  *
+ * `dismissedRoutineDays` is cleared for the same reason as `planDays`: it is
+ * per-account preference, not pending work, and leaving it would carry one
+ * account's "não foi um dia normal" dismissals into whoever signs in next.
+ *
  * Use `discardPendingWrites` when the intent really is to throw the writes away.
  */
 export function clearOfflineData(): void {
-  useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {} });
+  useOfflineStore.setState({ cache: {}, lastSyncAt: {}, planDays: {}, dismissedRoutineDays: [] });
 }
 
 /** Drops queued and failed writes. Only for an explicit "discard" by the user. */

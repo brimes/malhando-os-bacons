@@ -14,6 +14,10 @@ const ORIGIN_LABELS: Partial<Record<FoodLog['origin'], string>> = {
   // Procedência, não aviso de IA: diz que os números vieram de uma descrição
   // conversada, que é o que a pessoa precisa reconhecer ao reler o histórico.
   assistant: 'Conversa',
+  // Diferente das outras: não é uma medição do dia, é a mediana de dias
+  // parecidos confirmada com um toque. Precisa ficar claro que é estimativa,
+  // não um registro item a item.
+  routine: 'Rotina (estimativa)',
 };
 
 export function OriginBadge({ origin }: { origin: FoodLog['origin'] }) {

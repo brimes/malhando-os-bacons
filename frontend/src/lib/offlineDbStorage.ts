@@ -59,7 +59,7 @@ function fromOutboxRecord(record: OutboxRecord): PendingMutation {
   return mutation;
 }
 
-const META_KEYS = ['cache', 'lastSyncAt', 'failed', 'nextLocalId', 'activeSession', 'planDays'] as const;
+const META_KEYS = ['cache', 'lastSyncAt', 'failed', 'nextLocalId', 'activeSession', 'planDays', 'dismissedRoutineDays'] as const;
 
 /** Reads everything `useOfflineStore` persists, or `null` when the database has nothing yet (fresh install). */
 export async function readPersistedOfflineState(): Promise<PersistedOfflineState | null> {
@@ -81,6 +81,7 @@ export async function readPersistedOfflineState(): Promise<PersistedOfflineState
     nextLocalId: (meta.get('nextLocalId') as number) ?? -1,
     activeSession: meta.has('activeSession') ? meta.get('activeSession') : null,
     planDays: (meta.get('planDays') as PersistedOfflineState['planDays']) ?? {},
+    dismissedRoutineDays: (meta.get('dismissedRoutineDays') as PersistedOfflineState['dismissedRoutineDays']) ?? [],
   };
 }
 
@@ -111,6 +112,7 @@ export async function writePersistedOfflineState(state: PersistedOfflineState): 
       nextLocalId: state.nextLocalId,
       activeSession: state.activeSession,
       planDays: state.planDays,
+      dismissedRoutineDays: state.dismissedRoutineDays,
     };
     for (const key of META_KEYS) metaStore.put({ key, value: values[key] } satisfies MetaRow);
   });
@@ -128,7 +130,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 /** Only the fields worth carrying over from the old blob — see the slice description for why `cache`/`lastSyncAt` are not among them. */
-function pickMigratableFields(raw: unknown): Pick<LegacyPersistedState, 'queue' | 'failed' | 'activeSession' | 'nextLocalId' | 'planDays'> {
+function pickMigratableFields(raw: unknown): Pick<LegacyPersistedState, 'queue' | 'failed' | 'activeSession' | 'nextLocalId' | 'planDays' | 'dismissedRoutineDays'> {
   const state = isPlainObject(raw) ? raw : {};
   return {
     queue: Array.isArray(state.queue) ? (state.queue as PendingMutation[]) : [],
@@ -136,6 +138,7 @@ function pickMigratableFields(raw: unknown): Pick<LegacyPersistedState, 'queue' 
     activeSession: 'activeSession' in state ? state.activeSession : null,
     nextLocalId: typeof state.nextLocalId === 'number' ? state.nextLocalId : -1,
     planDays: isPlainObject(state.planDays) ? (state.planDays as LegacyPersistedState['planDays']) : {},
+    dismissedRoutineDays: Array.isArray(state.dismissedRoutineDays) ? (state.dismissedRoutineDays as string[]) : [],
   };
 }
 
@@ -196,7 +199,7 @@ export async function migrateLegacyLocalStorageToIndexedDb(): Promise<void> {
 export async function exportIndexedDbToLegacyLocalStorage(): Promise<void> {
   const state = await readPersistedOfflineState();
   const payload = {
-    state: state ?? { cache: {}, lastSyncAt: {}, queue: [], failed: [], nextLocalId: -1, activeSession: null, planDays: {} },
+    state: state ?? { cache: {}, lastSyncAt: {}, queue: [], failed: [], nextLocalId: -1, activeSession: null, planDays: {}, dismissedRoutineDays: [] },
     version: 1,
   };
   window.localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(payload));

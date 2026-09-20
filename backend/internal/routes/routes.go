@@ -148,6 +148,11 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("PUT /api/nutrition/foods/{id}", chain(nutritionHandler.UpdatePersonalFood, auth))
 	mux.HandleFunc("DELETE /api/nutrition/foods/{id}", chain(nutritionHandler.DeletePersonalFood, auth))
 	mux.HandleFunc("GET /api/nutrition/suggestion", chain(nutritionHandler.SuggestRestOfDay, auth))
+	// Rotina destilada e dias sem registro: contas determinísticas sobre o
+	// histórico, sem IA — cacheáveis como qualquer GET (não entram em
+	// ONLINE_ONLY_PATHS no frontend).
+	mux.HandleFunc("GET /api/nutrition/routine", chain(nutritionHandler.GetRoutine, auth))
+	mux.HandleFunc("GET /api/nutrition/missing-days", chain(nutritionHandler.GetMissingDays, auth))
 	// Modo IA da tela de registrar: conversa que vira registros. Não grava nada;
 	// quem grava é o app, pelos endpoints de log, depois da conferência.
 	mux.HandleFunc("POST /api/nutrition/logs/assistant", chain(nutritionHandler.LogAssistant, auth))

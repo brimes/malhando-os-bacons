@@ -8,12 +8,14 @@ import type {
   FoodLog,
   FoodLogHistoryEntry,
   LabelAnalysis,
+  MissingDaysResponse,
   NutritionCalendarData,
   NutritionLogAssistantMessage,
   NutritionLogDraft,
   NutritionFavorite,
   NutritionPlan,
   NutritionPlanJob,
+  NutritionRoutine,
   NutritionSuggestion,
   PhotoUploadResponse,
   PlateAnalysis,
@@ -129,6 +131,18 @@ export const nutritionApi = {
 
   deleteFood: async (id: number): Promise<void> => {
     await apiClient.delete(`/nutrition/foods/${id}`);
+  },
+
+  // Conta determinística, sem IA — cacheável como qualquer GET (não está em
+  // ONLINE_ONLY_PATHS): a tela mostra a última rotina conhecida offline.
+  getRoutine: async (signal?: AbortSignal): Promise<NutritionRoutine> => {
+    const { data } = await apiClient.get<NutritionRoutine>('/nutrition/routine', { signal });
+    return data;
+  },
+
+  getMissingDays: async (signal?: AbortSignal): Promise<MissingDaysResponse> => {
+    const { data } = await apiClient.get<MissingDaysResponse>('/nutrition/missing-days', { signal });
+    return data;
   },
 
   calendar: async (month: string): Promise<NutritionCalendarData> => {

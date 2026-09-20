@@ -152,7 +152,7 @@ func (h *NutritionHandler) CreateLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	origin := req.Origin
-	validOrigins := map[string]bool{"manual": true, "plan": true, "photo_plate": true, "photo_label": true, "cheat_day": true, "assistant": true}
+	validOrigins := map[string]bool{"manual": true, "plan": true, "photo_plate": true, "photo_label": true, "cheat_day": true, "assistant": true, "routine": true}
 	if origin == "" {
 		origin = "manual"
 	}

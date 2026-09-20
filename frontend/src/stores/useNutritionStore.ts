@@ -9,7 +9,9 @@ import type {
   FoodItem,
   FoodLog,
   FoodLogHistoryEntry,
+  MissingDaysResponse,
   NutritionPlan,
+  NutritionRoutine,
   UpdateFoodLogInput,
 } from '../types';
 
@@ -26,6 +28,12 @@ interface NutritionState {
   isLoadingHistory: boolean;
   /** Resultado da busca no histórico — separado de `logHistory`, que é a lista padrão. */
   historyResults: FoodLogHistoryEntry[];
+  /** "Dia normal" destilado do histórico — ver GET /api/nutrition/routine. Null até o primeiro fetch. */
+  routine: NutritionRoutine | null;
+  isLoadingRoutine: boolean;
+  /** Datas dos últimos 30 dias sem nenhum food_log — ver GET /api/nutrition/missing-days. */
+  missingDays: string[];
+  isLoadingMissingDays: boolean;
 
   fetchPlans: () => Promise<void>;
   createPlan: (input: CreateNutritionPlanInput) => Promise<void>;
@@ -53,6 +61,10 @@ interface NutritionState {
    * `referencesLocalId`), left for the screen to catch and show.
    */
   toggleFavorite: (entry: FoodLogHistoryEntry) => Promise<void>;
+  fetchRoutine: () => Promise<void>;
+  fetchMissingDays: () => Promise<void>;
+  /** Drops `date` from `missingDays` right after it is confirmed or dismissed, without a refetch. */
+  removeMissingDay: (date: string) => void;
 }
 
 const plansKey = () => resourceKeyForRequest('/nutrition/plans');
@@ -60,6 +72,8 @@ const plansKey = () => resourceKeyForRequest('/nutrition/plans');
 const logsKey = (date?: string) => resourceKeyForRequest('/nutrition/logs', date ? { date } : undefined);
 const personalFoodsKey = () => resourceKeyForRequest('/nutrition/foods');
 const logHistoryKey = () => resourceKeyForRequest('/nutrition/logs/history');
+const routineKey = () => resourceKeyForRequest('/nutrition/routine');
+const missingDaysKey = () => resourceKeyForRequest('/nutrition/missing-days');
 
 export const useNutritionStore = create<NutritionState>((set, get) => ({
   plans: [],
@@ -73,6 +87,10 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   logHistory: [],
   isLoadingHistory: false,
   historyResults: [],
+  routine: null,
+  isLoadingRoutine: false,
+  missingDays: [],
+  isLoadingMissingDays: false,
 
   fetchPlans: async () => {
     set({ isLoading: !hasCache(plansKey()), error: null });
@@ -304,5 +322,31 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     );
     set({ logHistory });
     patchCacheLocally(logHistoryKey(), logHistory);
+  },
+
+  fetchRoutine: async () => {
+    set({ isLoadingRoutine: !hasCache(routineKey()) });
+    await readThrough<NutritionRoutine>({
+      resourceKey: routineKey(),
+      fetcher: () => nutritionApi.getRoutine(),
+      apply: (routine) => set({ routine, isLoadingRoutine: false }),
+      onError: (_error, hadCache) => set({ isLoadingRoutine: false, routine: hadCache ? get().routine : null }),
+    });
+  },
+
+  fetchMissingDays: async () => {
+    set({ isLoadingMissingDays: !hasCache(missingDaysKey()) });
+    await readThrough<MissingDaysResponse>({
+      resourceKey: missingDaysKey(),
+      fetcher: () => nutritionApi.getMissingDays(),
+      apply: (response) => set({ missingDays: response.days, isLoadingMissingDays: false }),
+      onError: (_error, hadCache) => set({ isLoadingMissingDays: false, missingDays: hadCache ? get().missingDays : [] }),
+    });
+  },
+
+  removeMissingDay: (date: string) => {
+    const missingDays = get().missingDays.filter((d) => d !== date);
+    set({ missingDays });
+    patchCacheLocally(missingDaysKey(), { days: missingDays });
   },
 }));
