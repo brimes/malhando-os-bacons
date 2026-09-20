@@ -7,6 +7,22 @@ export interface User {
   created_at: string;
 }
 
+/** Um lugar onde a pessoa treina, com os aparelhos disponíveis ali. */
+export interface Gym {
+  id: number;
+  name: string;
+  notes: string;
+  equipment: string[];
+  created_at: string;
+}
+
+export interface GymInput {
+  name: string;
+  notes: string;
+  /** Substitui a lista inteira no servidor — não há PATCH incremental. */
+  equipment: string[];
+}
+
 export interface WorkoutSet {
   id: number;
   workout_id: number;
@@ -99,6 +115,8 @@ export interface TrainingPlanDay {
   focus: string;
   instructions: string;
   last_done_at?: string;
+  /** Só em dia de plano dinâmico: a data para a qual aquele dia foi gerado. */
+  generated_for?: string;
   exercises: TrainingPlanExercise[];
 }
 
@@ -112,9 +130,18 @@ export interface TrainingPlan {
   creation_method: 'manual' | 'automatic';
   adaptation_phase: boolean;
   active: boolean;
-  /** "compensation" is a cheat-day plan: a separate row, never the real plan. */
-  kind?: 'regular' | 'compensation';
+  /**
+   * "compensation" is a cheat-day plan: a separate row, never the real plan.
+   * "dynamic" não tem dias fixos: cada um é gerado sob demanda, um de cada vez.
+   */
+  kind?: 'regular' | 'compensation' | 'dynamic';
   expires_at?: string;
+  /** Presente quando o plano foi encerrado (fechado manualmente após a data-alvo). `null`/ausente enquanto ativo. */
+  archived_at?: string | null;
+  gym_id?: number | null;
+  gym_name?: string | null;
+  /** Preferências usadas na criação automática/dinâmica; ausente num plano manual. */
+  preferences?: string;
   days?: TrainingPlanDay[];
   created_at: string;
 }
@@ -126,6 +153,7 @@ export interface TrainingPlanInput {
   days_per_week: number;
   session_duration_minutes: number;
   days: TrainingPlanDay[];
+  gym_id?: number;
 }
 
 export interface AutomaticTrainingPlanInput {
@@ -134,12 +162,25 @@ export interface AutomaticTrainingPlanInput {
   days_per_week: number;
   session_duration_minutes: number;
   preferences: string;
+  gym_id?: number;
+}
+
+/** Sem `days`: a criação é instantânea, e cada dia nasce depois, sob demanda (`POST /training-plans/:id/dynamic-day`). */
+export interface DynamicTrainingPlanInput {
+  name: string;
+  target_date: string;
+  days_per_week: number;
+  session_duration_minutes: number;
+  preferences: string;
+  gym_id?: number;
 }
 
 export interface TrainingPlanJob {
   id: number;
   status: 'pending' | 'done' | 'failed';
   plan_id?: number;
+  /** Preenchido quando o job é a geração de um dia dinâmico, para navegar direto até ele. */
+  plan_day_id?: number;
   error?: string;
   created_at: string;
 }

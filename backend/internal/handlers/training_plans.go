@@ -74,16 +74,27 @@ func (h *TrainingPlanHandler) assistantFor(ctx context.Context, userID int64) se
 	return services.NewTrainingPlanAssistant(h.resolver.For(ctx, userID))
 }
 
-// List returns the person's real plans only. Compensation plans (kind =
-// 'compensation') are always active=false and have their own display surface
-// via the cheat-day flow — mixing them into this history would make an
-// expired indulgence look like an abandoned training plan.
+// List returns the person's real plans — regular and dynamic. Compensation
+// plans (kind = 'compensation') are always active=false and have their own
+// display surface via the cheat-day flow — mixing them into this history
+// would make an expired indulgence look like an abandoned training plan.
+//
+// ?archived=true flips to the archived list instead of the default one: a
+// plan is either live (archived_at IS NULL) or archived, never both, so the
+// two lists never overlap.
 func (h *TrainingPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
-	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT id, name, description, target_date, days_per_week, session_duration_minutes,
-		 creation_method, adaptation_phase, active, kind, created_at
-		 FROM training_plans WHERE user_id = $1 AND kind = 'regular' ORDER BY active DESC, created_at DESC`, userID)
+	archived := r.URL.Query().Get("archived") == "true"
+	query := `SELECT tp.id, tp.name, tp.description, tp.target_date, tp.days_per_week, tp.session_duration_minutes,
+	 tp.creation_method, tp.adaptation_phase, tp.active, tp.kind, tp.archived_at, tp.gym_id, g.name, tp.preferences, tp.created_at
+	 FROM training_plans tp LEFT JOIN gyms g ON g.id = tp.gym_id
+	 WHERE tp.user_id = $1 AND tp.kind IN ('regular', 'dynamic') AND tp.archived_at IS `
+	if archived {
+		query += `NOT NULL ORDER BY tp.archived_at DESC`
+	} else {
+		query += `NULL ORDER BY tp.active DESC, tp.created_at DESC`
+	}
+	rows, err := h.db.Pool.Query(r.Context(), query, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load training plans"})
 		return
@@ -93,7 +104,8 @@ func (h *TrainingPlanHandler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var plan models.TrainingPlan
 		if err := rows.Scan(&plan.ID, &plan.Name, &plan.Description, &plan.TargetDate, &plan.DaysPerWeek,
-			&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.Kind, &plan.CreatedAt); err == nil {
+			&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.Kind,
+			&plan.ArchivedAt, &plan.GymID, &plan.GymName, &plan.Preferences, &plan.CreatedAt); err == nil {
 			plans = append(plans, plan)
 		}
 	}
@@ -109,12 +121,14 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	var plan models.TrainingPlan
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, name, description, target_date, days_per_week, session_duration_minutes,
-		 creation_method, adaptation_phase, active, kind, expires_at, created_at
-		 FROM training_plans WHERE id = $1 AND user_id = $2`, id, userID,
+		`SELECT tp.id, tp.name, tp.description, tp.target_date, tp.days_per_week, tp.session_duration_minutes,
+		 tp.creation_method, tp.adaptation_phase, tp.active, tp.kind, tp.expires_at, tp.archived_at,
+		 tp.gym_id, g.name, tp.preferences, tp.created_at
+		 FROM training_plans tp LEFT JOIN gyms g ON g.id = tp.gym_id
+		 WHERE tp.id = $1 AND tp.user_id = $2`, id, userID,
 	).Scan(&plan.ID, &plan.Name, &plan.Description, &plan.TargetDate, &plan.DaysPerWeek,
 		&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active,
-		&plan.Kind, &plan.ExpiresAt, &plan.CreatedAt)
+		&plan.Kind, &plan.ExpiresAt, &plan.ArchivedAt, &plan.GymID, &plan.GymName, &plan.Preferences, &plan.CreatedAt)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "training plan not found"})
 		return
@@ -124,10 +138,17 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Plano dinâmico não tem "os dias da semana": tem uma lista que só cresce.
+	// Devolver todo o histórico deixaria a tela cada vez mais pesada, então só
+	// os 10 mais recentes voltam, com o de hoje primeiro.
+	dayOrder, dayLimit := "d.day_number", ""
+	if plan.Kind == "dynamic" {
+		dayOrder, dayLimit = "d.day_number DESC", " LIMIT 10"
+	}
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT d.id, d.day_number, d.name, d.focus, d.instructions, MAX(w.date)
+		`SELECT d.id, d.day_number, d.name, d.focus, d.instructions, d.generated_for, d.generated_at, MAX(w.date)
 		 FROM training_plan_days d LEFT JOIN workouts w ON w.training_plan_day_id = d.id AND w.status = 'completed'
-		 WHERE d.plan_id = $1 GROUP BY d.id ORDER BY d.day_number`, plan.ID)
+		 WHERE d.plan_id = $1 GROUP BY d.id ORDER BY `+dayOrder+dayLimit, plan.ID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load plan days"})
 		return
@@ -135,7 +156,8 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	for rows.Next() {
 		var day models.TrainingPlanDay
-		if err := rows.Scan(&day.ID, &day.DayNumber, &day.Name, &day.Focus, &day.Instructions, &day.LastDoneAt); err != nil {
+		if err := rows.Scan(&day.ID, &day.DayNumber, &day.Name, &day.Focus, &day.Instructions,
+			&day.GeneratedFor, &day.GeneratedAt, &day.LastDoneAt); err != nil {
 			continue
 		}
 		// O LEFT JOIN traz o vídeo demonstrativo quando o nome já foi
@@ -227,6 +249,10 @@ func (h *TrainingPlanHandler) CreateManual(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
+	if err := validateGymOwnership(r.Context(), h.db, userID, input.GymID); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	plan, err := h.create(r.Context(), userID, input, "manual")
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -248,11 +274,23 @@ func (h *TrainingPlanHandler) CreateAutomatic(w http.ResponseWriter, r *http.Req
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
+	// Validado aqui, síncrono, para devolver 400 na hora — validar só dentro da
+	// goroutine deixaria o erro aparecer minutos depois, no polling do job.
+	if err := validateGymOwnership(r.Context(), h.db, userID, req.GymID); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	userContext, err := buildUserContext(r.Context(), h.db, userID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
 		return
 	}
+	gymContext, err := buildGymContext(r.Context(), h.db, userID, req.GymID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
+		return
+	}
+	userContext += gymContext
 	var job models.TrainingPlanJob
 	err = h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO training_plan_jobs (user_id, status) VALUES ($1,'pending')
@@ -287,6 +325,10 @@ func (h *TrainingPlanHandler) runAutomatic(jobID, userID int64, userContext stri
 		fail("the training plan assistant is temporarily unavailable", err)
 		return
 	}
+	// gym_id e preferences não fazem parte do schema que o assistente devolve
+	// (são entrada, não saída) — vêm de volta aqui, do pedido original.
+	input.GymID = req.GymID
+	input.Preferences = req.Preferences
 	plan, err := h.create(ctx, userID, *input, "automatic")
 	if err != nil {
 		fail("failed to save generated training plan", err)
@@ -308,9 +350,9 @@ func (h *TrainingPlanHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	}
 	var job models.TrainingPlanJob
 	err = h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, status, plan_id, error, created_at FROM training_plan_jobs
+		`SELECT id, status, plan_id, plan_day_id, error, created_at FROM training_plan_jobs
 		 WHERE id = $1 AND user_id = $2`, id, userID,
-	).Scan(&job.ID, &job.Status, &job.PlanID, &job.Error, &job.CreatedAt)
+	).Scan(&job.ID, &job.Status, &job.PlanID, &job.PlanDayID, &job.Error, &job.CreatedAt)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "job not found"})
 		return
@@ -346,14 +388,15 @@ func (h *TrainingPlanHandler) create(ctx context.Context, userID int64, input mo
 	var plan models.TrainingPlan
 	err = tx.QueryRow(ctx,
 		`INSERT INTO training_plans (user_id, name, description, target_date, days_per_week,
-		 session_duration_minutes, creation_method, adaptation_phase)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		 session_duration_minutes, creation_method, adaptation_phase, gym_id, preferences)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		 RETURNING id,name,description,target_date,days_per_week,session_duration_minutes,
-		 creation_method,adaptation_phase,active,created_at`,
+		 creation_method,adaptation_phase,active,gym_id,preferences,created_at`,
 		userID, input.Name, strings.TrimSpace(input.Description), targetDate, input.DaysPerWeek,
-		input.SessionDurationMinutes, method, adaptation,
+		input.SessionDurationMinutes, method, adaptation, input.GymID, strings.TrimSpace(input.Preferences),
 	).Scan(&plan.ID, &plan.Name, &plan.Description, &plan.TargetDate, &plan.DaysPerWeek,
-		&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active, &plan.CreatedAt)
+		&plan.SessionDurationMinutes, &plan.CreationMethod, &plan.AdaptationPhase, &plan.Active,
+		&plan.GymID, &plan.Preferences, &plan.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -478,4 +521,115 @@ func timePointerValue(value *time.Time) string {
 		return "não se aplica"
 	}
 	return value.Format("2006-01-02")
+}
+
+// Archive só é permitido depois que a data-alvo passou — arquivar um plano em
+// andamento apagaria da lista algo que a pessoa ainda está seguindo. Não
+// apaga nada: dias e séries continuam com o histórico intacto, só o plano some
+// da listagem padrão.
+func (h *TrainingPlanHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	id, err := parsePlanIDFromAdjustPath(r.URL.Path)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid training plan id"})
+		return
+	}
+	var targetDate time.Time
+	err = h.db.Pool.QueryRow(r.Context(),
+		`SELECT target_date FROM training_plans WHERE id = $1 AND user_id = $2`, id, userID).Scan(&targetDate)
+	if err == pgx.ErrNoRows {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "training plan not found"})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load training plan"})
+		return
+	}
+	if !targetDate.Before(time.Now().Truncate(24 * time.Hour)) {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "plan has not reached its target date"})
+		return
+	}
+	if _, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE training_plans SET archived_at = NOW(), active = false, updated_at = NOW() WHERE id = $1`, id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to archive training plan"})
+		return
+	}
+	r.URL.Path = fmt.Sprintf("/api/training-plans/%d", id)
+	h.Get(w, r)
+}
+
+// Unarchive não tem a mesma restrição de data: a pessoa pode querer voltar a
+// ver um plano vencido antes de decidir o próximo.
+func (h *TrainingPlanHandler) Unarchive(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	id, err := parsePlanIDFromAdjustPath(r.URL.Path)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid training plan id"})
+		return
+	}
+	tag, err := h.db.Pool.Exec(r.Context(),
+		`UPDATE training_plans SET archived_at = NULL, active = true, updated_at = NOW()
+		 WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to unarchive training plan"})
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "training plan not found"})
+		return
+	}
+	r.URL.Path = fmt.Sprintf("/api/training-plans/%d", id)
+	h.Get(w, r)
+}
+
+// validateGymOwnership confere que a academia informada (se houver) é do
+// próprio usuário, antes de gravá-la num plano. gymID nil é sempre válido —
+// "sem academia" continua sendo uma opção normal.
+func validateGymOwnership(ctx context.Context, database *db.DB, userID int64, gymID *int64) error {
+	if gymID == nil {
+		return nil
+	}
+	var exists bool
+	if err := database.Pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM gyms WHERE id = $1 AND user_id = $2)`, *gymID, userID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("gym does not belong to user")
+	}
+	return nil
+}
+
+// buildGymContext monta o trecho de contexto com o nome e os aparelhos da
+// academia escolhida, para o assistente só prescrever o que é executável ali
+// — a regra em si mora no system prompt (gymEquipmentRule), aqui só entram os
+// dados. Sem academia (gymID nil), devolve string vazia sem erro: nada muda no
+// prompt, o comportamento de antes desta feature.
+func buildGymContext(ctx context.Context, database *db.DB, userID int64, gymID *int64) (string, error) {
+	if gymID == nil {
+		return "", nil
+	}
+	var name string
+	if err := database.Pool.QueryRow(ctx,
+		`SELECT name FROM gyms WHERE id = $1 AND user_id = $2`, *gymID, userID).Scan(&name); err != nil {
+		return "", err
+	}
+	rows, err := database.Pool.Query(ctx,
+		`SELECT name FROM gym_equipment WHERE gym_id = $1 ORDER BY name`, *gymID)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	var equipment []string
+	for rows.Next() {
+		var item string
+		if rows.Scan(&item) == nil {
+			equipment = append(equipment, item)
+		}
+	}
+	list := "nenhum aparelho cadastrado (considere apenas peso corporal)"
+	if len(equipment) > 0 {
+		list = strings.Join(equipment, ", ")
+	}
+	return fmt.Sprintf(" Academia escolhida: %s. Aparelhos disponíveis: %s.", name, list), nil
 }

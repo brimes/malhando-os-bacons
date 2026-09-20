@@ -83,7 +83,7 @@ export function ProfilePage() {
           </div>
         )}
 
-        <div>
+        <div className="space-y-3">
           <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Treino</h3>
           <button type="button" onClick={() => navigate('/settings')} className="w-full text-left">
             <Card className="flex items-center justify-between">
@@ -92,6 +92,18 @@ export function ProfilePage() {
                 <div>
                   <p className="text-sm font-medium text-white">Configurações do treino</p>
                   <p className="text-xs text-zinc-500">Contagem para iniciar, vibração e avanço automático</p>
+                </div>
+              </div>
+              <span className="text-zinc-600">›</span>
+            </Card>
+          </button>
+          <button type="button" onClick={() => navigate('/gyms')} className="w-full text-left">
+            <Card className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🏋️</span>
+                <div>
+                  <p className="text-sm font-medium text-white">Minhas academias</p>
+                  <p className="text-xs text-zinc-500">Aparelhos disponíveis em cada lugar onde você treina</p>
                 </div>
               </div>
               <span className="text-zinc-600">›</span>

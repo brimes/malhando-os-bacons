@@ -14,9 +14,70 @@ type TrainingPlanAssistant interface {
 	// Adjust rewrites an existing plan from a free-text instruction, returning
 	// the complete plan (not a diff) so the caller can reconcile it in one pass.
 	Adjust(context.Context, string, models.TrainingPlanInput, string) (*models.TrainingPlanInput, error)
+	// GenerateDynamicDay gera um único dia novo para um plano kind='dynamic'.
+	// plan carrega a configuração do plano (nome, frequência, duração,
+	// preferências); recent resume os últimos dias já gerados deste plano e os
+	// treinos concluídos recentes, para o dia novo não repetir o que já foi
+	// treinado. Não recebe nem devolve o envelope do plano inteiro — só o dia.
+	GenerateDynamicDay(ctx context.Context, userContext string, plan models.TrainingPlan, recent string) (*models.TrainingPlanDayInput, error)
 }
 
 const trainingPlanSystemPrompt = `Você é um planejador de treinos de musculação cuidadoso. Gere em português do Brasil um plano prático, progressivo e compatível com objetivo, experiência, histórico, preferências, duração disponível, lesões e limitações fornecidas. Se for iniciante em adaptação, use exercícios simples, volume moderado, técnica como prioridade e evite falha muscular. Nunca inclua exercício que conflite com uma limitação informada; ofereça variações seguras nas notas. Todo dia deve começar com pelo menos um exercício de aquecimento explícito. Aquecimento em esteira, bicicleta, mobilidade ou isometria deve usar tracking_type=time e duration_seconds; exercícios de força normalmente usam tracking_type=reps. Para exercícios por tempo, use reps=1. Cada dia deve caber no tempo disponível e ter entre 4 e 9 exercícios contando o aquecimento. Retorne exatamente a quantidade de dias solicitada. Não faça diagnóstico, não use ferramentas e não inclua recomendações médicas.`
+
+// gymEquipmentRule entra em toda montagem de exercício: plano novo, dia
+// dinâmico e ajuste. É segura mesmo sem academia — sem o dado no contexto, não
+// há o que restringir, e o prompt diz isso explicitamente.
+const gymEquipmentRule = ` Quando o contexto trouxer uma academia com a lista de aparelhos disponíveis, prescreva somente exercícios executáveis com esses aparelhos — exercícios de peso corporal são sempre permitidos, independentemente da lista. Quando o aparelho ideal para um exercício não estiver na lista, escolha a alternativa equivalente mais próxima em vez de deixar de treinar aquele grupo muscular. Sem academia informada no contexto, não há essa restrição.`
+
+var trainingPlanGenerateSystemPrompt = trainingPlanSystemPrompt + gymEquipmentRule
+
+// dynamicDaySystemPrompt herda as mesmas regras de segurança, aquecimento e
+// aparelhos do plano completo, e acrescenta o que é específico de gerar um
+// dia por vez.
+var dynamicDaySystemPrompt = trainingPlanGenerateSystemPrompt + `
+
+Você está gerando o PRÓXIMO dia de um plano DINÂMICO, não um plano completo: a
+pessoa pede um treino de cada vez, e cada pedido deve devolver um único dia
+completo, pronto para hoje. Use a frequência semanal e a duração de sessão
+configuradas para decidir o volume e o tipo de foco do dia. Evite repetir os
+grupos musculares predominantes do último treino registrado — distribua o
+volume ao longo da semana como um plano de vários dias faria, mesmo sem
+planejar os dias futuros. Nunca invente um "day_number" ou mencione outros
+dias: devolva apenas os campos deste dia.`
+
+var trainingPlanExerciseSchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"exercise_name":    map[string]any{"type": "string"},
+		"sets":             map[string]any{"type": "integer"},
+		"reps":             map[string]any{"type": "integer"},
+		"tracking_type":    map[string]any{"type": "string", "enum": []any{"reps", "time"}},
+		"duration_seconds": map[string]any{"type": []any{"integer", "null"}},
+		"rest_seconds":     map[string]any{"type": "integer"},
+		"notes":            map[string]any{"type": "string"},
+	},
+	"required":             []any{"exercise_name", "sets", "reps", "tracking_type", "duration_seconds", "rest_seconds", "notes"},
+	"additionalProperties": false,
+}
+
+// trainingPlanDaySchema descreve um dia sozinho (nome, foco, instruções e
+// exercícios) — o mesmo formato usado dentro de trainingPlanSchema, mas sem o
+// envelope do plano. Reaproveitado tanto pelo plano completo (dentro de
+// "days") quanto pela geração de um dia dinâmico.
+var trainingPlanDaySchema = map[string]any{
+	"type": "object",
+	"properties": map[string]any{
+		"name":         map[string]any{"type": "string"},
+		"focus":        map[string]any{"type": "string"},
+		"instructions": map[string]any{"type": "string"},
+		"exercises": map[string]any{
+			"type":  "array",
+			"items": trainingPlanExerciseSchema,
+		},
+	},
+	"required":             []any{"name", "focus", "instructions", "exercises"},
+	"additionalProperties": false,
+}
 
 var trainingPlanSchema = map[string]any{
 	"type": "object",
@@ -24,34 +85,8 @@ var trainingPlanSchema = map[string]any{
 		"name":        map[string]any{"type": "string"},
 		"description": map[string]any{"type": "string"},
 		"days": map[string]any{
-			"type": "array",
-			"items": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"name":         map[string]any{"type": "string"},
-					"focus":        map[string]any{"type": "string"},
-					"instructions": map[string]any{"type": "string"},
-					"exercises": map[string]any{
-						"type": "array",
-						"items": map[string]any{
-							"type": "object",
-							"properties": map[string]any{
-								"exercise_name":    map[string]any{"type": "string"},
-								"sets":             map[string]any{"type": "integer"},
-								"reps":             map[string]any{"type": "integer"},
-								"tracking_type":    map[string]any{"type": "string", "enum": []any{"reps", "time"}},
-								"duration_seconds": map[string]any{"type": []any{"integer", "null"}},
-								"rest_seconds":     map[string]any{"type": "integer"},
-								"notes":            map[string]any{"type": "string"},
-							},
-							"required":             []any{"exercise_name", "sets", "reps", "tracking_type", "duration_seconds", "rest_seconds", "notes"},
-							"additionalProperties": false,
-						},
-					},
-				},
-				"required":             []any{"name", "focus", "instructions", "exercises"},
-				"additionalProperties": false,
-			},
+			"type":  "array",
+			"items": trainingPlanDaySchema,
 		},
 	},
 	"required":             []any{"name", "description", "days"},
@@ -71,7 +106,7 @@ func (a *trainingPlanAssistant) Generate(ctx context.Context, userContext string
 		req.DaysPerWeek, req.SessionDurationMinutes, req.TargetDate, req.Name, req.Preferences, userContext)
 
 	var plan models.TrainingPlanInput
-	if err := a.generator.Generate(ctx, trainingPlanSystemPrompt, prompt, trainingPlanSchema, &plan); err != nil {
+	if err := a.generator.Generate(ctx, trainingPlanGenerateSystemPrompt, prompt, trainingPlanSchema, &plan); err != nil {
 		return nil, err
 	}
 
@@ -87,7 +122,11 @@ func (a *trainingPlanAssistant) Generate(ctx context.Context, userContext string
 	return &plan, nil
 }
 
-const trainingPlanAdjustPrompt = trainingPlanSystemPrompt + `
+// O ajuste também recebe gymEquipmentRule: um plano vinculado a uma academia
+// continua vinculado depois de ajustado, e trocar um exercício por outro que
+// exige um aparelho inexistente ali é o mesmo erro, cometido depois. A regra
+// não faz nada quando o contexto não traz academia.
+const trainingPlanAdjustPrompt = trainingPlanSystemPrompt + gymEquipmentRule + `
 
 Você está AJUSTANDO um plano que já existe, a pedido da pessoa. Regras do ajuste:
 Devolva o plano COMPLETO, não apenas as partes alteradas. Mantenha intacto tudo
@@ -123,4 +162,18 @@ func (a *trainingPlanAssistant) Adjust(ctx context.Context, userContext string, 
 	plan.SessionDurationMinutes = current.SessionDurationMinutes
 	plan.DaysPerWeek = len(plan.Days)
 	return &plan, nil
+}
+
+func (a *trainingPlanAssistant) GenerateDynamicDay(ctx context.Context, userContext string, plan models.TrainingPlan, recent string) (*models.TrainingPlanDayInput, error) {
+	prompt := fmt.Sprintf("Plano dinâmico %q: %d dias por semana, sessões de %d minutos. Preferências informadas: %q. Contexto da pessoa: %s\n\n%s",
+		plan.Name, plan.DaysPerWeek, plan.SessionDurationMinutes, plan.Preferences, userContext, recent)
+
+	var day models.TrainingPlanDayInput
+	if err := a.generator.Generate(ctx, dynamicDaySystemPrompt, prompt, trainingPlanDaySchema, &day); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(day.Name) == "" || len(day.Exercises) == 0 {
+		return nil, fmt.Errorf("assistant returned an empty day")
+	}
+	return &day, nil
 }

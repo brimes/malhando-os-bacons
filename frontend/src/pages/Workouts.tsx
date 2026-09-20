@@ -37,12 +37,21 @@ export function WorkoutsPage() {
     return () => { alive = false; };
   }, []);
 
-  const trackedPlan = plans.find((plan) => plan.active) ?? null;
+  // Arquivado nunca aparece aqui, mesmo que ainda esteja no cache local: abrir
+  // um plano arquivado (na tela de arquivados) o guarda pelo mesmo caminho que
+  // guarda qualquer detalhe visitado, e sem este filtro ele voltaria a aparecer
+  // na lista principal só por ter sido aberto uma vez.
+  const visiblePlans = plans.filter((plan) => !plan.archived_at);
+  const trackedPlan = visiblePlans.find((plan) => plan.active) ?? null;
   // O detalhe (com os dias) e o resumo convivem no mesmo store — `rememberPlan`
   // preserva `days` quando a listagem, que não os traz, chega por cima.
   const detail = trackedPlan?.days?.length ? trackedPlan : null;
   const progress = useMemo(() => {
-    if (!trackedPlan) return null;
+    // Plano dinâmico não tem semana planejada: os dias que ele acumula são
+    // treinos já gerados, não uma rotina a cumprir. Calcular progresso sobre
+    // eles mostraria um "treino da vez" apontando para o treino de outro dia,
+    // que é o oposto de gerar na hora.
+    if (!trackedPlan || trackedPlan.kind === 'dynamic') return null;
     return computePlanWeekProgress({
       plan: detail ?? trackedPlan,
       workouts: history,
@@ -56,21 +65,35 @@ export function WorkoutsPage() {
       <div className="space-y-4 px-4 py-4 pb-24">
         {progress && trackedPlan && <PlanWeekCard progress={progress} />}
 
-        {isLoading ? <div className="py-16 text-center text-zinc-500">Carregando planos...</div> : plans.length === 0 ? (
+        {isLoading ? <div className="py-16 text-center text-zinc-500">Carregando planos...</div> : visiblePlans.length === 0 ? (
           <div className="space-y-4 py-14 text-center"><img src="/mob-icon.png" alt="" className="mx-auto h-24 w-24 rounded-3xl object-cover opacity-80" /><h2 className="text-xl font-bold text-white">Seu treino começa com um plano</h2><p className="mx-auto max-w-xs text-sm text-zinc-500">Deixe o assistente criar tudo com base no seu objetivo ou monte cada treino manualmente.</p><Button onClick={() => navigate('/training-plans/new')}>Criar primeiro plano</Button></div>
         ) : (
-          <div className="space-y-3">{plans.map((plan) => {
+          <div className="space-y-3">{visiblePlans.map((plan) => {
             // O treino da vez só existe para o plano acompanhado, e vive dentro
             // do cartão dele em vez de num cartão próprio: é o mesmo assunto.
             const next = plan.id === trackedPlan?.id ? progress?.days.find((entry) => entry.isNext) : undefined;
             return (
             <Card key={plan.id} onClick={() => navigate(`/training-plans/${plan.id}`)}>
-              <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h2 className="font-bold text-white">{plan.name}</h2>{plan.creation_method === 'automatic' && <span className="rounded-full bg-primary-950 px-2 py-0.5 text-[9px] font-semibold text-primary-300">IA</span>}</div><p className="mt-1 line-clamp-2 text-xs text-zinc-500">{plan.description}</p></div><span className="text-zinc-600">›</span></div>
+              <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 flex-wrap"><h2 className="font-bold text-white">{plan.name}</h2>{plan.creation_method === 'automatic' && <span className="rounded-full bg-primary-950 px-2 py-0.5 text-[9px] font-semibold text-primary-300">IA</span>}{plan.kind === 'dynamic' && <span className="rounded-full bg-sky-950 px-2 py-0.5 text-[9px] font-semibold text-sky-300">Dinâmico</span>}</div><p className="mt-1 line-clamp-2 text-xs text-zinc-500">{plan.description}</p></div><span className="text-zinc-600">›</span></div>
 
               {progress?.daysUnknown && plan.id === trackedPlan?.id && (
                 <p className="mt-3 rounded-xl bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
                   Abra este plano uma vez com internet para que o treino da vez fique disponível offline.
                 </p>
+              )}
+
+              {plan.kind === 'dynamic' && (
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); navigate(`/training-plans/${plan.id}`); }}
+                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-sky-950/60 px-3 py-3 text-left ring-1 ring-sky-800"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-semibold uppercase tracking-widest text-sky-400">Sob demanda</span>
+                    <span className="mt-0.5 block truncate font-bold text-white">Gerar o treino de hoje</span>
+                  </span>
+                  <span className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white">Abrir ›</span>
+                </button>
               )}
 
               {next?.day.id && (
@@ -99,6 +122,8 @@ export function WorkoutsPage() {
         )}
 
         <button onClick={() => navigate('/workouts/history')} className="flex w-full items-center justify-between rounded-2xl border border-primary-900 bg-primary-950/50 px-4 py-3 text-left"><div><p className="text-sm font-semibold text-primary-300">Histórico de treinos</p><p className="text-xs text-zinc-500">Calendário e sessões já realizadas</p></div><span className="text-xl text-primary-400">›</span></button>
+
+        <button onClick={() => navigate('/training-plans/archived')} className="flex w-full items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left"><div><p className="text-sm font-semibold text-zinc-300">Planos arquivados</p><p className="text-xs text-zinc-500">Planos encerrados após a data-alvo</p></div><span className="text-xl text-zinc-500">›</span></button>
 
         <button onClick={() => navigate('/workouts/new')} className="w-full py-2 text-sm text-zinc-600 hover:text-zinc-400">Registrar treino livre</button>
       </div>

@@ -51,6 +51,21 @@ func (h *TrainingPlanHandler) Adjust(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
 		return
 	}
+	// O vínculo com a academia sobrevive ao ajuste, então os aparelhos dela
+	// precisam chegar aqui também: sem isso o ajuste trocaria um exercício por
+	// outro que exige um aparelho que não existe no lugar onde a pessoa treina.
+	var gymID *int64
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT gym_id FROM training_plans WHERE id = $1 AND user_id = $2`, planID, userID).Scan(&gymID); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
+		return
+	}
+	gymContext, err := buildGymContext(r.Context(), h.db, userID, gymID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare training context"})
+		return
+	}
+	userContext += gymContext
 
 	var job models.TrainingPlanJob
 	err = h.db.Pool.QueryRow(r.Context(),

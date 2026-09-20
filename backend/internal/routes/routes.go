@@ -27,6 +27,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	legalHandler := handlers.NewLegalHandler()
 	onboardingHandler := handlers.NewOnboardingHandler(database, resolver)
 	trainingPlanHandler := handlers.NewTrainingPlanHandler(database, resolver)
+	gymHandler := handlers.NewGymHandler(database)
 	termsHandler := handlers.NewTermsHandler(database)
 	llmSettingsHandler := handlers.NewLLMSettingsHandler(database)
 	workoutChatHandler := handlers.NewWorkoutChatHandler(database, resolver)
@@ -94,11 +95,25 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /api/training-plans", chain(trainingPlanHandler.List, auth))
 	mux.HandleFunc("POST /api/training-plans/manual", chain(trainingPlanHandler.CreateManual, auth))
 	mux.HandleFunc("POST /api/training-plans/automatic", chain(trainingPlanHandler.CreateAutomatic, auth))
+	// Plano dinâmico: cria a configuração na hora (sem LLM), e cada dia nasce
+	// sob demanda via dynamic-day — mesmo padrão de job/polling de automatic.
+	mux.HandleFunc("POST /api/training-plans/dynamic", chain(trainingPlanHandler.CreateDynamic, auth))
+	mux.HandleFunc("POST /api/training-plans/{id}/dynamic-day", chain(trainingPlanHandler.GenerateDynamicDay, auth))
 	mux.HandleFunc("GET /api/training-plans/jobs/{id}", chain(trainingPlanHandler.GetJob, auth))
 	mux.HandleFunc("GET /api/training-plans/compensation", chain(trainingPlanHandler.GetCompensation, auth))
 	mux.HandleFunc("GET /api/training-plans/{id}", chain(trainingPlanHandler.Get, auth))
 	mux.HandleFunc("POST /api/training-plans/{id}/adjust", chain(trainingPlanHandler.Adjust, auth))
+	mux.HandleFunc("POST /api/training-plans/{id}/archive", chain(trainingPlanHandler.Archive, auth))
+	mux.HandleFunc("POST /api/training-plans/{id}/unarchive", chain(trainingPlanHandler.Unarchive, auth))
 	mux.HandleFunc("DELETE /api/training-plans/{id}", chain(trainingPlanHandler.Delete, auth))
+
+	// Academias e aparelhos: escopam a geração de plano ao que a pessoa tem à
+	// mão (ver gymEquipmentRule em training_plan_assistant.go).
+	mux.HandleFunc("GET /api/gyms", chain(gymHandler.List, auth))
+	mux.HandleFunc("POST /api/gyms", chain(gymHandler.Create, auth))
+	mux.HandleFunc("GET /api/gyms/{id}", chain(gymHandler.Get, auth))
+	mux.HandleFunc("PUT /api/gyms/{id}", chain(gymHandler.Update, auth))
+	mux.HandleFunc("DELETE /api/gyms/{id}", chain(gymHandler.Delete, auth))
 
 	// Vídeos demonstrativos de exercício. Autenticados: quem paga o egress do
 	// bucket é o dono do projeto, e um endpoint aberto que devolve URL assinada

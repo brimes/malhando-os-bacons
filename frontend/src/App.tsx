@@ -31,7 +31,10 @@ import { CheatDayPage } from './pages/CheatDay';
 import { FitnessAssessmentPage } from './pages/FitnessAssessment';
 import { NewTrainingPlanPage } from './pages/NewTrainingPlan';
 import { TrainingPlanDetailPage } from './pages/TrainingPlanDetail';
+import { ArchivedTrainingPlansPage } from './pages/ArchivedTrainingPlans';
 import { TrainingPlanDayPage } from './pages/TrainingPlanDay';
+import { GymsPage } from './pages/Gyms';
+import { GymFormPage } from './pages/GymForm';
 import { WorkoutSessionPage } from './pages/WorkoutSession';
 import { SettingsPage } from './pages/Settings';
 import { ResultsPage } from './pages/Results';
@@ -139,8 +142,12 @@ export default function App() {
             <Route path="/results" element={<ProtectedRoute><ResultsPage /></ProtectedRoute>} />
             <Route path="/results/review" element={<ProtectedRoute><ProgressReviewPage /></ProtectedRoute>} />
             <Route path="/training-plans/new" element={<ProtectedRoute><NewTrainingPlanPage /></ProtectedRoute>} />
+            <Route path="/training-plans/archived" element={<ProtectedRoute><ArchivedTrainingPlansPage /></ProtectedRoute>} />
             <Route path="/training-plans/:id" element={<ProtectedRoute><TrainingPlanDetailPage /></ProtectedRoute>} />
             <Route path="/training-plans/:planId/days/:dayId" element={<ProtectedRoute><TrainingPlanDayPage /></ProtectedRoute>} />
+            <Route path="/gyms" element={<ProtectedRoute><GymsPage /></ProtectedRoute>} />
+            <Route path="/gyms/new" element={<ProtectedRoute><GymFormPage /></ProtectedRoute>} />
+            <Route path="/gyms/:id" element={<ProtectedRoute><GymFormPage /></ProtectedRoute>} />
 
             <Route
               path="/nutrition"

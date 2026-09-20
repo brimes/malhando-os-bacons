@@ -54,6 +54,12 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   /^\/onboarding\/objective\//,
   /^\/training-plans\/automatic/,
   /^\/training-plans\/\d+\/adjust/,
+  // Mesma razão do automático/ajuste: a criação dinâmica ainda depende do
+  // servidor responder na hora (não é um job — ver `trainingPlansApi.createDynamic`),
+  // e a geração do dia roda minutos contra o assistente. Enfileiradas, a
+  // resposta chegaria sem ninguém olhando a tela.
+  /^\/training-plans\/dynamic/,
+  /^\/training-plans\/\d+\/dynamic-day/,
   // Same reasoning as the training plan assistant: generation/adjustment run
   // for minutes against a live LLM call, and a photo upload cannot be queued
   // in localStorage at all (base64 would blow past the per-entry cap and the

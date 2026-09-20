@@ -18,6 +18,11 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 
 - **Geração de plano é assíncrona** (`training_plan_jobs` + polling). O assistente leva minutos; segurar a conexão estourava o `WriteTimeout` e o proxy virava 500.
 - **Ajustar plano reconcilia no lugar**, nunca recria. `workouts` e `workout_sets` referenciam dias e exercícios com `ON DELETE SET NULL`: apagar desvincularia todo histórico e os pesos memorizados, sem erro.
+- **Plano dinâmico insere um dia novo a cada geração**, nunca reaproveita o
+  anterior. Por isso o `day_number` deixou de ter teto de 7 (migration 029):
+  reescrever o dia de ontem desvincularia o treino já feito nele, pelo mesmo
+  `ON DELETE SET NULL` acima. Cada geração também é uma chamada de IA — o
+  produto pede treino novo a cada toque, e é assim de propósito.
 - **`set_number` é derivado no servidor** e séries têm `client_set_id`; o start tem `client_session_id`. Sem essas chaves, uma requisição reenviada não é recusada como repetida — é renomeada para a próxima série e inserida, corrompendo o histórico em silêncio.
 - **A sessão de treino em andamento vive em slot próprio** do store offline, fora do cache despejável. No cache, ela era a primeira descartada pela poda LRU e pela limpeza de cota.
 - **Sair da conta não descarta a fila offline**, só o cache de leitura. Token expirado ou 5xx passageiro em `/auth/me` caem no logout e apagariam trabalho que só existe no aparelho.
