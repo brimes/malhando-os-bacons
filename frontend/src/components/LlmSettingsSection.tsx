@@ -6,74 +6,13 @@ import { getErrorMessage } from '../api/client';
 import { useOfflineStatus } from '../lib/offline';
 import type { LlmSettings } from '../types';
 
-function SubscriptionSheet({ isSubscribed, isBusy, onConfirm, onClose }: {
-  isSubscribed: boolean;
-  isBusy: boolean;
-  onConfirm: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={isSubscribed ? 'Cancelar assinatura' : 'Assinar o MOB'}
-      >
-        <div className="mb-4 rounded-xl border border-amber-900 bg-amber-950/30 p-3 text-xs font-semibold leading-relaxed text-amber-200">
-          Demonstração: nenhuma cobrança real acontece. Nenhum dado de pagamento é pedido ou armazenado.
-        </div>
-
-        <h3 className="text-lg font-bold text-white">{isSubscribed ? 'Cancelar assinatura' : 'Assinar o MOB'}</h3>
-
-        {isSubscribed ? (
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-            Ao cancelar, você volta a usar o crédito compartilhado entre todos os usuários — que pode acabar — a menos
-            que você cadastre a sua própria chave de API.
-          </p>
-        ) : (
-          <>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Com a assinatura, o MOB usa um LLM exclusivo para você. Sem fila, sem depender do crédito compartilhado e
-              sem precisar cadastrar chave de API.
-            </p>
-            <div className="mt-4 space-y-2">
-              {[
-                'LLM próprio, sem crédito compartilhado',
-                'Planos e dúvidas sem risco de ficar sem crédito',
-                'Sem precisar gerenciar chave de API',
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-2 rounded-xl bg-zinc-950 p-3">
-                  <span className="text-primary-400">✓</span>
-                  <span className="text-sm text-zinc-300">{item}</span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-center text-2xl font-black text-white">
-              R$ 0,00 <span className="text-sm font-medium text-zinc-500">/ demonstração</span>
-            </p>
-          </>
-        )}
-
-        <Button
-          fullWidth
-          size="lg"
-          variant={isSubscribed ? 'danger' : 'primary'}
-          isLoading={isBusy}
-          onClick={onConfirm}
-          className="mt-5"
-        >
-          {isSubscribed ? 'Cancelar assinatura (demo)' : 'Assinar agora (demo)'}
-        </Button>
-        <button type="button" onClick={onClose} className="mt-2 w-full py-3 text-sm text-zinc-500">
-          Voltar
-        </button>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * Sem fluxo de assinatura: o que existia aqui era uma demonstração, sem cobrança
+ * e sem provisionar nada. Uma tela de assinatura fora da compra no app é o que a
+ * App Review trata como funcionalidade de demonstração (2.2) ou como compra por
+ * fora (3.1.1) — e o backend (`POST /api/subscription/mock`) só marcava uma flag.
+ * Quando houver assinatura de verdade, ela entra por In-App Purchase.
+ */
 export function LlmSettingsSection() {
   // `/llm-settings` is in `ONLINE_ONLY_PATHS` (see `offlineSync.ts`): a save
   // attempted offline is rejected, never queued — the key must never sit in
@@ -88,8 +27,6 @@ export function LlmSettingsSection() {
   const [showKey, setShowKey] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSubscribing, setIsSubscribing] = useState(false);
-  const [showSubscription, setShowSubscription] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -106,7 +43,6 @@ export function LlmSettingsSection() {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const isSubscribed = settings.subscription_status === 'active';
   const suggestions = providerModels(provider);
 
   const persist = async (key: string, successMessage: string) => {
@@ -129,27 +65,6 @@ export function LlmSettingsSection() {
     if (!window.confirm('Remover sua chave e voltar a usar o crédito compartilhado?')) return;
     // Empty api_key is the documented way to drop the stored key on the backend.
     await persist('', 'Chave removida. Você voltou para o crédito compartilhado.');
-  };
-
-  const toggleSubscription = async () => {
-    setIsSubscribing(true);
-    setError(null);
-    setNotice(null);
-    try {
-      // The mock endpoint already returns the updated settings, so a second
-      // round trip would only add latency and a window for them to disagree.
-      apply(await llmApi.mockSubscription({ action: isSubscribed ? 'cancel' : 'subscribe' }));
-      setShowSubscription(false);
-      // Not "you now have your own LLM": the mock provisions nothing, so the
-      // requests keep running on the shared credits until a key is saved.
-      setNotice(isSubscribed
-        ? 'Assinatura cancelada (demonstração).'
-        : 'Assinatura ativada (demonstração). Nesta versão ela ainda não provisiona um LLM próprio.');
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
-    } finally {
-      setIsSubscribing(false);
-    }
   };
 
   if (isLoading) {
@@ -177,15 +92,6 @@ export function LlmSettingsSection() {
               param de funcionar até o crédito voltar. Se você não quiser dividir esse crédito, cadastre a sua própria
               chave de API abaixo.
             </p>
-            {isSubscribed && (
-              // The mock subscription does not provision anything: without a key
-              // the requests still run on the shared credits. Saying otherwise
-              // here would contradict the state shown right above.
-              <p className="mt-2 rounded-lg bg-black/30 p-2 text-xs leading-relaxed text-amber-200/70">
-                Sua assinatura está marcada como ativa, mas ela é uma <strong>demonstração</strong>: ainda não provisiona
-                um LLM próprio. Até cadastrar uma chave, o uso continua no crédito compartilhado.
-              </p>
-            )}
           </>
         ) : (
           <>
@@ -306,38 +212,6 @@ export function LlmSettingsSection() {
           </Button>
         )}
       </Card>
-
-      <Card className="space-y-3">
-        <div>
-          <h4 className="text-sm font-semibold text-white">Assinar o app</h4>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-            Não quer lidar com chave de API? Assine e o MOB passa a usar um LLM próprio para você.
-            <span className="mt-1 block font-semibold text-amber-300">Este fluxo é uma demonstração: não há cobrança real.</span>
-          </p>
-        </div>
-        {isSubscribed && (
-          <p className="rounded-xl border border-primary-900 bg-primary-950/30 p-3 text-xs font-semibold text-primary-200">
-            Assinatura ativa (demonstração)
-          </p>
-        )}
-        <Button
-          fullWidth
-          size="lg"
-          variant={isSubscribed ? 'secondary' : 'primary'}
-          onClick={() => setShowSubscription(true)}
-        >
-          {isSubscribed ? 'Gerenciar assinatura' : 'Assinar o app'}
-        </Button>
-      </Card>
-
-      {showSubscription && (
-        <SubscriptionSheet
-          isSubscribed={isSubscribed}
-          isBusy={isSubscribing}
-          onConfirm={toggleSubscription}
-          onClose={() => !isSubscribing && setShowSubscription(false)}
-        />
-      )}
     </div>
   );
 }

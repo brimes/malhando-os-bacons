@@ -180,18 +180,20 @@ export function LoginPage() {
             {isRegistering ? 'Já tenho uma conta' : 'Ainda não tenho uma conta'}
           </button>
 
-          <div className="flex items-center gap-3 text-xs text-zinc-600">
-            <span className="h-px flex-1 bg-zinc-800" />
-            <span>ou continue com</span>
-            <span className="h-px flex-1 bg-zinc-800" />
-          </div>
+          {/* Sem client ID — o caso dos builds de loja, onde a variável não é
+              injetada — o bloco inteiro some. O aviso de "aguardando configuração
+              OAuth" que ficava aqui era a primeira coisa na primeira tela, e lê
+              como app inacabado. */}
+          {googleClientID && (
+            <>
+              <div className="flex items-center gap-3 text-xs text-zinc-600">
+                <span className="h-px flex-1 bg-zinc-800" />
+                <span>ou continue com</span>
+                <span className="h-px flex-1 bg-zinc-800" />
+              </div>
 
-          {googleClientID ? (
-            <div id="google-signin-button" className="flex justify-center" />
-          ) : (
-            <div className="rounded-xl border border-zinc-800 px-4 py-3 text-center text-xs text-zinc-500">
-              Login com Google aguardando configuração OAuth
-            </div>
+              <div id="google-signin-button" className="flex justify-center" />
+            </>
           )}
 
           <p className="text-center text-xs text-zinc-600">

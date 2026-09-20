@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { LlmSettings, LlmSettingsInput, SubscriptionMockInput } from '../types';
+import type { LlmSettings, LlmSettingsInput } from '../types';
 
 export const DEFAULT_LLM_SETTINGS: LlmSettings = {
   provider: 'gemini',
@@ -34,13 +34,4 @@ export const llmApi = {
   update: async (input: LlmSettingsInput): Promise<LlmSettings> => (
     await apiClient.put<LlmSettings>('/llm-settings', input)
   ).data,
-  /**
-   * Mock subscription flow — no real charge happens on the backend. The response
-   * wraps the settings in {mock, settings}, unwrapped here so callers get the
-   * same shape as get/update.
-   */
-  mockSubscription: async (input: SubscriptionMockInput): Promise<LlmSettings> => {
-    const { data } = await apiClient.post<{ mock: boolean; settings: LlmSettings }>('/subscription/mock', input);
-    return data.settings;
-  },
 };

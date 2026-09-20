@@ -675,10 +675,6 @@ export interface LlmSettingsInput {
   api_key: string;
 }
 
-export interface SubscriptionMockInput {
-  action: 'subscribe' | 'cancel';
-}
-
 export interface WorkoutChatMessage {
   role: 'user' | 'assistant';
   content: string;
