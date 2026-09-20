@@ -60,6 +60,12 @@ type TrainingPlanExercise struct {
 	// ainda não foi resolvido, ou porque foi resolvido como "não existe".
 	// O app trata os dois casos igual: mostra o exercício sem vídeo.
 	Video *ExerciseVideo `json:"video,omitempty"`
+	// SubstitutedFrom só vem preenchido pela sessão ativa (ActiveWorkout), e só
+	// quando o exercício foi trocado com scope="session" — o plano (e este
+	// mesmo campo em qualquer outra leitura) nunca vê essa troca, porque ela
+	// vale só para este treino. Guarda o nome original para a tela explicar a
+	// troca; sem ele a pessoa só veria um exercício diferente do que memorizou.
+	SubstitutedFrom *string `json:"substituted_from,omitempty"`
 }
 
 // ExerciseVideo é o apontamento para o vídeo demonstrativo no bucket.

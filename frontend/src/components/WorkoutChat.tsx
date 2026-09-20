@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { workoutChatApi } from '../api/workoutChat';
+import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
-import type { WorkoutChatMessage } from '../types';
+import type { ActiveWorkout, TrainingPlanExercise, WorkoutChatMessage, WorkoutChatSubstitution } from '../types';
 
 interface WorkoutChatProps {
   workoutId: number;
@@ -10,6 +11,10 @@ interface WorkoutChatProps {
   onClose: () => void;
   /** Optional context appended to the question, e.g. the exercise being executed. */
   exerciseName?: string;
+  /** Today's exercises, só para achar o nome do que está sendo trocado no cartão de confirmação. */
+  exercises?: TrainingPlanExercise[];
+  /** Chamado com a sessão já atualizada depois que a pessoa confirma uma troca. */
+  onSubstituted?: (active: ActiveWorkout) => void;
 }
 
 const SUGGESTIONS = [
@@ -39,13 +44,18 @@ function useIsOnline(): boolean {
   return isOnline;
 }
 
-export function WorkoutChat({ workoutId, open = true, onClose, exerciseName }: WorkoutChatProps) {
+export function WorkoutChat({ workoutId, open = true, onClose, exerciseName, exercises = [], onSubstituted }: WorkoutChatProps) {
   const isOnline = useIsOnline();
   const [messages, setMessages] = useState<WorkoutChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A última proposta de troca que a resposta trouxe. Some ao enviar uma nova
+  // pergunta, ao aplicar ou ao ser ignorada — nunca fica "pendurada" depois
+  // que a conversa segue para outra coisa.
+  const [substitution, setSubstitution] = useState<WorkoutChatSubstitution | null>(null);
+  const [applyingScope, setApplyingScope] = useState<'session' | 'plan' | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -82,13 +92,17 @@ export function WorkoutChat({ workoutId, open = true, onClose, exerciseName }: W
     setDraft('');
     setError(null);
     setIsSending(true);
+    // A new question retires whatever proposal was on screen — it belongs to
+    // the turn that produced it, not to the conversation going forward.
+    setSubstitution(null);
     // Optimistic echo so the person sees the question immediately, mid-workout.
     setMessages((current) => [...current, { role: 'user', content: question, created_at: new Date().toISOString() }]);
 
     try {
       const contextual = exerciseName ? `(Exercício atual: ${exerciseName}) ${question}` : question;
-      const answer = await workoutChatApi.send(workoutId, contextual);
-      setMessages((current) => [...current, answer]);
+      const result = await workoutChatApi.send(workoutId, contextual);
+      setMessages((current) => [...current, result.message]);
+      setSubstitution(result.substitution ?? null);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
       // Drop the optimistic message so the person can retry without duplicates.
@@ -96,6 +110,35 @@ export function WorkoutChat({ workoutId, open = true, onClose, exerciseName }: W
       setDraft(question);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const originalExerciseName = substitution
+    ? exercises.find((exercise) => exercise.id === substitution.training_plan_exercise_id)?.exercise_name
+    : undefined;
+
+  const applySubstitution = async (scope: 'session' | 'plan') => {
+    if (!substitution || applyingScope) return;
+    setApplyingScope(scope);
+    setError(null);
+    try {
+      const active = await workoutsApi.substitute(workoutId, {
+        training_plan_exercise_id: substitution.training_plan_exercise_id,
+        new_name: substitution.new_name,
+        sets: substitution.sets,
+        reps: substitution.reps,
+        tracking_type: substitution.tracking_type,
+        duration_seconds: substitution.duration_seconds,
+        rest_seconds: substitution.rest_seconds,
+        notes: substitution.notes,
+        scope,
+      });
+      setSubstitution(null);
+      onSubstituted?.(active);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setApplyingScope(null);
     }
   };
 
@@ -159,6 +202,53 @@ export function WorkoutChat({ workoutId, open = true, onClose, exerciseName }: W
           {isSending && (
             <div className="w-fit rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-500">
               <span className="animate-pulse">digitando...</span>
+            </div>
+          )}
+
+          {substitution && (
+            <div className="rounded-2xl border border-primary-800 bg-primary-950/40 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-400">Troca sugerida</p>
+              {originalExerciseName && (
+                <p className="mt-1 text-xs text-zinc-400">
+                  No lugar de <span className="text-zinc-200">{originalExerciseName}</span>
+                </p>
+              )}
+              <p className="mt-1 text-base font-bold text-white">{substitution.new_name}</p>
+              <p className="mt-1 text-xs text-zinc-400">
+                {substitution.tracking_type === 'time'
+                  ? `${substitution.sets}x ${substitution.duration_seconds ?? 0}s`
+                  : `${substitution.sets}x${substitution.reps}`}
+                {substitution.rest_seconds > 0 && ` · ${substitution.rest_seconds}s de descanso`}
+              </p>
+              {substitution.reason && (
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">{substitution.reason}</p>
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  disabled={applyingScope !== null}
+                  onClick={() => void applySubstitution('session')}
+                  className="flex-1 rounded-xl bg-primary-600 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {applyingScope === 'session' ? 'Trocando...' : 'Trocar só hoje'}
+                </button>
+                <button
+                  type="button"
+                  disabled={applyingScope !== null}
+                  onClick={() => void applySubstitution('plan')}
+                  className="flex-1 rounded-xl bg-zinc-800 py-2.5 text-xs font-semibold text-zinc-200 disabled:opacity-50"
+                >
+                  {applyingScope === 'plan' ? 'Trocando...' : 'Trocar no plano'}
+                </button>
+              </div>
+              <button
+                type="button"
+                disabled={applyingScope !== null}
+                onClick={() => setSubstitution(null)}
+                className="mt-2 w-full py-1.5 text-[11px] text-zinc-500 disabled:opacity-50"
+              >
+                Ignorar
+              </button>
             </div>
           )}
 

@@ -51,6 +51,10 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   // "não sincronizado" queueing path instead of the clear "precisa de
   // internet" message this path exists to give it.
   /^\/workouts\/-?\d+\/chat(\/|$)/,
+  // Troca de exercício: depende do servidor para resolver o vídeo do nome
+  // novo e devolver a sessão atualizada. Enfileirada, a pessoa continuaria o
+  // treino com o exercício antigo achando que já trocou.
+  /^\/workouts\/-?\d+\/substitutions(\/|$)/,
   /^\/onboarding\/objective\//,
   /^\/training-plans\/automatic/,
   /^\/training-plans\/\d+\/adjust/,

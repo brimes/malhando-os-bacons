@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -15,14 +16,16 @@ import (
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/middleware"
 	"github.com/mob/backend/internal/models"
+	"github.com/mob/backend/internal/services"
 )
 
 type WorkoutSessionHandler struct {
-	db *db.DB
+	db      *db.DB
+	matcher services.ExerciseVideoMatcher
 }
 
-func NewWorkoutSessionHandler(database *db.DB) *WorkoutSessionHandler {
-	return &WorkoutSessionHandler{db: database}
+func NewWorkoutSessionHandler(database *db.DB, resolver services.GeneratorResolver) *WorkoutSessionHandler {
+	return &WorkoutSessionHandler{db: database, matcher: services.NewExerciseVideoMatcher(database, resolver)}
 }
 
 // offlineKeyPattern accepts a UUID or any short opaque identifier the app may
@@ -235,15 +238,25 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 	// taps on "próximo" all send the same stale number, and two of them can be
 	// in flight before the screen has caught up.
 	setNumber := req.SetNumber
+	exerciseName := req.ExerciseName
 	if req.TrainingPlanExerciseID != nil {
 		var plannedSets int
 		// FOR UPDATE serialises concurrent inserts for this exercise, so the
 		// count below cannot be read twice before either insert lands.
+		//
+		// The LEFT JOIN with workout_exercise_substitutions overrides both the
+		// planned set count and the name that gets recorded: when this session
+		// swapped the exercise ("Trocar só hoje"), the client cannot be trusted
+		// to send the substituted name back — the exercise id is the only thing
+		// that survives the swap, so the name is derived here instead.
 		err = tx.QueryRow(r.Context(),
-			`SELECT e.sets FROM training_plan_exercises e
+			`SELECT COALESCE(s.sets, e.sets), COALESCE(s.exercise_name, e.exercise_name)
+			 FROM training_plan_exercises e
 			 JOIN workouts w ON w.training_plan_day_id = e.plan_day_id
+			 LEFT JOIN workout_exercise_substitutions s
+			   ON s.training_plan_exercise_id = e.id AND s.workout_id = w.id
 			 WHERE e.id = $1 AND w.id = $2 FOR UPDATE OF e`,
-			*req.TrainingPlanExerciseID, workoutID).Scan(&plannedSets)
+			*req.TrainingPlanExerciseID, workoutID).Scan(&plannedSets, &exerciseName)
 		if err == pgx.ErrNoRows {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "exercise does not belong to this workout"})
 			return
@@ -282,7 +295,7 @@ func (h *WorkoutSessionHandler) CompleteSet(w http.ResponseWriter, r *http.Reque
 		 VALUES ($1,$2,1,$3,$4,$5,$6,$7,$8,$9,NOW())
 		 RETURNING id, workout_id, exercise_name, sets, reps, tracking_type, duration_seconds,
 		 weight_kg, training_plan_exercise_id, set_number, client_set_id, completed_at, created_at`,
-		workoutID, req.ExerciseName, req.Reps, req.WeightKg, req.TrackingType,
+		workoutID, exerciseName, req.Reps, req.WeightKg, req.TrackingType,
 		req.DurationSeconds, req.TrainingPlanExerciseID, setNumber, clientSetID,
 	).Scan(&set.ID, &set.WorkoutID, &set.ExerciseName, &set.Sets, &set.Reps, &set.TrackingType,
 		&set.DurationSeconds, &set.WeightKg, &set.TrainingPlanExerciseID, &set.SetNumber,
@@ -447,10 +460,17 @@ func (h *WorkoutSessionHandler) applyChecklistRequest(w http.ResponseWriter, r *
 		var name, trackingType string
 		var plannedSets, reps int
 		var duration *int
+		// Same override as CompleteSet: a session-only substitution wins over
+		// the plan exercise, so the checklist path records the exercise the
+		// person actually did — the substitute — not the one it replaced.
 		err := tx.QueryRow(r.Context(),
-			`SELECT e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds
+			`SELECT COALESCE(s.exercise_name, e.exercise_name), COALESCE(s.sets, e.sets),
+			        COALESCE(s.reps, e.reps), COALESCE(s.tracking_type, e.tracking_type),
+			        COALESCE(s.duration_seconds, e.duration_seconds)
 			 FROM training_plan_exercises e
 			 JOIN workouts w ON w.training_plan_day_id = e.plan_day_id
+			 LEFT JOIN workout_exercise_substitutions s
+			   ON s.training_plan_exercise_id = e.id AND s.workout_id = w.id
 			 WHERE e.id = $1 AND w.id = $2 FOR UPDATE OF e`,
 			item.TrainingPlanExerciseID, workoutID,
 		).Scan(&name, &plannedSets, &reps, &trackingType, &duration)
@@ -567,6 +587,125 @@ func (h *WorkoutSessionHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "workout cancelled"})
 }
 
+// Substitute applies an exercise swap the person confirmed — from the chat's
+// proposal, or typed by hand. Scope decides how far it reaches: "session"
+// only affects this workout (workout_exercise_substitutions), "plan"
+// rewrites the plan exercise itself and reaches every future session too.
+func (h *WorkoutSessionHandler) Substitute(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserID(r.Context())
+	workoutID, err := parseWorkoutIDFromSessionPath(r.URL.Path)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid workout id"})
+		return
+	}
+	var req models.WorkoutSubstitutionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	req.NewName = strings.TrimSpace(req.NewName)
+	req.Notes = strings.TrimSpace(req.Notes)
+	if req.TrackingType == "" {
+		req.TrackingType = "reps"
+	}
+	if req.NewName == "" || len(req.NewName) > 200 ||
+		req.Sets < 1 || req.Sets > 20 || req.Reps < 1 || req.Reps > 100 ||
+		req.RestSeconds < 0 || req.RestSeconds > 600 ||
+		(req.TrackingType != "reps" && req.TrackingType != "time") ||
+		(req.TrackingType == "time" && (req.DurationSeconds == nil || *req.DurationSeconds < 1 || *req.DurationSeconds > 7200)) ||
+		(req.Scope != "session" && req.Scope != "plan") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid substitution data"})
+		return
+	}
+
+	if !h.ownsActiveWorkout(r, userID, workoutID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "active workout not found"})
+		return
+	}
+
+	// O exercício tem de pertencer ao dia deste treino — nunca confiar no id
+	// só porque veio autenticado, sem isso a pessoa poderia apontar para o
+	// exercício de outro plano seu (ou, sem o EXISTS por usuário embutido no
+	// JOIN, tentar descobrir se um id de outra conta existe pela resposta).
+	var belongs bool
+	if err := h.db.Pool.QueryRow(r.Context(),
+		`SELECT EXISTS(
+		   SELECT 1 FROM training_plan_exercises e
+		   JOIN workouts w ON w.training_plan_day_id = e.plan_day_id
+		   WHERE e.id = $1 AND w.id = $2 AND w.user_id = $3)`,
+		req.TrainingPlanExerciseID, workoutID, userID).Scan(&belongs); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save substitution"})
+		return
+	}
+	if !belongs {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "exercise does not belong to this workout"})
+		return
+	}
+
+	if req.Scope == "plan" {
+		if err := h.substitutePlanExercise(r.Context(), req); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save substitution"})
+			return
+		}
+	} else {
+		if _, err := h.db.Pool.Exec(r.Context(),
+			`INSERT INTO workout_exercise_substitutions
+			 (workout_id, training_plan_exercise_id, exercise_name, sets, reps, tracking_type, duration_seconds, rest_seconds, notes)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+			 ON CONFLICT (workout_id, training_plan_exercise_id) DO UPDATE
+			   SET exercise_name = EXCLUDED.exercise_name, sets = EXCLUDED.sets, reps = EXCLUDED.reps,
+			       tracking_type = EXCLUDED.tracking_type, duration_seconds = EXCLUDED.duration_seconds,
+			       rest_seconds = EXCLUDED.rest_seconds, notes = EXCLUDED.notes`,
+			workoutID, req.TrainingPlanExerciseID, req.NewName, req.Sets, req.Reps, req.TrackingType,
+			req.DurationSeconds, req.RestSeconds, req.Notes); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to save substitution"})
+			return
+		}
+	}
+
+	h.associateVideoInBackground(userID, req.NewName)
+	h.writeActive(w, r, userID, workoutID)
+}
+
+// substitutePlanExercise aplica scope="plan": UPDATE no lugar, nunca
+// DELETE+INSERT. workout_sets referencia esta linha com ON DELETE SET NULL —
+// recriar desvincularia todo o histórico e os pesos memorizados em silêncio.
+// Mesmo precedente de applyDayExercises em training_plan_adjust.go: um nome
+// diferente zera last_weight_kg, porque o peso memorizado era de outro
+// movimento.
+func (h *WorkoutSessionHandler) substitutePlanExercise(ctx context.Context, req models.WorkoutSubstitutionRequest) error {
+	var currentName string
+	if err := h.db.Pool.QueryRow(ctx,
+		`SELECT exercise_name FROM training_plan_exercises WHERE id = $1`,
+		req.TrainingPlanExerciseID).Scan(&currentName); err != nil {
+		return err
+	}
+	query := `UPDATE training_plan_exercises
+	          SET exercise_name=$2, sets=$3, reps=$4, tracking_type=$5,
+	              duration_seconds=$6, rest_seconds=$7, notes=$8`
+	if !strings.EqualFold(currentName, req.NewName) {
+		query += `, last_weight_kg=NULL`
+	}
+	query += ` WHERE id=$1`
+	_, err := h.db.Pool.Exec(ctx, query, req.TrainingPlanExerciseID, req.NewName, req.Sets, req.Reps,
+		req.TrackingType, req.DurationSeconds, req.RestSeconds, req.Notes)
+	return err
+}
+
+// associateVideoInBackground liga o nome do substituto ao catálogo de vídeos
+// fora da requisição, como create faz para um plano inteiro
+// (associarVideosEmSegundoPlano em training_plans.go) — a resposta não espera
+// pela associação, e o vínculo aparece na próxima leitura da sessão.
+func (h *WorkoutSessionHandler) associateVideoInBackground(userID int64, exerciseName string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := h.matcher.EnsureLinks(ctx, userID, []string{exerciseName}); err != nil {
+			slog.Warn("substituição sem vínculo de vídeo", "user_id", userID, "error", err)
+		}
+	}()
+}
+
 func (h *WorkoutSessionHandler) ownsActiveWorkout(r *http.Request, userID, workoutID int64) bool {
 	var exists bool
 	err := h.db.Pool.QueryRow(r.Context(),
@@ -602,13 +741,21 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		// Traz o vídeo demonstrativo junto: é nesta tela, com a pessoa prestes
 		// a executar a série, que ele serve para alguma coisa. LEFT porque a
 		// maioria dos nomes não tem vínculo e o exercício vale sem vídeo.
+		//
+		// O segundo LEFT JOIN traz a troca de sessão ("Trocar só hoje"), quando
+		// existe uma para este workout — o vídeo é buscado pelo nome já
+		// resolvido (substituto, se houver) para não mostrar o vídeo do
+		// exercício antigo por engano.
 		rows, err := h.db.Pool.Query(r.Context(),
 			`SELECT e.id, e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds,
 			        e.rest_seconds, e.notes, e.last_weight_kg,
-			        v.catalog_name, v.object_webm, v.object_mp4
+			        v.catalog_name, v.object_webm, v.object_mp4,
+			        s.exercise_name, s.sets, s.reps, s.tracking_type, s.duration_seconds, s.rest_seconds, s.notes
 			 FROM training_plan_exercises e
-			 LEFT JOIN exercise_video_links v ON v.exercise_name = e.exercise_name
-			 WHERE e.plan_day_id=$1 ORDER BY e.exercise_order`, *planDayID)
+			 LEFT JOIN workout_exercise_substitutions s
+			   ON s.training_plan_exercise_id = e.id AND s.workout_id = $2
+			 LEFT JOIN exercise_video_links v ON v.exercise_name = COALESCE(s.exercise_name, e.exercise_name)
+			 WHERE e.plan_day_id=$1 ORDER BY e.exercise_order`, *planDayID, workoutID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to load exercises"})
 			return
@@ -618,10 +765,24 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		for rows.Next() {
 			var exercise models.TrainingPlanExercise
 			var catalogo, webm, mp4 *string
+			var subName, subTrackingType, subNotes *string
+			var subSets, subReps, subRestSeconds, subDurationSeconds *int
 			if err := rows.Scan(&exercise.ID, &exercise.ExerciseName, &exercise.Sets, &exercise.Reps,
 				&exercise.TrackingType, &exercise.DurationSeconds, &exercise.RestSeconds,
-				&exercise.Notes, &exercise.LastWeightKg, &catalogo, &webm, &mp4); err == nil {
+				&exercise.Notes, &exercise.LastWeightKg, &catalogo, &webm, &mp4,
+				&subName, &subSets, &subReps, &subTrackingType, &subDurationSeconds, &subRestSeconds, &subNotes); err == nil {
 				exercise.Video = montarVideo(catalogo, webm, mp4)
+				if subName != nil {
+					original := exercise.ExerciseName
+					exercise.SubstitutedFrom = &original
+					exercise.ExerciseName = *subName
+					exercise.Sets = *subSets
+					exercise.Reps = *subReps
+					exercise.TrackingType = *subTrackingType
+					exercise.DurationSeconds = subDurationSeconds
+					exercise.RestSeconds = *subRestSeconds
+					exercise.Notes = *subNotes
+				}
 				active.Exercises = append(active.Exercises, exercise)
 			}
 		}

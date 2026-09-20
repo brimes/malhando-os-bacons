@@ -53,6 +53,25 @@ type ActiveWorkout struct {
 	Exercises []TrainingPlanExercise `json:"exercises"`
 }
 
+// WorkoutSubstitutionRequest carries an exercise swap the person confirmed —
+// typically the proposal that came back from the chat (see
+// WorkoutChatSubstitution), but the shape stands on its own either way.
+//
+// Scope decides how far it reaches: "session" only affects this workout, via
+// workout_exercise_substitutions; "plan" rewrites training_plan_exercises in
+// place, so every future session sees it too.
+type WorkoutSubstitutionRequest struct {
+	TrainingPlanExerciseID int64  `json:"training_plan_exercise_id"`
+	NewName                string `json:"new_name"`
+	Sets                   int    `json:"sets"`
+	Reps                   int    `json:"reps"`
+	TrackingType           string `json:"tracking_type"`
+	DurationSeconds        *int   `json:"duration_seconds"`
+	RestSeconds            int    `json:"rest_seconds"`
+	Notes                  string `json:"notes"`
+	Scope                  string `json:"scope"`
+}
+
 // TrainingSettings holds the guided session preferences shown in the settings screen.
 type TrainingSettings struct {
 	CountdownSeconds int  `json:"countdown_seconds"`

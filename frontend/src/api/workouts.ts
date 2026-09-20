@@ -3,7 +3,7 @@ import { isConnectivityError, takeLocalId } from '../lib/offline';
 import { newClientSessionId, openOfflineSession, readCachedActiveWorkout, reconcileActiveSessionRead } from '../lib/workoutSession';
 import type {
   Workout, CreateWorkoutInput, WorkoutStats, WorkoutCalendarData,
-  ActiveWorkout, CompleteSetInput, WorkoutSet, CompleteWorkoutInput,
+  ActiveWorkout, CompleteSetInput, WorkoutSet, CompleteWorkoutInput, WorkoutSubstitutionInput,
 } from '../types';
 
 export const workoutsApi = {
@@ -134,5 +134,15 @@ export const workoutsApi = {
 
   cancel: async (workoutId: number): Promise<void> => {
     await apiClient.post(`/workouts/${workoutId}/cancel`);
+  },
+
+  // Aplica uma troca de exercício confirmada na tela — normalmente a proposta
+  // que veio do chat. Sempre online (ver ONLINE_ONLY_PATHS em offlineSync.ts):
+  // depende do servidor resolver o vídeo do novo nome e devolver a sessão
+  // atualizada, e enfileirada a pessoa continuaria vendo o exercício antigo
+  // achando que já trocou.
+  substitute: async (workoutId: number, input: WorkoutSubstitutionInput): Promise<ActiveWorkout> => {
+    const { data } = await apiClient.post<ActiveWorkout>(`/workouts/${workoutId}/substitutions`, input);
+    return data;
   },
 };

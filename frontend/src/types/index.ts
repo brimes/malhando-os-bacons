@@ -89,6 +89,13 @@ export interface TrainingPlanExercise {
   notes: string;
   last_weight_kg?: number;
   video?: ExerciseVideo;
+  /**
+   * Presente só na sessão ativa, e só quando o exercício foi trocado com
+   * "Trocar só hoje": o nome original, para a tela explicar a troca sem a
+   * pessoa achar que o plano mudou sozinho. `id` continua o do exercício do
+   * plano — é o que o app usa para registrar série.
+   */
+  substituted_from?: string;
 }
 
 /**
@@ -720,6 +727,40 @@ export interface WorkoutChatMessage {
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+}
+
+/**
+ * Proposta de troca de exercício que o chat pode devolver junto da resposta —
+ * só quando a pessoa pediu para trocar ou disse que não consegue fazer o
+ * exercício. Nada muda no treino sozinho: a tela mostra um cartão com
+ * "Trocar só hoje" / "Trocar no plano", e só aplica depois da confirmação via
+ * `workoutsApi.substitute`.
+ */
+export interface WorkoutChatSubstitution {
+  training_plan_exercise_id: number;
+  new_name: string;
+  sets: number;
+  reps: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number | null;
+  rest_seconds: number;
+  notes: string;
+  /** Frase curta explicando por que esse substituto serve — mostrada no cartão. */
+  reason: string;
+}
+
+/** Corpo de POST /workouts/{id}/substitutions. */
+export interface WorkoutSubstitutionInput {
+  training_plan_exercise_id: number;
+  new_name: string;
+  sets: number;
+  reps: number;
+  tracking_type: 'reps' | 'time';
+  duration_seconds?: number | null;
+  rest_seconds: number;
+  notes: string;
+  /** "session" só vale para este treino; "plan" reescreve o exercício do plano. */
+  scope: 'session' | 'plan';
 }
 
 export interface SaveBodyMeasurementInput {

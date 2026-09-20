@@ -19,7 +19,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 
 	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID, photoDir)
 	workoutHandler := handlers.NewWorkoutHandler(database)
-	sessionHandler := handlers.NewWorkoutSessionHandler(database)
+	sessionHandler := handlers.NewWorkoutSessionHandler(database, resolver)
 	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
 	stepsHandler := handlers.NewStepsHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database)
@@ -73,6 +73,10 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("POST /api/workouts/{id}/complete", chain(sessionHandler.Complete, auth))
 	mux.HandleFunc("POST /api/workouts/{id}/progress", chain(sessionHandler.Progress, auth))
 	mux.HandleFunc("POST /api/workouts/{id}/cancel", chain(sessionHandler.Cancel, auth))
+	// Troca de exercício confirmada na tela — vinda da proposta do chat ou
+	// aplicada diretamente. scope="session" só vale para este treino;
+	// scope="plan" reconcilia training_plan_exercises no lugar.
+	mux.HandleFunc("POST /api/workouts/{id}/substitutions", chain(sessionHandler.Substitute, auth))
 
 	// Dúvidas durante o treino
 	mux.HandleFunc("GET /api/workouts/{id}/chat", chain(workoutChatHandler.List, auth))

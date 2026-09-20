@@ -143,6 +143,7 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
               <p className="mt-1 text-xs text-zinc-500">
                 {remainingFor(exercise)} de {exercise.sets} séries restantes
                 {exercise.id === currentId && ' · atual'}
+                {exercise.substituted_from && ' · trocado hoje'}
               </p>
             </button>
           ))}
@@ -568,6 +569,15 @@ export function WorkoutSessionPage() {
     </button>
   );
 
+  // Applying a chat-proposed substitution updates the same slot `refresh()`
+  // writes into: the phase state (`currentExerciseId`, weights typed so far)
+  // is keyed by exercise id, which a substitution never changes, so nothing
+  // about it needs to move.
+  const applySubstitution = (updated: ActiveWorkout) => {
+    setActive(updated);
+    setShowChat(false);
+  };
+
   // Rendered by the execution screen and by the handover, so a question is never
   // more than one tap away while the session is running.
   const chatNode = showChat && (
@@ -575,6 +585,8 @@ export function WorkoutSessionPage() {
       workoutId={active.workout.id}
       onClose={() => setShowChat(false)}
       exerciseName={currentExercise?.exercise_name}
+      exercises={exercises}
+      onSubstituted={applySubstitution}
     />
   );
 
@@ -706,6 +718,9 @@ export function WorkoutSessionPage() {
               Exercício {exercises.length - pendingExercises.length + 1} de {exercises.length}
             </p>
             <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+            {currentExercise.substituted_from && (
+              <p className="mt-0.5 text-[11px] text-zinc-500">no lugar de {currentExercise.substituted_from}</p>
+            )}
             {/* Aqui é onde o vídeo serve para alguma coisa: a pessoa está
                 prestes a executar e ainda dá tempo de conferir o movimento.
                 Não renderiza nada quando não há vídeo. */}
@@ -820,6 +835,9 @@ export function WorkoutSessionPage() {
             Série {currentSetNumber} de {currentExercise.sets}
           </p>
           <h2 className="shrink-0 text-xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+          {currentExercise.substituted_from && (
+            <p className="shrink-0 text-[10px] text-zinc-500">no lugar de {currentExercise.substituted_from}</p>
+          )}
 
           {/* Duas leituras da mesma tela, conforme o que a pessoa está fazendo.
               Durante o esforço o que importa é ver o movimento, então o vídeo

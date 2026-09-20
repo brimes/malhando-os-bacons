@@ -27,19 +27,6 @@ const (
 	maxWorkoutChatMessage   = 1000
 )
 
-const workoutChatSystemPrompt = `Você é um assistente de treino dentro de um aplicativo de musculação, respondendo em português do Brasil enquanto a pessoa está treinando.
-
-Responda dúvidas sobre execução de exercício, ajuste de carga, substituição de exercício por equipamento ocupado ou indisponível, tempo de descanso e desconforto durante o movimento.
-
-Regras:
-- Seja curto e direto. Em geral no máximo 3 frases ou uma lista de até 4 itens. A pessoa está com o celular na mão, no meio da série.
-- Use o contexto do treino (exercícios do dia, séries já feitas, cargas) para responder de forma concreta.
-- Respeite as lesões e limitações informadas: nunca sugira algo que conflite com elas.
-- Você NÃO faz diagnóstico médico e não prescreve tratamento ou medicamento.
-- Diante de dor aguda, dor no peito, falta de ar, tontura, formigamento, dor articular que piora ou qualquer sintoma preocupante: oriente parar o exercício e procurar um profissional de saúde. Não tente descobrir a causa.
-- Se a dúvida fugir do escopo de treino, diga isso em uma frase e volte ao treino.
-- Não invente exercícios que não existem nem números de carga que você não tem como saber.`
-
 type WorkoutChatHandler struct {
 	db       *db.DB
 	resolver services.GeneratorResolver
@@ -108,15 +95,13 @@ func (h *WorkoutChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chat, err := h.resolver.ChatFor(r.Context(), userID)
-	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error": "o assistente configurado não responde dúvidas em texto livre",
-		})
-		return
-	}
+	// A geração estruturada é sempre possível — o resolver cai para o crédito
+	// compartilhado quando o provedor da pessoa falha ao construir — então,
+	// diferente do texto livre de antes, não há um caso de "provedor não
+	// suporta" a tratar aqui.
+	assistant := services.NewWorkoutChatAssistant(h.resolver.For(r.Context(), userID))
 
-	workoutContext, err := h.buildWorkoutContext(r.Context(), userID, workoutID)
+	workoutContext, exerciseIDs, err := h.buildWorkoutContext(r.Context(), userID, workoutID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to prepare workout context"})
 		return
@@ -135,7 +120,7 @@ func (h *WorkoutChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	chatCtx, cancel := context.WithTimeout(r.Context(), workoutChatTimeout)
 	defer cancel()
-	answer, err := chat.Chat(chatCtx, workoutChatSystemPrompt+"\n\n"+workoutContext, conversation)
+	draft, err := assistant.Reply(chatCtx, workoutContext, conversation)
 	if err != nil {
 		slog.Error("workout chat failed", "user_id", userID, "workout_id", workoutID, "error", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
@@ -143,7 +128,7 @@ func (h *WorkoutChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	answer = strings.TrimSpace(answer)
+	answer := strings.TrimSpace(draft.Answer)
 	if answer == "" {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error": "o assistente não conseguiu responder; tente reformular a pergunta",
@@ -151,9 +136,22 @@ func (h *WorkoutChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A proposta só é honrada se apontar para um exercício real do treino de
+	// hoje — o schema pede isso ao modelo, mas nada obriga ele a obedecer, e
+	// aceitar um id fora da lista aplicaria a troca no exercício errado (ou
+	// falharia com 400 lá na frente, sem a pessoa entender por quê).
+	substitution := draft.Substitution
+	if substitution != nil && !exerciseIDs[substitution.TrainingPlanExerciseID] {
+		slog.Warn("assistente propôs troca para exercício fora do treino de hoje",
+			"user_id", userID, "workout_id", workoutID, "training_plan_exercise_id", substitution.TrainingPlanExerciseID)
+		substitution = nil
+	}
+
 	// Both turns are written together, after the answer arrives: storing the
 	// question up front would leave it in the thread with no reply whenever the
-	// provider fails, and the person would have no way to retry it.
+	// provider fails, and the person would have no way to retry it. The
+	// substitution proposal itself is not persisted — it lives only in this
+	// response, and the screen either applies it right away or lets it go.
 	rows, err := h.db.Pool.Query(r.Context(),
 		`INSERT INTO workout_chat_messages (workout_id, user_id, role, content)
 		 VALUES ($1, $2, 'user', $3), ($1, $2, 'assistant', $4)
@@ -164,7 +162,7 @@ func (h *WorkoutChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var response models.WorkoutChatResponse
+	response := models.WorkoutChatResponse{Substitution: substitution}
 	for rows.Next() {
 		var message models.WorkoutChatMessage
 		if err := rows.Scan(&message.ID, &message.WorkoutID, &message.Role, &message.Content, &message.CreatedAt); err != nil {
@@ -220,49 +218,69 @@ func (h *WorkoutChatHandler) loadMessages(ctx context.Context, workoutID int64, 
 }
 
 // buildWorkoutContext describes the session the question is about: the plan for
-// the day, what has already been done and who the person is.
-func (h *WorkoutChatHandler) buildWorkoutContext(ctx context.Context, userID, workoutID int64) (string, error) {
+// the day, what has already been done and who the person is. The returned map
+// lists the training_plan_exercise ids that exist in today's day — the only
+// ones a substitution proposal may legitimately point at; Send rejects
+// anything else instead of trusting the model's output.
+func (h *WorkoutChatHandler) buildWorkoutContext(ctx context.Context, userID, workoutID int64) (string, map[int64]bool, error) {
 	var name, status string
 	var date time.Time
 	var planDayID *int64
 	if err := h.db.Pool.QueryRow(ctx,
 		`SELECT name, date, status, training_plan_day_id FROM workouts WHERE id = $1 AND user_id = $2`,
 		workoutID, userID).Scan(&name, &date, &status, &planDayID); err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	var summary strings.Builder
 	fmt.Fprintf(&summary, "Treino atual: %q, data %s, situação %s.\n",
 		name, date.Format("2006-01-02"), translateWorkoutStatus(status))
 
+	exerciseIDs := map[int64]bool{}
 	if planDayID != nil {
 		var dayName, focus, instructions string
+		var planID int64
 		if err := h.db.Pool.QueryRow(ctx,
-			`SELECT name, focus, instructions FROM training_plan_days WHERE id = $1`, planDayID,
-		).Scan(&dayName, &focus, &instructions); err == nil {
+			`SELECT d.name, d.focus, d.instructions, p.id
+			 FROM training_plan_days d JOIN training_plans p ON p.id = d.plan_id
+			 WHERE d.id = $1`, planDayID,
+		).Scan(&dayName, &focus, &instructions, &planID); err == nil {
 			fmt.Fprintf(&summary, "Dia do plano: %s (foco: %s). Instruções: %s\n", dayName, focus, instructions)
+
+			// Mesma regra do ajuste de plano (Adjust em training_plan_adjust.go):
+			// uma troca sugerida aqui também tem de caber nos aparelhos da
+			// academia, quando há uma vinculada ao plano.
+			var gymID *int64
+			if err := h.db.Pool.QueryRow(ctx,
+				`SELECT gym_id FROM training_plans WHERE id = $1`, planID).Scan(&gymID); err == nil {
+				if gymContext, gymErr := buildGymContext(ctx, h.db, userID, gymID); gymErr == nil && gymContext != "" {
+					summary.WriteString(gymContext + "\n")
+				}
+			}
 		}
 		rows, err := h.db.Pool.Query(ctx,
-			`SELECT exercise_name, sets, reps, tracking_type, duration_seconds, rest_seconds, notes, last_weight_kg
+			`SELECT id, exercise_name, sets, reps, tracking_type, duration_seconds, rest_seconds, notes, last_weight_kg
 			 FROM training_plan_exercises WHERE plan_day_id = $1 ORDER BY exercise_order`, *planDayID)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
-		summary.WriteString("Exercícios previstos para hoje:\n")
+		summary.WriteString("Exercícios previstos para hoje (id é o que vai em substitution.training_plan_exercise_id):\n")
 		for rows.Next() {
+			var id int64
 			var exerciseName, trackingType, notes string
 			var sets, reps, restSeconds int
 			var durationSeconds *int
 			var lastWeight *float64
-			if err := rows.Scan(&exerciseName, &sets, &reps, &trackingType, &durationSeconds,
+			if err := rows.Scan(&id, &exerciseName, &sets, &reps, &trackingType, &durationSeconds,
 				&restSeconds, &notes, &lastWeight); err != nil {
 				continue
 			}
+			exerciseIDs[id] = true
 			target := fmt.Sprintf("%dx%d repetições", sets, reps)
 			if trackingType == "time" && durationSeconds != nil {
 				target = fmt.Sprintf("%d séries de %ds", sets, *durationSeconds)
 			}
-			line := fmt.Sprintf("- %s: %s, descanso %ds", exerciseName, target, restSeconds)
+			line := fmt.Sprintf("- id=%d %s: %s, descanso %ds", id, exerciseName, target, restSeconds)
 			if lastWeight != nil && *lastWeight > 0 {
 				line += fmt.Sprintf(", última carga %.1fkg", *lastWeight)
 			}
@@ -278,7 +296,7 @@ func (h *WorkoutChatHandler) buildWorkoutContext(ctx context.Context, userID, wo
 		`SELECT exercise_name, COUNT(*), MAX(weight_kg) FROM workout_sets
 		 WHERE workout_id = $1 GROUP BY exercise_name ORDER BY MIN(id)`, workoutID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	defer setRows.Close()
 	done := []string{}
@@ -305,12 +323,12 @@ func (h *WorkoutChatHandler) buildWorkoutContext(ctx context.Context, userID, wo
 	// thinner, which the prompt already tolerates.
 	userContext, err := buildUserContext(ctx, h.db, userID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return "", err
+		return "", nil, err
 	}
 	if userContext != "" {
 		summary.WriteString("Contexto da pessoa: " + userContext + "\n")
 	}
-	return summary.String(), nil
+	return summary.String(), exerciseIDs, nil
 }
 
 func translateWorkoutStatus(status string) string {
