@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { App as CapacitorApp } from '@capacitor/app';
 import { DeleteAccountModal } from '../components/DeleteAccountModal';
 
 export function ProfilePage() {
@@ -12,6 +13,16 @@ export function ProfilePage() {
   const { user, logout, deleteAccount } = useAuthStore();
   const { state, isLoading, resetObjective } = useOnboardingStore();
   const [isDeleteOpen, setDeleteOpen] = useState(false);
+  // A versão vem do pacote instalado, não de um número escrito no código: era
+  // isso que fazia toda build dizer "0.1.0" e não dava para saber, olhando o
+  // app, se o aparelho tinha a build nova. `getInfo` só responde no app
+  // nativo — no navegador a promessa rejeita e a linha muda de texto.
+  const [appVersion, setAppVersion] = useState('');
+  useEffect(() => {
+    CapacitorApp.getInfo()
+      .then((info) => setAppVersion(`${info.version} (${info.build})`))
+      .catch(() => setAppVersion(''));
+  }, []);
 
   const redefineObjective = async () => {
     if (!window.confirm('Deseja apagar a conversa atual e definir um novo objetivo?')) return;
@@ -165,7 +176,7 @@ export function ProfilePage() {
           Excluir minha conta
         </button>
 
-        <p className="pt-2 text-center text-xs text-zinc-700">MOB versão 0.1.0</p>
+        <p className="pt-2 text-center text-xs text-zinc-700">{appVersion ? `MOB versão ${appVersion}` : 'MOB no navegador'}</p>
       </div>
 
       {isDeleteOpen && (
