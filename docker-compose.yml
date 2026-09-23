@@ -28,8 +28,6 @@ services:
       PORT: "8080"
       DATABASE_URL: "postgres://mob_user:mob_password@postgres:5432/mob_db?sslmode=disable"
       JWT_SECRET: "dev-secret-change-in-production-please"
-      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-placeholder}"
-      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-placeholder}"
       ENVIRONMENT: "development"
       ALLOWED_ORIGINS: "http://localhost:5173,capacitor://localhost"
       ASSISTANT_PROVIDER: "${ASSISTANT_PROVIDER:-gemini}"
@@ -59,7 +57,6 @@ services:
     container_name: mob-frontend
     environment:
       VITE_PROXY_TARGET: "http://backend:8080"
-      VITE_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
     ports:
       - "5173:5173"
     depends_on:

@@ -14,10 +14,10 @@ import (
 // known once the user is.
 // videoSigner pode ser nil: sem credencial configurada os endpoints de vídeo
 // respondem 503 e o resto da API funciona normalmente.
-func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, googleClientID, allowedOrigins, photoDir string) http.Handler {
+func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, allowedOrigins, photoDir string) http.Handler {
 	mux := http.NewServeMux()
 
-	authHandler := handlers.NewAuthHandler(database, jwtSecret, googleClientID, photoDir)
+	authHandler := handlers.NewAuthHandler(database, jwtSecret, photoDir)
 	workoutHandler := handlers.NewWorkoutHandler(database)
 	sessionHandler := handlers.NewWorkoutSessionHandler(database, resolver)
 	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
@@ -41,7 +41,6 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	// Auth routes (public)
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
-	mux.HandleFunc("POST /api/auth/google", authHandler.GoogleLogin)
 	mux.HandleFunc("GET /api/auth/me", chain(authHandler.Me, auth))
 	// Excluir a conta de dentro do app é exigência da Apple (5.1.1(v)) para
 	// quem deixa criar conta. Apaga de verdade: cascata no banco e as fotos.

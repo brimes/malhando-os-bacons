@@ -9,19 +9,17 @@ import (
 )
 
 type Config struct {
-	Port               string
-	DatabaseURL        string
-	JWTSecret          string
-	GoogleClientID     string
-	GoogleClientSecret string
-	Environment        string
-	AllowedOrigins     string
-	AssistantProvider  string
-	OpenCodeURL        string
-	OpenCodeModel      string
-	GeminiAPIKey       string
-	GeminiModel        string
-	MigrationsDir      string
+	Port              string
+	DatabaseURL       string
+	JWTSecret         string
+	Environment       string
+	AllowedOrigins    string
+	AssistantProvider string
+	OpenCodeURL       string
+	OpenCodeModel     string
+	GeminiAPIKey      string
+	GeminiModel       string
+	MigrationsDir     string
 	// PhotoDir is where nutrition photos (plate/label) are written: a bind
 	// mount in dev, a PersistentVolumeClaim in production. Without it the
 	// backend would write into the container's ephemeral filesystem and lose
@@ -44,20 +42,18 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		Port:               getEnv("PORT", "8080"),
-		DatabaseURL:        getEnvRequired("DATABASE_URL"),
-		JWTSecret:          getEnvRequired("JWT_SECRET"),
-		GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
-		GoogleClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
-		Environment:        getEnv("ENVIRONMENT", "development"),
-		AllowedOrigins:     getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
-		AssistantProvider:  getEnv("ASSISTANT_PROVIDER", "gemini"),
-		OpenCodeURL:        getEnv("OPENCODE_URL", "http://localhost:4096"),
-		OpenCodeModel:      getEnv("OPENCODE_MODEL", "openai/gpt-5.6-sol"),
-		GeminiAPIKey:       getEnv("GEMINI_API_KEY", ""),
-		GeminiModel:        getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
-		MigrationsDir:      getEnv("MIGRATIONS_DIR", "/app/migrations"),
-		PhotoDir:           getEnv("PHOTO_DIR", "/data/photos"),
+		Port:              getEnv("PORT", "8080"),
+		DatabaseURL:       getEnvRequired("DATABASE_URL"),
+		JWTSecret:         getEnvRequired("JWT_SECRET"),
+		Environment:       getEnv("ENVIRONMENT", "development"),
+		AllowedOrigins:    getEnv("ALLOWED_ORIGINS", "http://localhost:5173"),
+		AssistantProvider: getEnv("ASSISTANT_PROVIDER", "gemini"),
+		OpenCodeURL:       getEnv("OPENCODE_URL", "http://localhost:4096"),
+		OpenCodeModel:     getEnv("OPENCODE_MODEL", "openai/gpt-5.6-sol"),
+		GeminiAPIKey:      getEnv("GEMINI_API_KEY", ""),
+		GeminiModel:       getEnv("GEMINI_MODEL", "gemini-3.6-flash"),
+		MigrationsDir:     getEnv("MIGRATIONS_DIR", "/app/migrations"),
+		PhotoDir:          getEnv("PHOTO_DIR", "/data/photos"),
 
 		ExerciseVideoBucket:      getEnv("EXERCISE_VIDEO_BUCKET", "malhando-os-bacons-exercicios"),
 		ExerciseVideoCredentials: getEnv("EXERCISE_VIDEO_CREDENTIALS", ""),

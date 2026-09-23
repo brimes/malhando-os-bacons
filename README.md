@@ -56,7 +56,6 @@ mob/
 ## Rotas da API
 
 ```
-POST   /api/auth/google              — Login com Google OAuth
 POST   /api/auth/register            — Cadastro com nome, e-mail e senha
 POST   /api/auth/login               — Login com e-mail e senha
 GET    /api/auth/me                  — Usuário atual
@@ -112,7 +111,6 @@ cd /home/picoclaw/mob
 cp backend/.env.example backend/.env
 # Variáveis usadas pelo Docker Compose
 cp .env.example .env
-# Edite backend/.env com suas credenciais Google OAuth
 
 # Sobe PostgreSQL, Backend e Frontend web via Docker
 make up
@@ -138,7 +136,7 @@ Abra `/home/picoclaw/mob/watch/` no Android Studio e conecte um Galaxy Watch 7 (
 
 ### Schema
 ```sql
-users            — usuários (Google OAuth)
+users            — usuários (e-mail e senha)
 workouts         — sessões de treino
 workout_sets     — exercícios dentro do treino
 food_items       — catálogo de alimentos (TACO seeds incluídas)
@@ -160,8 +158,6 @@ make migrate
 | `PORT` | Porta do servidor (padrão: 8080) |
 | `DATABASE_URL` | URL de conexão PostgreSQL |
 | `JWT_SECRET` | Secret para assinar tokens JWT (mínimo 32 chars) |
-| `GOOGLE_CLIENT_ID` | Client ID do Google OAuth |
-| `GOOGLE_CLIENT_SECRET` | Client Secret do Google OAuth |
 | `ENVIRONMENT` | `development` ou `production` |
 | `ALLOWED_ORIGINS` | Origins permitidas para CORS |
 | `OPENCODE_URL` | URL do servidor iniciado por `opencode serve` |
@@ -177,21 +173,6 @@ opencode serve --hostname 192.168.252.1 --port 4096
 
 Neste ambiente, `192.168.252.1` é a interface do Mac acessível pela VM Docker. O backend usa `OPENCODE_URL` e `OPENCODE_MODEL`, permitindo trocar o modelo sem alterar o código.
 
-## Login com Google
-
-1. Acesse [Google Cloud Console](https://console.cloud.google.com/) e crie ou selecione um projeto.
-2. Abra **Google Auth Platform**, configure **Branding**, **Audience** e adicione seu e-mail como usuário de teste enquanto o app estiver em modo de testes.
-3. Em **Clients**, crie um cliente OAuth do tipo **Web application**.
-4. Em **Authorized JavaScript origins**, adicione `http://localhost:5173`.
-5. Copie o **Client ID** para `GOOGLE_CLIENT_ID` no arquivo `.env` da raiz e reconstrua os serviços:
-
-```bash
-cp .env.example .env
-# Edite GOOGLE_CLIENT_ID no arquivo .env
-docker compose up -d --build backend frontend
-```
-
-O fluxo web atual usa Google Identity Services e precisa apenas do Client ID. Nunca coloque o Client Secret no frontend ou em uma variável `VITE_*`. Android e iOS precisarão de clientes OAuth próprios quando forem compilados.
 
 ## Features
 

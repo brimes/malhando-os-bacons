@@ -2,25 +2,10 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/useAuthStore';
 
-const googleClientID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
-declare global {
-  interface Window {
-    google?: {
-      accounts: {
-        id: {
-          initialize: (config: object) => void;
-          renderButton: (element: HTMLElement, config: object) => void;
-          prompt: () => void;
-        };
-      };
-    };
-  }
-}
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const { login, register, loginWithGoogle, clearError, isAuthenticated, isLoading, error } = useAuthStore();
+  const { login, register, clearError, isAuthenticated, isLoading, error } = useAuthStore();
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -31,42 +16,6 @@ export function LoginPage() {
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
-
-  useEffect(() => {
-    if (!googleClientID) return;
-
-    // Load Google Identity Services script
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      window.google?.accounts.id.initialize({
-        client_id: googleClientID,
-        callback: async (response: { credential: string }) => {
-          try {
-            await loginWithGoogle(response.credential);
-            navigate('/');
-          } catch {
-            // Error handled by store
-          }
-        },
-      });
-
-      const buttonEl = document.getElementById('google-signin-button');
-      if (buttonEl) {
-        window.google?.accounts.id.renderButton(buttonEl, {
-          theme: 'filled_black',
-          size: 'large',
-          shape: 'pill',
-          text: 'signin_with',
-          locale: 'pt-BR',
-        });
-      }
-    };
-    document.head.appendChild(script);
-    return () => script.remove();
-  }, [loginWithGoogle, navigate]);
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -180,21 +129,6 @@ export function LoginPage() {
             {isRegistering ? 'Já tenho uma conta' : 'Ainda não tenho uma conta'}
           </button>
 
-          {/* Sem client ID — o caso dos builds de loja, onde a variável não é
-              injetada — o bloco inteiro some. O aviso de "aguardando configuração
-              OAuth" que ficava aqui era a primeira coisa na primeira tela, e lê
-              como app inacabado. */}
-          {googleClientID && (
-            <>
-              <div className="flex items-center gap-3 text-xs text-zinc-600">
-                <span className="h-px flex-1 bg-zinc-800" />
-                <span>ou continue com</span>
-                <span className="h-px flex-1 bg-zinc-800" />
-              </div>
-
-              <div id="google-signin-button" className="flex justify-center" />
-            </>
-          )}
 
           <p className="text-center text-xs text-zinc-600">
             Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade.

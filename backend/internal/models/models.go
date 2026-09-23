@@ -148,10 +148,6 @@ type Steps struct {
 
 // Request/Response types
 
-type GoogleAuthRequest struct {
-	IDToken string `json:"id_token"`
-}
-
 type RegisterRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
