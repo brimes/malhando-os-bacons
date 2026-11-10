@@ -749,7 +749,7 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		rows, err := h.db.Pool.Query(r.Context(),
 			`SELECT e.id, e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds,
 			        e.rest_seconds, e.notes, e.last_weight_kg,
-			        v.catalog_name, v.object_webm, v.object_mp4,
+			        v.catalog_name, v.object_webm, v.object_mp4, v.resolved_by,
 			        s.exercise_name, s.sets, s.reps, s.tracking_type, s.duration_seconds, s.rest_seconds, s.notes
 			 FROM training_plan_exercises e
 			 LEFT JOIN workout_exercise_substitutions s
@@ -764,14 +764,15 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 		active.Exercises = []models.TrainingPlanExercise{}
 		for rows.Next() {
 			var exercise models.TrainingPlanExercise
-			var catalogo, webm, mp4 *string
+			var catalogo, webm, mp4, resolvedBy *string
 			var subName, subTrackingType, subNotes *string
 			var subSets, subReps, subRestSeconds, subDurationSeconds *int
 			if err := rows.Scan(&exercise.ID, &exercise.ExerciseName, &exercise.Sets, &exercise.Reps,
 				&exercise.TrackingType, &exercise.DurationSeconds, &exercise.RestSeconds,
-				&exercise.Notes, &exercise.LastWeightKg, &catalogo, &webm, &mp4,
+				&exercise.Notes, &exercise.LastWeightKg, &catalogo, &webm, &mp4, &resolvedBy,
 				&subName, &subSets, &subReps, &subTrackingType, &subDurationSeconds, &subRestSeconds, &subNotes); err == nil {
 				exercise.Video = montarVideo(catalogo, webm, mp4)
+				exercise.VideoStatus = statusDoVideo(exercise.Video, resolvedBy)
 				if subName != nil {
 					original := exercise.ExerciseName
 					exercise.SubstitutedFrom = &original
@@ -786,6 +787,9 @@ func (h *WorkoutSessionHandler) writeActive(w http.ResponseWriter, r *http.Reque
 				active.Exercises = append(active.Exercises, exercise)
 			}
 		}
+		// Depois do loop: o nome final (com a troca de sessão aplicada) é o
+		// que a ilustração deve seguir.
+		anexarIlustracoes(r.Context(), h.db, active.Exercises)
 	}
 	if active.Exercises == nil {
 		active.Exercises = []models.TrainingPlanExercise{}

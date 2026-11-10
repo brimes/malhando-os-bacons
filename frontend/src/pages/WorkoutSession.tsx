@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
 import { WorkoutChat } from '../components/WorkoutChat';
 import { ExerciseVideoPlayer } from '../components/ExerciseVideoPlayer';
+import { ExerciseIllustration } from '../components/ExerciseIllustration';
 import { getErrorMessage } from '../api/client';
 import {
   dropQueuedMutations,
@@ -725,6 +726,7 @@ export function WorkoutSessionPage() {
                 prestes a executar e ainda dá tempo de conferir o movimento.
                 Não renderiza nada quando não há vídeo. */}
             <ExerciseVideoPlayer video={currentExercise.video} className="mt-3 aspect-square" />
+            {!currentExercise.video && <ExerciseIllustration exercise={currentExercise} className="mt-3" />}
             <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
               {currentExercise.tracking_type === 'time' ? (
                 <>
@@ -887,6 +889,7 @@ export function WorkoutSessionPage() {
                   Assim o elemento tem exatamente o tamanho da imagem. */}
               <div className="flex min-h-0 flex-1 items-center justify-center">
                 <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-auto object-contain" />
+                {!currentExercise.video && <ExerciseIllustration exercise={currentExercise} className="h-full" />}
               </div>
               {currentExercise.notes && (
                 <p className="line-clamp-2 shrink-0 text-[11px] leading-snug text-zinc-500">{currentExercise.notes}</p>

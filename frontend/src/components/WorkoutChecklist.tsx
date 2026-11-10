@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from './Card';
 import { ExerciseVideoPlayer } from './ExerciseVideoPlayer';
+import { ExerciseIllustration } from './ExerciseIllustration';
 import { temVideoLocal } from '../lib/videos/videoStore';
 import { isNetworkOnline } from '../lib/offline';
 import type { TrainingPlanExercise } from '../types';
@@ -34,7 +35,9 @@ function formatTarget(exercise: TrainingPlanExercise) {
  */
 function BotaoVerMovimento({ exercise }: { exercise: TrainingPlanExercise }) {
   const [aberto, setAberto] = useState(false);
-  if (!exercise.video) return null;
+  if (!exercise.video) {
+    return <ExerciseIllustration exercise={exercise} className="mt-2" />;
+  }
   if (!temVideoLocal(exercise.video.catalog_name) && !isNetworkOnline()) return null;
 
   return (

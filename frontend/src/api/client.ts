@@ -47,6 +47,9 @@ const NON_CACHEABLE_GET_PATHS: RegExp[] = [
   /^\/nutrition\/plans\/jobs\//,
   /^\/nutrition\/suggestion/,
   /^\/nutrition\/photos\//,
+  // Estado de geração em curso e imagem (blob): nada que valha guardar no
+  // localStorage. A imagem pronta tem armazenamento próprio em lib/illustrations.
+  /^\/exercise-illustrations/,
   /^\/nutrition\/cheat-day/,
   /^\/training-plans\/jobs\//,
   // A avaliação é vários parágrafos de texto mais dois planos inteiros em

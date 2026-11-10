@@ -167,7 +167,7 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 		exerciseRows, err := h.db.Pool.Query(r.Context(),
 			`SELECT e.id, e.exercise_name, e.sets, e.reps, e.tracking_type, e.duration_seconds,
 			        e.rest_seconds, e.notes, e.last_weight_kg,
-			        v.catalog_name, v.object_webm, v.object_mp4
+			        v.catalog_name, v.object_webm, v.object_mp4, v.resolved_by
 			 FROM training_plan_exercises e
 			 LEFT JOIN exercise_video_links v ON v.exercise_name = e.exercise_name
 			 WHERE e.plan_day_id = $1 ORDER BY e.exercise_order`, day.ID)
@@ -177,15 +177,17 @@ func (h *TrainingPlanHandler) Get(w http.ResponseWriter, r *http.Request) {
 		day.Exercises = []models.TrainingPlanExercise{}
 		for exerciseRows.Next() {
 			var exercise models.TrainingPlanExercise
-			var catalogo, webm, mp4 *string
+			var catalogo, webm, mp4, resolvedBy *string
 			if err := exerciseRows.Scan(&exercise.ID, &exercise.ExerciseName, &exercise.Sets, &exercise.Reps,
 				&exercise.TrackingType, &exercise.DurationSeconds, &exercise.RestSeconds, &exercise.Notes,
-				&exercise.LastWeightKg, &catalogo, &webm, &mp4); err == nil {
+				&exercise.LastWeightKg, &catalogo, &webm, &mp4, &resolvedBy); err == nil {
 				exercise.Video = montarVideo(catalogo, webm, mp4)
+				exercise.VideoStatus = statusDoVideo(exercise.Video, resolvedBy)
 				day.Exercises = append(day.Exercises, exercise)
 			}
 		}
 		exerciseRows.Close()
+		anexarIlustracoes(r.Context(), h.db, day.Exercises)
 		plan.Days = append(plan.Days, day)
 	}
 	writeJSON(w, http.StatusOK, plan)
