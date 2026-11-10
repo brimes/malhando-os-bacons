@@ -13,6 +13,8 @@ type User struct {
 	// só com Google ou Apple não tem. O hash em si nunca sai do servidor.
 	HasPassword bool      `json:"has_password"`
 	CreatedAt   time.Time `json:"created_at"`
+	// TokenVersion vai no JWT (`tv`); nunca no JSON.
+	TokenVersion int `json:"-"`
 }
 
 type Workout struct {

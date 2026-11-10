@@ -25,19 +25,22 @@ type AuthHandler struct {
 	// too: they live on disk, outside every cascade the database performs.
 	photoDir string
 	svc      AuthServices
+	// versions é o cache de token_version do middleware; quem muda a versão
+	// aqui o limpa. Pode ser nil (testes).
+	versions *middleware.TokenVersionCache
 }
 
 // userColumns e scanUser mantêm num lugar só a forma como um User é lido.
 // has_password sai do hash sem trazê-lo.
-const userColumns = `id, email, name, avatar_url, google_id, apple_id, (password_hash IS NOT NULL), created_at`
+const userColumns = `id, email, name, avatar_url, google_id, apple_id, (password_hash IS NOT NULL), created_at, token_version`
 
 func scanUser(row pgx.Row, user *models.User, extra ...any) error {
-	dest := []any{&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.AppleID, &user.HasPassword, &user.CreatedAt}
+	dest := []any{&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.AppleID, &user.HasPassword, &user.CreatedAt, &user.TokenVersion}
 	return row.Scan(append(dest, extra...)...)
 }
 
-func NewAuthHandler(database *db.DB, jwtSecret, photoDir string, svc AuthServices) *AuthHandler {
-	return &AuthHandler{db: database, jwtSecret: jwtSecret, photoDir: photoDir, svc: svc}
+func NewAuthHandler(database *db.DB, jwtSecret, photoDir string, svc AuthServices, versions *middleware.TokenVersionCache) *AuthHandler {
+	return &AuthHandler{db: database, jwtSecret: jwtSecret, photoDir: photoDir, svc: svc, versions: versions}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -198,12 +201,18 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) writeAuthResponse(w http.ResponseWriter, status int, user *models.User) {
-	token, err := middleware.GenerateToken(user.ID, user.Email, h.jwtSecret)
+	token, err := middleware.GenerateToken(user.ID, user.Email, h.jwtSecret, user.TokenVersion)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
 		return
 	}
 	writeJSON(w, status, models.AuthResponse{Token: token, User: *user})
+}
+
+func (h *AuthHandler) invalidateVersion(userID int64) {
+	if h.versions != nil {
+		h.versions.Invalidate(userID)
+	}
 }
 
 func validEmail(email string) bool {
