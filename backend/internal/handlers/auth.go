@@ -24,10 +24,20 @@ type AuthHandler struct {
 	// photoDir is here only so deleting an account can delete the meal photos
 	// too: they live on disk, outside every cascade the database performs.
 	photoDir string
+	svc      AuthServices
 }
 
-func NewAuthHandler(database *db.DB, jwtSecret, photoDir string) *AuthHandler {
-	return &AuthHandler{db: database, jwtSecret: jwtSecret, photoDir: photoDir}
+// userColumns e scanUser mantêm num lugar só a forma como um User é lido.
+// has_password sai do hash sem trazê-lo.
+const userColumns = `id, email, name, avatar_url, google_id, apple_id, (password_hash IS NOT NULL), created_at`
+
+func scanUser(row pgx.Row, user *models.User, extra ...any) error {
+	dest := []any{&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.AppleID, &user.HasPassword, &user.CreatedAt}
+	return row.Scan(append(dest, extra...)...)
+}
+
+func NewAuthHandler(database *db.DB, jwtSecret, photoDir string, svc AuthServices) *AuthHandler {
+	return &AuthHandler{db: database, jwtSecret: jwtSecret, photoDir: photoDir, svc: svc}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -59,13 +69,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
-	err = h.db.Pool.QueryRow(r.Context(),
+	err = scanUser(h.db.Pool.QueryRow(r.Context(),
 		`INSERT INTO users (email, name, password_hash)
 		 VALUES ($1, $2, $3)
 		 ON CONFLICT (email) DO NOTHING
-		 RETURNING id, email, name, avatar_url, google_id, created_at`,
+		 RETURNING `+userColumns,
 		req.Email, req.Name, string(passwordHash),
-	).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.CreatedAt)
+	), &user)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "email already registered"})
 		return
@@ -88,10 +98,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 	var user models.User
 	var passwordHash *string
-	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, email, name, avatar_url, google_id, password_hash, created_at
+	err := scanUser(h.db.Pool.QueryRow(r.Context(),
+		`SELECT `+userColumns+`, password_hash
 		 FROM users WHERE email = $1`, req.Email,
-	).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &passwordHash, &user.CreatedAt)
+	), &user, &passwordHash)
 	if err != nil || passwordHash == nil || bcrypt.CompareHashAndPassword([]byte(*passwordHash), []byte(req.Password)) != nil {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid email or password"})
 		return
@@ -108,10 +118,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var user models.User
-	err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT id, email, name, avatar_url, google_id, created_at FROM users WHERE id = $1`,
+	err := scanUser(h.db.Pool.QueryRow(r.Context(),
+		`SELECT `+userColumns+` FROM users WHERE id = $1`,
 		userID,
-	).Scan(&user.ID, &user.Email, &user.Name, &user.AvatarURL, &user.GoogleID, &user.CreatedAt)
+	), &user)
 
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
@@ -137,16 +147,17 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.DeleteAccountRequest
-	// An empty body is fine for a Google account, which has no password.
+	// An empty body is fine for a Google or Apple account, which has no password.
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
 	}
 
-	var passwordHash *string
+	var passwordHash, appleRefreshToken *string
+	var appleID *string
 	if err := h.db.Pool.QueryRow(r.Context(),
-		`SELECT password_hash FROM users WHERE id = $1`, userID,
-	).Scan(&passwordHash); err != nil {
+		`SELECT password_hash, apple_id, apple_refresh_token FROM users WHERE id = $1`, userID,
+	).Scan(&passwordHash, &appleID, &appleRefreshToken); err != nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "user not found"})
 		return
 	}
@@ -158,6 +169,13 @@ func (h *AuthHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "senha incorreta"})
 			return
 		}
+	}
+
+	// A Apple exige revogar o vínculo ao excluir a conta. Antes do DELETE porque
+	// o refresh_token mora na linha; e sem derrubar a exclusão se falhar — a
+	// pessoa pediu para sair, e o LGPD vale mais que a limpeza do lado da Apple.
+	if appleID != nil {
+		h.revokeApple(r.Context(), userID, appleRefreshToken)
 	}
 
 	if _, err := h.db.Pool.Exec(r.Context(), `DELETE FROM users WHERE id = $1`, userID); err != nil {

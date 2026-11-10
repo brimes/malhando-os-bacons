@@ -181,7 +181,7 @@ export function ProfilePage() {
 
       {isDeleteOpen && (
         <DeleteAccountModal
-          hasPassword={!user?.google_id}
+          hasPassword={user?.has_password !== false}
           onClose={() => setDeleteOpen(false)}
           onConfirm={deleteAccount}
         />
