@@ -179,6 +179,25 @@ func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, to
 		 LIMIT 1`, userID,
 	).Scan(&next.PlanID, &next.PlanName, &next.DayID, &next.DayName, &next.Focus, &next.LastDoneAt)
 	if err == nil {
+		next.Exercises = []models.NextWorkoutExercise{}
+		// Mesma fonte de last_weight_kg que o plano: a coluna do exercício.
+		if rows, qerr := h.db.Pool.Query(ctx,
+			`SELECT exercise_name, sets, reps, tracking_type, duration_seconds, last_weight_kg
+			 FROM training_plan_exercises WHERE plan_day_id = $1 ORDER BY exercise_order`, next.DayID); qerr == nil {
+			for rows.Next() {
+				var e models.NextWorkoutExercise
+				if rows.Scan(&e.Name, &e.Sets, &e.Reps, &e.TrackingType, &e.DurationSeconds, &e.LastWeightKg) == nil {
+					next.Exercises = append(next.Exercises, e)
+					next.TotalSets += e.Sets
+				}
+			}
+			rows.Close()
+		}
+		var minutes int
+		if h.db.Pool.QueryRow(ctx,
+			`SELECT session_duration_minutes FROM training_plans WHERE id = $1`, next.PlanID).Scan(&minutes) == nil {
+			next.SessionDurationMinutes = &minutes
+		}
 		resp.NextWorkout = &next
 	}
 

@@ -62,6 +62,21 @@ type NextWorkout struct {
 	DayName    string     `json:"day_name"`
 	Focus      string     `json:"focus"`
 	LastDoneAt *time.Time `json:"last_done_at,omitempty"`
+	// Exercises, TotalSets e SessionDurationMinutes dizem o que há no dia, para
+	// o cartão da tela inicial mostrar o treino sem abrir o plano.
+	Exercises              []NextWorkoutExercise `json:"exercises"`
+	TotalSets              int                   `json:"total_sets"`
+	SessionDurationMinutes *int                  `json:"session_duration_minutes,omitempty"`
+}
+
+// NextWorkoutExercise é o resumo de um exercício do próximo treino.
+type NextWorkoutExercise struct {
+	Name            string   `json:"name"`
+	Sets            int      `json:"sets"`
+	Reps            int      `json:"reps"`
+	TrackingType    string   `json:"tracking_type"`
+	DurationSeconds *int     `json:"duration_seconds,omitempty"`
+	LastWeightKg    *float64 `json:"last_weight_kg,omitempty"`
 }
 
 // WeeklyPerformance compares the current week against the active plan's target.
