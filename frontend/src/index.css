@@ -126,9 +126,12 @@
   }
   textarea { padding-top: 14px; padding-bottom: 14px; }
   input::placeholder, textarea::placeholder { color: rgb(var(--dim)); }
+  /* `!important`: muitos campos trazem `focus:outline-none` e `border-line` de
+     utilidade, que venceriam esta regra e deixariam o foco invisível. */
   input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: none; /* o foco é a borda de 2 px */
-    border-color: rgb(var(--brand-fg));
+    outline: 2px solid rgb(var(--brand-fg)) !important;
+    outline-offset: 0 !important;
+    border-color: rgb(var(--brand-fg)) !important;
   }
   input:disabled, select:disabled, textarea:disabled { opacity: .45; }
 }

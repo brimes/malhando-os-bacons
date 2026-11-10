@@ -151,7 +151,7 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
   // grandes e o `min-h` garante espaço para o botão em 320 px; se o texto pedir
   // mais, o cartão cresce em vez de cortar o botão.
   return (
-    <div className={`relative flex min-h-[208px] aspect-[16/10] items-center justify-center rounded-lg p-3 ${className}`}>
+    <div className={`relative flex min-h-[176px] aspect-[16/10] items-center justify-center rounded-lg p-3 ${className}`}>
       <div className="stripes absolute inset-0 rounded-lg" aria-hidden="true" />
       <div className="relative flex w-full flex-col items-center rounded-md bg-surface p-4 text-center shadow-card">
         {fase === 'gerando' ? (

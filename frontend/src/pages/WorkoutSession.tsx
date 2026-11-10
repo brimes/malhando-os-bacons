@@ -72,7 +72,7 @@ function PhaseButton({ fase, onClick, disabled, pulse, children }: {
 
 /** Ação secundária em linha: 48 px (ou 44 px quando discreta), sem preenchimento forte. */
 const ACAO_SECUNDARIA = 'press min-h-[48px] rounded-md bg-surface-2 px-3 text-[15px] font-semibold text-fg disabled:cursor-not-allowed disabled:opacity-[.45]';
-const ACAO_DISCRETA = 'press min-h-[44px] rounded-md px-3 text-[15px] font-semibold';
+const ACAO_DISCRETA = 'press min-h-[44px] rounded-md px-1 text-[15px] font-semibold';
 
 /**
  * O alvo da série — repetições, ou tempo quando o exercício é por duração.
@@ -981,11 +981,11 @@ export function WorkoutSessionPage() {
               No descanso não há movimento para conferir: o anel assume, porque
               aí o tempo é a única coisa que interessa. */}
           {emDescanso ? (
-            <div key="descanso" className="enter flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+            <div key="descanso" className="enter flex flex-1 flex-col items-center justify-center gap-4">
               <div className={restDone ? 'pulse-double' : ''}>
                 <Ring
                   progress={restDone || restSeconds <= 0 ? 1 : Math.max(0, restLeft) / restSeconds}
-                  size={184}
+                  size={160}
                   stroke={12}
                   colorClass="text-teal"
                 >
@@ -1007,7 +1007,7 @@ export function WorkoutSessionPage() {
               </div>
             </div>
           ) : (
-            <div key="esforco" className="fade-in-mob flex min-h-0 flex-1 flex-col gap-3">
+            <div key="esforco" className="fade-in-mob flex flex-1 flex-col gap-3">
               <div className="grid shrink-0 grid-cols-2 gap-3">
                 <SeloDoCronometro
                   fase={phase === 'countdown' ? 'countdown' : 'executing'}
@@ -1077,27 +1077,15 @@ export function WorkoutSessionPage() {
           {/* Secundárias em linha, 48 px. Finalizar e descartar são saídas, não o
               caminho normal: discretas, 44 px, logo abaixo do que se aperta a
               cada série. */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={isBusy || completedSets.length === 0}
-              className={ACAO_SECUNDARIA}
-            >
-              ← Voltar série
+          <div className="grid grid-cols-4 gap-1">
+            <button type="button" onClick={goBack} disabled={isBusy || completedSets.length === 0} aria-label="Voltar série" className={ACAO_DISCRETA}>
+              ← Voltar
             </button>
-            <button
-              type="button"
-              onClick={() => setShowPostpone(true)}
-              disabled={pendingExercises.length < 2}
-              className={ACAO_SECUNDARIA}
-            >
-              Adiar exercício
+            <button type="button" onClick={() => setShowPostpone(true)} disabled={pendingExercises.length < 2} aria-label="Adiar exercício" className={ACAO_DISCRETA}>
+              Adiar
             </button>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={openFinishSheet} className={`${ACAO_DISCRETA} text-brand-fg`}>
-              Finalizar treino agora
+            <button type="button" onClick={openFinishSheet} aria-label="Finalizar treino agora" className={`${ACAO_DISCRETA} text-brand-fg`}>
+              Finalizar
             </button>
             <button type="button" onClick={cancel} className={`${ACAO_DISCRETA} text-danger`}>Descartar</button>
           </div>
