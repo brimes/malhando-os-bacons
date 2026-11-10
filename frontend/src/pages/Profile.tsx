@@ -7,6 +7,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { App as CapacitorApp } from '@capacitor/app';
 import { DeleteAccountModal } from '../components/DeleteAccountModal';
+import { ThemeSelector } from '../components/ThemeSelector';
 
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -93,6 +94,11 @@ export function ProfilePage() {
             </Card>
           </div>
         )}
+
+        <div>
+          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Aparência</h3>
+          <ThemeSelector />
+        </div>
 
         <div className="space-y-3">
           <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Treino</h3>

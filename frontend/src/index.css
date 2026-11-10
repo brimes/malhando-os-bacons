@@ -2,6 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tokens do MASTER.md. `:root` = claro, `.dark` = escuro. Cores em canais RGB
+   para o Tailwind poder aplicar alfa (`bg-surface/80`). */
+:root {
+  --bg: 247 244 242;
+  --surface: 255 255 255;
+  --surface-2: 241 235 232;
+  --line: 230 220 216;
+  --fg: 29 21 18;
+  --muted: 110 93 87;
+  --dim: 133 114 105;
+  --brand: 195 69 34;
+  --brand-fg: 195 69 34;
+  --teal: 12 125 112;
+  --violet: 90 71 214;
+  --sun: 148 102 0;
+  --ok: 24 122 81;
+  --danger: 196 48 42;
+  --on-sun: 255 255 255;
+  --on-teal: 255 255 255;
+  --teal-soft: rgb(12 125 112 / .102);
+  --violet-soft: rgb(90 71 214 / .102);
+  --sun-soft: rgb(148 102 0 / .102);
+  --ok-soft: rgb(24 122 81 / .102);
+  --danger-soft: rgb(196 48 42 / .102);
+  --brand-soft: rgb(217 92 43 / .122);
+  --shadow-card: 0 1px 2px #3a120e0f, 0 8px 24px #3a120e14;
+  --shadow-sheet: 0 -8px 40px #00000066;
+  color-scheme: light;
+}
+.dark {
+  --bg: 18 13 11;
+  --surface: 29 22 19;
+  --surface-2: 39 30 26;
+  --line: 46 36 32;
+  --fg: 246 239 236;
+  --muted: 173 154 147;
+  --dim: 147 128 122;
+  --brand: 195 69 34;
+  --brand-fg: 232 120 60;
+  --teal: 52 209 189;
+  --violet: 157 140 255;
+  --sun: 255 201 74;
+  --ok: 63 191 134;
+  --danger: 240 100 90;
+  --on-sun: 42 28 0;
+  --on-teal: 4 36 31;
+  --teal-soft: rgb(52 209 189 / .133);
+  --violet-soft: rgb(157 140 255 / .133);
+  --sun-soft: rgb(255 201 74 / .133);
+  --ok-soft: rgb(63 191 134 / .133);
+  --danger-soft: rgb(240 100 90 / .133);
+  --brand-soft: rgb(217 92 43 / .149);
+  --shadow-card: 0 1px 0 #ffffff0a inset, 0 8px 24px #00000055;
+  color-scheme: dark;
+}
+
+
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
@@ -9,7 +66,7 @@
   }
 
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -23,12 +80,20 @@
     overflow-wrap: anywhere;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
-    accent-color: #d95c2b;
+    accent-color: rgb(var(--brand-fg));
+    background-color: rgb(var(--bg));
+    color: rgb(var(--fg));
   }
 
   ::selection {
-    background: #9f321f;
-    color: #fff7ed;
+    background: rgb(var(--brand));
+    color: #fff;
+  }
+
+  /* Foco visível em tudo que recebe teclado/leitor de tela (MASTER: 3px brand-fg, deslocado 2px). */
+  :focus-visible {
+    outline: 3px solid rgb(var(--brand-fg));
+    outline-offset: 2px;
   }
 }
 
@@ -43,6 +108,29 @@
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* Campos globais (MASTER): surface-2, raio md, 52 px, foco com borda brand-fg. */
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    background-color: rgb(var(--surface-2));
+    color: rgb(var(--fg));
+    border: 2px solid transparent;
+    border-radius: 16px;
+    min-height: 52px;
+    padding-left: 16px;
+    padding-right: 16px;
+    transition: border-color 120ms var(--ease);
+  }
+  textarea { padding-top: 14px; padding-bottom: 14px; }
+  input::placeholder, textarea::placeholder { color: rgb(var(--dim)); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: none; /* o foco é a borda de 2 px */
+    border-color: rgb(var(--brand-fg));
+  }
+  input:disabled, select:disabled, textarea:disabled { opacity: .45; }
 }
 
 @layer utilities {
@@ -68,3 +156,78 @@
     overflow: hidden;
   }
 }
+
+/* ---- Movimento (MASTER.md): só transform, opacity, stroke-dashoffset e cor. ---- */
+@layer utilities {
+  .tint-brand { background-image: linear-gradient(160deg, var(--brand-soft), transparent 60%); }
+  .tint-teal { background-image: linear-gradient(160deg, var(--teal-soft), transparent 60%); }
+  .tint-violet { background-image: linear-gradient(160deg, var(--violet-soft), transparent 60%); }
+  .tint-sun { background-image: linear-gradient(160deg, var(--sun-soft), transparent 60%); }
+  .tint-ok { background-image: linear-gradient(160deg, var(--ok-soft), transparent 60%); }
+
+  .bg-hero { background-image: linear-gradient(135deg, #d8392e 0%, #d95c2b 55%, #e8783c 100%); }
+
+  .num {
+    font-family: 'Archivo Variable', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+    font-stretch: 75%;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Pressionado: 120 ms, escala .97. Em elementos clicáveis. */
+  .press { transition: transform 120ms var(--ease), background-color 120ms var(--ease), opacity 120ms var(--ease); }
+  .press:active:not(:disabled) { transform: scale(0.97); }
+
+  /* Entrada: 260 ms, 16 px + opacidade; escalonamento via --i (40 ms, máx. 6). */
+  .enter { animation: mob-enter 260ms var(--ease) both; animation-delay: calc(min(var(--i, 0), 5) * 40ms); }
+  .exit { animation: mob-exit 180ms var(--ease) both; pointer-events: none; }
+  .sheet-in { animation: mob-sheet 260ms var(--ease) both; }
+  .fade-in-mob { animation: mob-fade 200ms var(--ease) both; }
+
+  /* Traço do anel/barra: transform/dashoffset, 700 ms. */
+  .ring-draw { transition: stroke-dashoffset 700ms var(--ease); }
+  .bar-draw { transform-origin: left center; animation: mob-bar 700ms var(--ease) both; }
+
+  .pulse-count { animation: mob-count-pulse 1000ms var(--ease) infinite; }
+  .pulse-double { animation: mob-double 1200ms var(--ease) infinite; }
+
+  /* Faixas diagonais do estado "sem vídeo". */
+  .stripes {
+    background-image: repeating-linear-gradient(135deg, rgb(var(--surface-2)) 0 14px, rgb(var(--surface)) 14px 28px);
+  }
+
+  .spark { position: absolute; width: 6px; height: 6px; border-radius: 999px; pointer-events: none;
+    animation: mob-spark 500ms var(--ease) both; animation-delay: calc(var(--d, 0) * 1ms); }
+}
+
+:root { --ease: cubic-bezier(0.25, 1, 0.5, 1); }
+
+@keyframes mob-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes mob-exit { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(8px); } }
+@keyframes mob-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mob-sheet { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes mob-bar { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mob-count-pulse { 0% { transform: scale(1); } 12% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes mob-double { 0%, 40%, 100% { transform: scale(1); } 10%, 50% { transform: scale(1.07); } 25%, 65% { transform: scale(1); } }
+@keyframes mob-spark {
+  from { opacity: 1; transform: translate(0, 0) scale(1); }
+  to { opacity: 0; transform: translate(var(--x), var(--y)) scale(0.4); }
+}
+
+/* Reduzir movimento: só opacidade. Sem deslizes, escalas, pulsos nem faíscas. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .enter, .sheet-in, .exit { animation-name: mob-fade; }
+  .exit { animation-name: mob-exit-fade; }
+  .press:active:not(:disabled) { transform: none; }
+  .pulse-count, .pulse-double, .spark { animation: none !important; }
+  .spark { display: none; }
+  .bar-draw { animation: none; }
+}
+@keyframes mob-exit-fade { from { opacity: 1; } to { opacity: 0; } }
