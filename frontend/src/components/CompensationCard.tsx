@@ -25,13 +25,18 @@ export function CompensationCard() {
   return (
     <button
       onClick={() => navigate(`/training-plans/${plan.id}`)}
-      className="flex w-full items-center justify-between rounded-2xl border border-amber-900 bg-amber-950/30 px-4 py-3 text-left"
+      className="press tint-sun flex min-h-[56px] w-full items-center justify-between gap-3 rounded-lg bg-surface px-[18px] py-3 text-left shadow-card"
     >
-      <div>
-        <p className="text-sm font-semibold text-amber-300">⚡ Compensação — {plan.name}</p>
-        {expiresLabel && <p className="text-xs text-amber-200/70">válida até {expiresLabel}</p>}
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-sun-soft text-sun" aria-hidden="true">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" /></svg>
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-semibold text-fg">Compensação — {plan.name}</p>
+          {expiresLabel && <p className="text-[13px] text-muted">válida até {expiresLabel}</p>}
+        </div>
       </div>
-      <span className="text-xl text-amber-400">›</span>
+      <svg className="h-5 w-5 shrink-0 text-dim" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
     </button>
   );
 }

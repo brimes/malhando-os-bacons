@@ -21,10 +21,10 @@ export function SyncBanner() {
   if (isOnline && pendingCount === 0 && failedCount === 0) return null;
 
   const tone = !isOnline
-    ? 'border-amber-900 bg-amber-950/40 text-amber-200'
+    ? 'bg-sun-soft text-sun'
     : failedCount > 0
-      ? 'border-red-900 bg-red-950/40 text-red-200'
-      : 'border-sky-900 bg-sky-950/40 text-sky-200';
+      ? 'bg-danger-soft text-danger'
+      : 'bg-brand-soft text-brand-fg';
 
   const message = !isOnline
     ? pendingCount > 0
@@ -37,7 +37,7 @@ export function SyncBanner() {
         : `${pendingCount} ${pendingCount === 1 ? 'alteração pendente' : 'alterações pendentes'}`;
 
   return (
-    <div className={`mx-4 mt-3 rounded-xl border px-3 py-2 text-xs font-medium ${tone}`}>
+    <div className={`mx-4 mt-3 rounded-sm px-3 py-2 text-[13px] font-medium ${tone}`}>
       {message}
     </div>
   );
@@ -51,30 +51,30 @@ export function SyncStatusPanel() {
   return (
     <Card className="space-y-3">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-400">Estado</span>
-        <span className={`text-sm font-semibold ${isOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
+        <span className="text-sm text-muted">Estado</span>
+        <span className={`text-sm font-semibold ${isOnline ? 'text-ok' : 'text-sun'}`}>
           {isOnline ? 'Conectado' : 'Sem internet'}
         </span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-zinc-400">Última sincronização</span>
-        <span className="text-sm font-medium text-white">{formatRelative(lastSyncAt)}</span>
+        <span className="text-sm text-muted">Última sincronização</span>
+        <span className="text-sm font-medium text-fg">{formatRelative(lastSyncAt)}</span>
       </div>
       {pendingCount > 0 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-400">Aguardando envio</span>
-          <span className="text-sm font-medium text-sky-300">{pendingCount}</span>
+          <span className="text-sm text-muted">Aguardando envio</span>
+          <span className="text-sm font-medium text-teal">{pendingCount}</span>
         </div>
       )}
 
       {failedCount > 0 && (
-        <div className="rounded-xl border border-red-900 bg-red-950/30 p-3">
-          <p className="text-xs font-semibold text-red-300">
+        <div className="rounded-sm bg-danger-soft p-3">
+          <p className="text-xs font-semibold text-danger">
             {failedCount} {failedCount === 1 ? 'alteração não foi enviada' : 'alterações não foram enviadas'}
           </p>
           <ul className="mt-2 space-y-1">
             {failedMutations.slice(0, 5).map((mutation) => (
-              <li key={mutation.localId} className="text-[11px] leading-relaxed text-red-200/80">
+              <li key={mutation.localId} className="text-xs leading-relaxed text-danger">
                 {mutation.method} {mutation.url}
                 {/* `reason` is the explanation set when this was parked as
                     failed and is always present; `lastError` only ever holds
@@ -85,7 +85,7 @@ export function SyncStatusPanel() {
               </li>
             ))}
           </ul>
-          <button type="button" onClick={discardFailedMutations} className="mt-2 text-xs font-semibold text-red-300">
+          <button type="button" onClick={discardFailedMutations} className="mt-2 text-xs font-semibold text-danger">
             Descartar
           </button>
         </div>
@@ -95,11 +95,11 @@ export function SyncStatusPanel() {
         type="button"
         onClick={() => void syncNow()}
         disabled={!isOnline || isSyncing}
-        className="w-full rounded-xl bg-zinc-800 py-3 text-sm font-semibold text-white disabled:opacity-40"
+        className="w-full rounded-md bg-surface-2 min-h-[48px] py-3 text-sm font-semibold text-fg disabled:opacity-40"
       >
         {isSyncing ? 'Sincronizando...' : 'Sincronizar agora'}
       </button>
-      <p className="text-xs leading-relaxed text-zinc-600">
+      <p className="text-xs leading-relaxed text-dim">
         Seus treinos ficam salvos no aparelho e continuam funcionando sem internet. O que você registrar
         offline é enviado sozinho assim que a conexão voltar.
       </p>

@@ -2,13 +2,14 @@ import {
   AreaChart,
   Area,
   BarChart,
-  Bar,
+  Bar as RBar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { Bar } from './Ring';
 
 interface DataPoint {
   label: string;
@@ -23,7 +24,7 @@ interface AreaChartProps {
   yUnit?: string;
 }
 
-export function MobAreaChart({ data, color = '#d946ef', height = 200, yUnit }: AreaChartProps) {
+export function MobAreaChart({ data, color = 'rgb(var(--brand-fg))', height = 200, yUnit }: AreaChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
@@ -33,17 +34,17 @@ export function MobAreaChart({ data, color = '#d946ef', height = 200, yUnit }: A
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-        <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+        <XAxis dataKey="label" tick={{ fill: 'rgb(var(--dim))', fontSize: 12 }} axisLine={false} tickLine={false} />
         <YAxis
-          tick={{ fill: '#71717a', fontSize: 11 }}
+          tick={{ fill: 'rgb(var(--dim))', fontSize: 12 }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => (yUnit ? `${v}${yUnit}` : v)}
         />
         <Tooltip
-          contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '12px' }}
-          labelStyle={{ color: '#a1a1aa' }}
+          contentStyle={{ backgroundColor: 'rgb(var(--surface-2))', border: 'none', borderRadius: '12px' }}
+          labelStyle={{ color: 'rgb(var(--muted))' }}
           itemStyle={{ color: color }}
         />
         <Area
@@ -67,20 +68,20 @@ interface BarChartProps {
   height?: number;
 }
 
-export function MobBarChart({ data, color = '#d946ef', color2 = '#ea580c', height = 200 }: BarChartProps) {
+export function MobBarChart({ data, color = 'rgb(var(--brand-fg))', color2 = 'rgb(var(--violet))', height = 200 }: BarChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-        <XAxis dataKey="label" tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fill: '#71717a', fontSize: 11 }} axisLine={false} tickLine={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
+        <XAxis dataKey="label" tick={{ fill: 'rgb(var(--dim))', fontSize: 12 }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fill: 'rgb(var(--dim))', fontSize: 12 }} axisLine={false} tickLine={false} />
         <Tooltip
-          contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '12px' }}
-          labelStyle={{ color: '#a1a1aa' }}
+          contentStyle={{ backgroundColor: 'rgb(var(--surface-2))', border: 'none', borderRadius: '12px' }}
+          labelStyle={{ color: 'rgb(var(--muted))' }}
         />
-        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+        <RBar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
         {data[0]?.value2 !== undefined && (
-          <Bar dataKey="value2" fill={color2} radius={[4, 4, 0, 0]} />
+          <RBar dataKey="value2" fill={color2} radius={[4, 4, 0, 0]} />
         )}
       </BarChart>
     </ResponsiveContainer>
@@ -107,10 +108,10 @@ export function MacroProgress({
   const pct = (val: number, target: number) => Math.min((val / (target || 1)) * 100, 100);
 
   const items = [
-    { label: 'Kcal', value: Math.round(calories), target: caloriesTarget, color: 'bg-primary-500' },
-    { label: 'Proteína', value: Math.round(protein), target: Math.round(proteinTarget), color: 'bg-blue-500', unit: 'g' },
-    { label: 'Carbs', value: Math.round(carbs), target: Math.round(carbsTarget), color: 'bg-amber-500', unit: 'g' },
-    { label: 'Gordura', value: Math.round(fat), target: Math.round(fatTarget), color: 'bg-red-500', unit: 'g' },
+    { label: 'Kcal', value: Math.round(calories), target: caloriesTarget, color: 'bg-brand-fg' },
+    { label: 'Proteína', value: Math.round(protein), target: Math.round(proteinTarget), color: 'bg-teal', unit: 'g' },
+    { label: 'Carbs', value: Math.round(carbs), target: Math.round(carbsTarget), color: 'bg-sun', unit: 'g' },
+    { label: 'Gordura', value: Math.round(fat), target: Math.round(fatTarget), color: 'bg-violet', unit: 'g' },
   ];
 
   return (
@@ -118,17 +119,12 @@ export function MacroProgress({
       {items.map((item) => (
         <div key={item.label}>
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-zinc-400">{item.label}</span>
-            <span className="text-white font-medium">
+            <span className="text-muted">{item.label}</span>
+            <span className="text-fg font-medium num">
               {item.value}{item.unit} / {item.target}{item.unit}
             </span>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div
-              className={`h-2 rounded-full transition-all ${item.color}`}
-              style={{ width: `${pct(item.value, item.target)}%` }}
-            />
-          </div>
+          <Bar progress={pct(item.value, item.target) / 100} colorClass={item.color} />
         </div>
       ))}
     </div>
