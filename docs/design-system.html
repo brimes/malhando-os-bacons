@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MOB Design System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=Inter:wght@400..800&display=swap">
+<style>
+/* Layout: page chrome follows viewer theme; two columns render the app tokens in dark and light side by side. */
+:root{--pbg:#f6f3f1;--pfg:#1c1513;--pmut:#6b5c57;--pline:#e4dbd7;--pcard:#fff;
+  --display:"Archivo","Arial Narrow","Roboto Condensed",system-ui,sans-serif;--body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --ease:cubic-bezier(0.25,1,0.5,1)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pbg:#0f0b0a;--pfg:#f3ece9;--pmut:#a8958f;--pline:#2a211e;--pcard:#181210;color-scheme:dark}}
+:root[data-theme="dark"]{--pbg:#0f0b0a;--pfg:#f3ece9;--pmut:#a8958f;--pline:#2a211e;--pcard:#181210;color-scheme:dark}
+body{background:var(--pbg);color:var(--pfg);font:16px/1.5 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+h1{font:850 clamp(32px,6vw,52px)/1 var(--display);font-stretch:78%;margin:0}
+h2{font:800 24px/1.1 var(--display);font-stretch:80%;margin:0 0 4px}
+.lede{color:var(--pmut);max-width:70ch;margin:8px 0 0}
+.box{background:var(--pcard);border:1px solid var(--pline);border-radius:18px;padding:18px;min-width:0}
+.box p{margin:4px 0;max-width:80ch}
+.diff{width:100%;border-collapse:collapse;font-size:14px}
+.diff td,.diff th{text-align:left;padding:7px 6px;border-bottom:1px solid var(--pline);vertical-align:top}
+.diff th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--pmut)}
+.tblwrap{overflow-x:auto}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:20px}
+
+.app{--bg:#120d0b;--surface:#1d1613;--surface-2:#271e1a;--line:#2e2420;--fg:#f6efec;--muted:#ad9a93;--dim:#93807a;
+  --brand:#c34522;--brand-fg:#e8783c;--brand-soft:#d95c2b26;--teal:#34d1bd;--teal-soft:#34d1bd22;--violet:#9d8cff;--violet-soft:#9d8cff22;
+  --sun:#ffc94a;--sun-soft:#ffc94a22;--ok:#3fbf86;--ok-soft:#3fbf8622;--danger:#f0645a;--on-sun:#2a1c00;--on-teal:#04241f;
+  --shadow:0 1px 0 #ffffff0a inset,0 8px 24px #00000055;
+  background:var(--bg);color:var(--fg);border-radius:24px;padding:20px;display:flex;flex-direction:column;gap:22px;min-width:0}
+.app.light{--bg:#f7f4f2;--surface:#fff;--surface-2:#f1ebe8;--line:#e6dcd8;--fg:#1d1512;--muted:#6e5d57;--dim:#857269;
+  --brand:#c34522;--brand-fg:#c34522;--brand-soft:#d95c2b1f;--teal:#0c7d70;--teal-soft:#0c7d701a;--violet:#5a47d6;--violet-soft:#5a47d61a;
+  --sun:#946600;--sun-soft:#ffc94a40;--ok:#187a51;--ok-soft:#187a511a;--danger:#c4302a;--on-sun:#fff;--on-teal:#fff;
+  --shadow:0 1px 2px #3a120e0f,0 8px 24px #3a120e14}
+.app h3{margin:0;font:750 12px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.mode{font:850 26px var(--display);font-stretch:78%}
+.sws{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.sw{border-radius:12px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.sw i{display:block;height:44px}
+.sw span{display:block;padding:6px 8px;font:600 11px/1.3 var(--body);color:var(--muted)}
+.sw b{display:block;color:var(--fg);font-size:12px}
+.type{display:flex;flex-direction:column;gap:6px}
+.num{font-family:var(--display);font-stretch:72%;font-weight:850;font-variant-numeric:tabular-nums;line-height:1}
+.type .row{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.type small{font:600 12px var(--body);color:var(--dim);min-width:72px}
+.btns{display:grid;grid-template-columns:auto repeat(5,minmax(0,1fr));gap:8px;align-items:center;font-size:12px;color:var(--dim)}
+.btns .h{font-weight:700;text-align:center}
+.b{height:48px;border-radius:16px;border:0;font:700 15px var(--body);cursor:pointer;transition:transform 120ms var(--ease);padding:0 6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.b:active,.b.is-press{transform:scale(.97)}
+.b:focus-visible,.b.is-focus{outline:3px solid var(--brand-fg);outline-offset:2px}
+.b:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.b.primary{background:var(--brand);color:#fff} .b.primary.is-active{box-shadow:inset 0 0 0 999px #00000026}
+.b.secondary{background:var(--surface-2);color:var(--fg)} .b.secondary.is-active{box-shadow:inset 0 0 0 2px var(--brand-fg)}
+.b.tonal{background:var(--teal-soft);color:var(--teal)} .b.tonal.is-active{background:var(--teal);color:var(--on-teal)}
+.b.danger{background:var(--surface-2);color:var(--danger)} .b.danger.is-active{background:var(--danger);color:#fff}
+.b.ghost{background:none;color:var(--muted)} .b.ghost.is-active{color:var(--fg);background:var(--surface-2)}
+.b.is-hover{filter:brightness(1.08)}
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border-radius:22px;padding:18px;box-shadow:var(--shadow);min-width:0}
+.card.tt{background:linear-gradient(160deg,var(--teal-soft),transparent 60%),var(--surface)}
+.card.tv{background:linear-gradient(160deg,var(--violet-soft),transparent 60%),var(--surface)}
+.card .l{font:600 13px var(--body);color:var(--muted)}
+.card .num{font-size:38px;margin-top:4px}
+.card .u{font:600 15px var(--body);color:var(--muted);margin-left:3px}
+.bar{height:8px;border-radius:9px;background:var(--surface-2);margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;width:100%;border-radius:9px;transform-origin:left}
+.hero{grid-column:1/-1;background:linear-gradient(135deg,#d8392e 0%,#d95c2b 55%,#e8783c 100%);color:#fff;border-radius:26px;padding:20px}
+.hero .e{font:700 12px var(--body);letter-spacing:.08em;text-transform:uppercase;opacity:.88}
+.hero .t{font:850 28px/1.05 var(--display);font-stretch:78%;margin:4px 0 0}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;height:32px;font:600 13px/1 var(--body);padding:0 12px 0 10px;border-radius:999px;background:var(--surface-2);color:var(--muted)}
+.chip svg{width:15px;height:15px;flex:none}
+.app.light .chip.s{background:#ffc94a33}
+.chip.t{background:var(--teal-soft);color:var(--teal)} .chip.v{background:var(--violet-soft);color:var(--violet)} .chip.s{background:var(--sun-soft);color:var(--sun)} .chip.o{background:var(--ok-soft);color:var(--ok)} .chip.b{background:var(--brand-soft);color:var(--brand-fg)}
+.field{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.inp{height:52px;border-radius:16px;background:var(--surface-2);border:2px solid transparent;color:var(--fg);font:16px var(--body);padding:0 14px;width:100%;min-width:0}
+.inp::placeholder{color:var(--dim)}
+.inp:focus,.inp.is-focus{outline:none;border-color:var(--brand-fg)}
+.inp:disabled{opacity:.45}
+.inp.err{border-color:var(--danger)}
+.lab{font:600 13px var(--body);color:var(--muted);display:flex;flex-direction:column;gap:6px;min-width:0}
+.lab .msg{color:var(--danger);font-size:13px}
+.phases{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.ph{border-radius:16px;padding:10px;text-align:center;font:700 12px var(--body);display:flex;flex-direction:column;gap:4px}
+.ph .num{font-size:24px}
+.scale{display:flex;flex-direction:column;gap:6px}
+.scale div{display:flex;align-items:center;gap:10px;font:600 12px var(--body);color:var(--muted)}
+.scale i{display:block;height:12px;border-radius:3px;background:var(--brand-fg)}
+.radii{display:flex;gap:10px;flex-wrap:wrap}
+.radii div{width:64px;height:48px;background:var(--surface-2);display:grid;place-items:center;font:600 11px var(--body);color:var(--muted)}
+.motion{display:flex;flex-direction:column;gap:10px}
+.track{height:44px;border-radius:12px;background:var(--surface-2);position:relative;overflow:hidden}
+.dot{position:absolute;top:8px;left:8px;width:28px;height:28px;border-radius:9px;background:var(--brand-fg)}
+.go .dot{transform:translateX(calc(var(--w) - 44px))}
+.mrow{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;font:600 12px var(--body);color:var(--muted)}
+.replay{align-self:flex-start;height:44px;padding:0 16px;border-radius:12px;border:0;background:var(--surface-2);color:var(--fg);font:700 14px var(--body);cursor:pointer}
+@media (prefers-reduced-motion: reduce){*{transition-duration:1ms!important;animation-duration:1ms!important}}
+@media (max-width:520px){.btns{grid-template-columns:auto repeat(5,minmax(0,1fr));font-size:10px}.b{font-size:12px;height:44px}.cards,.field{grid-template-columns:1fr}.phases{grid-template-columns:repeat(2,1fr)}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>MOB Design System</h1>
+    <p class="lede">Os tokens que vão para o app, aplicados nos componentes base, com escuro e claro lado a lado. Esta página é a proposta; o código vem depois do seu ok. Fonte única: <code>MASTER.md</code> na raiz do repositório.</p>
+  </header>
+
+  <section class="box">
+    <h2>O que muda nos tokens do projeto</h2>
+    <div class="tblwrap"><table class="diff">
+      <tr><th>Token</th><th>Hoje</th><th>Proposta</th></tr>
+      <tr><td><code>primary-50..950</code>, <code>bacon.*</code></td><td>paleta da marca</td><td>mantidos, mesmos nomes e valores</td></tr>
+      <tr><td>cores semânticas</td><td>não existem; telas usam <code>zinc-*</code> direto (215 usos)</td><td>adicionadas: <code>bg</code>, <code>surface</code>, <code>surface-2</code>, <code>line</code>, <code>fg</code>, <code>muted</code>, <code>dim</code>, <code>brand</code>, <code>brand-fg</code>, <code>teal</code>, <code>violet</code>, <code>sun</code>, <code>ok</code>, <code>danger</code> (+ <code>-soft</code>), por variável CSS nos dois temas</td></tr>
+      <tr><td>tema</td><td>só escuro, fixo</td><td>segue o sistema; escolha manual no Perfil</td></tr>
+      <tr><td><code>fontFamily.sans</code></td><td>Inter pelo Google Fonts</td><td>Inter empacotada no app</td></tr>
+      <tr><td><code>fontFamily.display</code></td><td>não existe</td><td>adicionado: Archivo variável, empacotada</td></tr>
+      <tr><td>raios, sombras</td><td>padrões do Tailwind</td><td>adicionados: <code>rounded-card</code> 22, <code>rounded-hero</code> 26, <code>shadow-card</code>, <code>shadow-sheet</code></td></tr>
+      <tr><td><code>animation.slide-up / fade-in / scale-in</code></td><td>300 / 200 / 220 ms</td><td>mesmos nomes; passam a 260 ms com a curva da tese</td></tr>
+      <tr><td><code>animation.pulse-slow</code></td><td>pulso infinito</td><td>removido onde não há estado real; pulso duplo só no fim do descanso</td></tr>
+      <tr><td><code>transitionTimingFunction.mob</code>, durações</td><td>não existem</td><td>adicionados: <code>ease-mob</code>, 120 / 180 / 260 / 600 / 700 ms</td></tr>
+    </table></div>
+    <p><b>Dependência nova (pede seu ok):</b> <code>@fontsource-variable/inter</code> e <code>@fontsource-variable/archivo</code>, as duas fontes empacotadas dentro do app. Hoje a Inter vem do Google e falha sem internet. Na academia, offline, o app cai na fonte do sistema.</p>
+  </section>
+
+  <div class="cols" id="cols"></div>
+</div>
+
+<template id="tpl">
+  <div class="app">
+    <div class="mode" data-mode></div>
+
+    <div><h3>Cores</h3><div class="sws" style="margin-top:10px" data-sw></div></div>
+
+    <div><h3>Tipografia</h3><div class="type" style="margin-top:10px">
+      <div class="row"><small>num-xl 44</small><span class="num" style="font-size:44px">1:30</span></div>
+      <div class="row"><small>num-lg 38</small><span class="num" style="font-size:38px">62,5 kg</span></div>
+      <div class="row"><small>title 34</small><span class="num" style="font-size:34px;font-stretch:78%">Bora treinar?</span></div>
+      <div class="row"><small>num-md 28</small><span class="num" style="font-size:28px;font-stretch:78%">Supino reto com barra</span></div>
+      <div class="row"><small>heading 17</small><span style="font:750 17px var(--body)">Nutrição hoje</span></div>
+      <div class="row"><small>body 16</small><span>Desça a barra até o peito e empurre sem travar o cotovelo.</span></div>
+      <div class="row"><small>body-sm 15</small><span style="font-size:15px;color:var(--muted)">4 séries de 10, descanso 90 s</span></div>
+      <div class="row"><small>label 13</small><span style="font:600 13px var(--body);color:var(--muted)">Treinos na semana</span></div>
+      <div class="row"><small>eyebrow 12</small><span style="font:750 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--brand-fg)">Série 2 de 4</span></div>
+    </div></div>
+
+    <div><h3>Botões, cinco estados</h3>
+      <div class="btns" style="margin-top:10px">
+        <span></span><span class="h">padrão</span><span class="h">pressionado</span><span class="h">foco</span><span class="h">ativo</span><span class="h">desabilitado</span>
+      </div>
+      <div class="btns" data-btns style="margin-top:6px;row-gap:8px"></div>
+    </div>
+
+    <div><h3>Cartões</h3><div class="cards" style="margin-top:10px">
+      <div class="hero"><div class="e">Treino de hoje</div><div class="t">Treino A: Peito e tríceps</div></div>
+      <div class="card tv"><div class="l">Treinos na semana</div><div class="num">3<span class="u">de 5</span></div><div class="bar"><i style="background:var(--violet);transform:scaleX(.6)"></i></div></div>
+      <div class="card tt"><div class="l">Nutrição hoje</div><div class="num">1.640<span class="u">kcal</span></div><div class="bar"><i style="background:var(--teal);transform:scaleX(.74)"></i></div></div>
+    </div></div>
+
+    <div><h3>Chips</h3><div class="chips" style="margin-top:10px">
+      <span class="chip">Peito</span>
+      <span class="chip b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M2 12h2M20 12h2M6 7v10M18 7v10M6 12h12"/></svg>4×10</span>
+      <span class="chip t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 3v8a2 2 0 0 0 2 2v8M5 3v5M9 3v5M17 21V3c-2 1-3 4-3 8h3"/></svg>112 g proteína</span>
+      <span class="chip v"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 17l5-5 4 4 7-8"/></svg>+2,5 kg</span>
+      <span class="chip s"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 4 5 5.5 5 11a5 5 0 0 1-10 0c0-2.5 1.2-3.8 2.3-5 .2 1.6 1 2.6 2 3C11 8 10 5 12 2z"/></svg>12 dias</span>
+      <span class="chip o"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>Concluída</span>
+    </div>
+    <p style="margin:8px 0 0;font-size:13px;color:var(--muted)">Chip é informação, não botão: altura 32 px, sem sombra, ícone da área quando ajuda a ler. Neutro em <code>surface-2</code>; de área, no fundo suave da cor dela.</p></div>
+
+    <div><h3>Campos</h3><div class="field" style="margin-top:10px">
+      <label class="lab">Padrão<input class="inp" placeholder="Seu e-mail"></label>
+      <label class="lab">Foco<input class="inp is-focus" value="mob@zel.care"></label>
+      <label class="lab">Erro<input class="inp err" value="mob@"><span class="msg">Falta o domínio do e-mail.</span></label>
+      <label class="lab">Desabilitado<input class="inp" disabled value="Não editável"></label>
+    </div></div>
+
+    <div><h3>Fases do treino guiado</h3><div class="phases" style="margin-top:10px">
+      <div class="ph" style="background:var(--sun);color:var(--on-sun)">Prepare-se<span class="num">3</span></div>
+      <div class="ph" style="background:var(--brand);color:#fff">Executando<span class="num">0:23</span></div>
+      <div class="ph" style="background:var(--teal);color:var(--on-teal)">Descanso<span class="num">1:12</span></div>
+      <div class="ph" style="background:var(--teal-soft);color:var(--teal);box-shadow:inset 0 0 0 3px var(--teal)">Pronto<span class="num">0:00</span></div>
+    </div></div>
+
+    <div><h3>Espaço e raios</h3>
+      <div class="scale" style="margin-top:10px" data-scale></div>
+      <div class="radii" style="margin-top:12px"><div style="border-radius:12px">sm 12</div><div style="border-radius:16px">md 16</div><div style="border-radius:22px">lg 22</div><div style="border-radius:26px">xl 26</div><div style="border-radius:999px">chip</div></div>
+    </div>
+
+    <div class="motion"><h3>Movimento</h3>
+      <div class="mrow"><span>toque 120 ms</span><div class="track" data-t="120"><span class="dot"></span></div></div>
+      <div class="mrow"><span>saída 180 ms</span><div class="track" data-t="180"><span class="dot"></span></div></div>
+      <div class="mrow"><span>entrada 260 ms</span><div class="track" data-t="260"><span class="dot"></span></div></div>
+      <div class="mrow"><span>anel 700 ms</span><div class="track" data-t="700"><span class="dot"></span></div></div>
+      <button class="replay" data-replay>▶ Rodar</button>
+    </div>
+  </div>
+</template>
+
+<script>
+const SW=[['bg','--bg'],['surface','--surface'],['surface-2','--surface-2'],['fg','--fg'],['muted','--muted'],['dim','--dim'],['brand','--brand'],['brand-fg','--brand-fg'],['teal','--teal'],['violet','--violet'],['sun','--sun'],['ok','--ok'],['danger','--danger']];
+const BT=[['primary','Começar'],['secondary','Voltar'],['tonal','Registrar'],['danger','Descartar'],['ghost','Adiar']];
+const cols=document.getElementById('cols');
+['dark','light'].forEach(th=>{
+  const n=document.getElementById('tpl').content.cloneNode(true);const app=n.querySelector('.app');if(th==='light')app.classList.add('light');
+  n.querySelector('[data-mode]').textContent=th==='dark'?'Escuro':'Claro';cols.appendChild(n);
+  const cs=getComputedStyle(app);
+  const sw=app.querySelector('[data-sw]');SW.forEach(([name,v])=>{const val=cs.getPropertyValue(v).trim();sw.insertAdjacentHTML('beforeend','<div class="sw"><i style="background:var('+v+')"></i><span><b>'+name+'</b>'+val+'</span></div>')});
+  const bt=app.querySelector('[data-btns]');BT.forEach(([k,label])=>{bt.insertAdjacentHTML('beforeend','<span>'+k+'</span>'+['','is-press','is-focus','is-active',''].map((s,i)=>'<button class="b '+k+' '+s+'"'+(i===4?' disabled':'')+'>'+label+'</button>').join(''))});
+  const sc=app.querySelector('[data-scale]');[4,8,12,16,20,24,32,40,48].forEach(v=>sc.insertAdjacentHTML('beforeend','<div><span style="width:28px">'+v+'</span><i style="width:'+v*3+'px"></i></div>'));
+  app.querySelector('[data-replay]').onclick=()=>{app.querySelectorAll('.track').forEach(t=>{const d=t.querySelector('.dot');t.style.setProperty('--w',t.clientWidth+'px');t.classList.remove('go');d.style.transition='none';void d.offsetWidth;d.style.transition='transform '+t.dataset.t+'ms cubic-bezier(0.25,1,0.5,1)';t.classList.add('go')})};
+});
+</script>
