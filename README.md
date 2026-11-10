@@ -58,6 +58,10 @@ mob/
 ```
 POST   /api/auth/register            — Cadastro com nome, e-mail e senha
 POST   /api/auth/login               — Login com e-mail e senha
+POST   /api/auth/google              — Login com Google (id_token nativo; 503 sem GOOGLE_CLIENT_IDS)
+POST   /api/auth/apple               — Sign in with Apple (identity_token, authorization_code, name)
+POST   /api/auth/password/forgot     — Envia código de 6 dígitos por e-mail (resposta sempre igual; 503 sem BREVO_API_KEY)
+POST   /api/auth/password/reset      — Redefine a senha com e-mail, código e nova senha
 GET    /api/auth/me                  — Usuário atual
 
 GET    /api/onboarding               — Estado atual do onboarding
@@ -136,7 +140,7 @@ Abra `/home/picoclaw/mob/watch/` no Android Studio e conecte um Galaxy Watch 7 (
 
 ### Schema
 ```sql
-users            — usuários (e-mail e senha)
+users            — usuários (e-mail e senha, Google, Apple)
 workouts         — sessões de treino
 workout_sets     — exercícios dentro do treino
 food_items       — catálogo de alimentos (TACO seeds incluídas)
@@ -158,6 +162,12 @@ make migrate
 | `PORT` | Porta do servidor (padrão: 8080) |
 | `DATABASE_URL` | URL de conexão PostgreSQL |
 | `JWT_SECRET` | Secret para assinar tokens JWT (mínimo 32 chars) |
+| `BREVO_API_KEY` | Chave da API do Brevo para o e-mail de redefinição de senha (opcional; sem ela `/password/forgot` responde 503) |
+| `BREVO_SENDER_EMAIL` | Remetente (precisa ser um sender validado no Brevo); obrigatório junto com a chave |
+| `BREVO_SENDER_NAME` | Nome do remetente (padrão `Malhando os Bacons`) |
+| `GOOGLE_CLIENT_IDS` | Client IDs OAuth aceitos como `aud` (web, iOS, Android), separados por vírgula (opcional) |
+| `APPLE_BUNDLE_ID` / `APPLE_SERVICE_ID` | `aud` aceitos do identityToken da Apple (padrão `net.brimes.mob`) |
+| `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | Chave .p8 da Apple; permite revogar o vínculo ao excluir a conta (opcionais) |
 | `ENVIRONMENT` | `development` ou `production` |
 | `ALLOWED_ORIGINS` | Origins permitidas para CORS |
 | `OPENCODE_URL` | URL do servidor iniciado por `opencode serve` |

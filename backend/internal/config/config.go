@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -35,6 +36,27 @@ type Config struct {
 	// o secret é aplicado à mão, fora do workflow.
 	ExerciseVideoBucket      string
 	ExerciseVideoCredentials string
+
+	// BrevoAPIKey, BrevoSenderEmail e BrevoSenderName habilitam o e-mail de redefinição de senha.
+	// Opcionais pelo mesmo motivo dos vídeos: sem a chave o backend sobe igual
+	// e POST /api/auth/password/forgot responde 503.
+	BrevoAPIKey      string
+	BrevoSenderEmail string
+	BrevoSenderName  string
+
+	// GoogleClientIDs: client IDs aceitos como `aud` do idToken do Google
+	// (web, iOS e Android). São públicos. Vazio: POST /api/auth/google responde 503.
+	GoogleClientIDs []string
+	// AppleBundleID e AppleServiceID: `aud` aceitos no identityToken da Apple.
+	AppleBundleID  string
+	AppleServiceID string
+	// AppleTeamID, AppleKeyID e ApplePrivateKey (o conteúdo do .p8) assinam o
+	// client_secret usado para trocar o authorizationCode e revogar o token
+	// quando a conta é excluída. Opcionais: sem eles o login com Apple funciona
+	// e a exclusão apenas não revoga o vínculo na Apple.
+	AppleTeamID     string
+	AppleKeyID      string
+	ApplePrivateKey string
 }
 
 func Load() (*Config, error) {
@@ -57,9 +79,31 @@ func Load() (*Config, error) {
 
 		ExerciseVideoBucket:      getEnv("EXERCISE_VIDEO_BUCKET", "malhando-os-bacons-exercicios"),
 		ExerciseVideoCredentials: getEnv("EXERCISE_VIDEO_CREDENTIALS", ""),
+
+		BrevoAPIKey:      getEnv("BREVO_API_KEY", ""),
+		BrevoSenderEmail: getEnv("BREVO_SENDER_EMAIL", ""),
+		BrevoSenderName:  getEnv("BREVO_SENDER_NAME", "Malhando os Bacons"),
+
+		GoogleClientIDs: splitList(getEnv("GOOGLE_CLIENT_IDS", "")),
+		AppleBundleID:   getEnv("APPLE_BUNDLE_ID", "net.brimes.mob"),
+		AppleServiceID:  getEnv("APPLE_SERVICE_ID", ""),
+		AppleTeamID:     getEnv("APPLE_TEAM_ID", ""),
+		AppleKeyID:      getEnv("APPLE_KEY_ID", ""),
+		ApplePrivateKey: getEnv("APPLE_PRIVATE_KEY", ""),
 	}
 
 	return cfg, nil
+}
+
+// splitList lê uma lista separada por vírgulas, ignorando brancos e itens vazios.
+func splitList(value string) []string {
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func getEnv(key, defaultValue string) string {

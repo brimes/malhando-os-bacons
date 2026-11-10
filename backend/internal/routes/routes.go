@@ -14,10 +14,10 @@ import (
 // known once the user is.
 // videoSigner pode ser nil: sem credencial configurada os endpoints de vídeo
 // respondem 503 e o resto da API funciona normalmente.
-func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, allowedOrigins, photoDir string) http.Handler {
+func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, allowedOrigins, photoDir string, authServices handlers.AuthServices) http.Handler {
 	mux := http.NewServeMux()
 
-	authHandler := handlers.NewAuthHandler(database, jwtSecret, photoDir)
+	authHandler := handlers.NewAuthHandler(database, jwtSecret, photoDir, authServices)
 	workoutHandler := handlers.NewWorkoutHandler(database)
 	sessionHandler := handlers.NewWorkoutSessionHandler(database, resolver)
 	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
@@ -41,6 +41,12 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	// Auth routes (public)
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
 	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
+	// Login social nativo: o app manda o idToken/identityToken do provedor.
+	mux.HandleFunc("POST /api/auth/google", authHandler.GoogleLogin)
+	mux.HandleFunc("POST /api/auth/apple", authHandler.AppleLogin)
+	// Redefinição de senha por código de 6 dígitos enviado por e-mail.
+	mux.HandleFunc("POST /api/auth/password/forgot", authHandler.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/password/reset", authHandler.ResetPassword)
 	mux.HandleFunc("GET /api/auth/me", chain(authHandler.Me, auth))
 	// Excluir a conta de dentro do app é exigência da Apple (5.1.1(v)) para
 	// quem deixa criar conta. Apaga de verdade: cascata no banco e as fotos.
@@ -123,6 +129,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	// é um proxy de download para qualquer um.
 	mux.HandleFunc("GET /api/exercise-videos/catalog", chain(exerciseVideoHandler.Catalog, auth))
 	mux.HandleFunc("POST /api/exercise-videos/urls", chain(exerciseVideoHandler.SignURLs, auth))
+
 
 	// Nutrition routes
 	mux.HandleFunc("GET /api/nutrition/plans", chain(nutritionHandler.ListPlans, auth))

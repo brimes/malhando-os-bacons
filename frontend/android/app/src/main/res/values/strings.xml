@@ -4,4 +4,5 @@
     <string name="title_activity_main">MOB - Malhando os Bacons</string>
     <string name="package_name">com.mob.app</string>
     <string name="custom_url_scheme">com.mob.app</string>
+    <string name="server_client_id">TODO_GOOGLE_WEB_CLIENT_ID</string>
 </resources>

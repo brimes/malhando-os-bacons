@@ -15,6 +15,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { TermsGate } from './components/TermsGate';
 import { DashboardPage } from './pages/Dashboard';
 import { LoginPage } from './pages/Login';
+import { ForgotPasswordPage } from './pages/ForgotPassword';
 import { WorkoutsPage } from './pages/Workouts';
 import { WorkoutDetailPage } from './pages/WorkoutDetail';
 import { NewWorkoutPage } from './pages/NewWorkout';
@@ -101,6 +102,7 @@ export default function App() {
         <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/esqueci-senha" element={<ForgotPasswordPage />} />
             <Route path="/onboarding" element={<ProtectedRoute allowIncomplete><OnboardingPage /></ProtectedRoute>} />
 
             <Route

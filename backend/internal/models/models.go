@@ -3,12 +3,16 @@ package models
 import "time"
 
 type User struct {
-	ID        int64     `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	AvatarURL *string   `json:"avatar_url,omitempty"`
-	GoogleID  *string   `json:"google_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        int64   `json:"id"`
+	Email     string  `json:"email"`
+	Name      string  `json:"name"`
+	AvatarURL *string `json:"avatar_url,omitempty"`
+	GoogleID  *string `json:"google_id,omitempty"`
+	AppleID   *string `json:"apple_id,omitempty"`
+	// HasPassword diz ao app se há senha a pedir ao excluir a conta: quem entrou
+	// só com Google ou Apple não tem. O hash em si nunca sai do servidor.
+	HasPassword bool      `json:"has_password"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Workout struct {
@@ -158,6 +162,28 @@ type RegisterRequest struct {
 // for accounts created through Google, which have no password to confirm with.
 type DeleteAccountRequest struct {
 	Password string `json:"password"`
+}
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email"`
+}
+
+type ResetPasswordRequest struct {
+	Email       string `json:"email"`
+	Code        string `json:"code"`
+	NewPassword string `json:"new_password"`
+}
+
+type GoogleAuthRequest struct {
+	IDToken string `json:"id_token"`
+}
+
+type AppleAuthRequest struct {
+	IdentityToken     string `json:"identity_token"`
+	AuthorizationCode string `json:"authorization_code"`
+	// Name só chega do aparelho, e só na primeira autorização: o token da Apple
+	// não o traz.
+	Name string `json:"name"`
 }
 
 type LoginRequest struct {

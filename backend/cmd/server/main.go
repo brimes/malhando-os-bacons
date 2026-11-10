@@ -13,6 +13,7 @@ import (
 
 	"github.com/mob/backend/internal/config"
 	"github.com/mob/backend/internal/db"
+	"github.com/mob/backend/internal/handlers"
 	"github.com/mob/backend/internal/routes"
 	"github.com/mob/backend/internal/services"
 )
@@ -103,7 +104,7 @@ func main() {
 		slog.Info("vídeos de exercício ativos", "bucket", cfg.ExerciseVideoBucket)
 	}
 
-	handler := routes.Setup(database, resolver, videoSigner, cfg.JWTSecret, cfg.AllowedOrigins, cfg.PhotoDir)
+	handler := routes.Setup(database, resolver, videoSigner, cfg.JWTSecret, cfg.AllowedOrigins, cfg.PhotoDir, handlers.NewAuthServices(cfg, database))
 
 	// Associa os vídeos dos exercícios que já estão no banco. Fora da subida do
 	// servidor, numa goroutine: chama o assistente e leva dezenas de segundos,

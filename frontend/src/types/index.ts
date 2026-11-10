@@ -4,6 +4,9 @@ export interface User {
   name: string;
   avatar_url?: string;
   google_id?: string;
+  apple_id?: string;
+  /** Falso para contas criadas só com Google/Apple. Ausente = assume que tem. */
+  has_password?: boolean;
   created_at: string;
 }
 

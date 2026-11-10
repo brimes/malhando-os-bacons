@@ -13,6 +13,8 @@ interface AuthState {
 
 	login: (email: string, password: string) => Promise<void>;
 	register: (name: string, email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  loginWithApple: (input: { identityToken: string; authorizationCode: string; name?: string }) => Promise<void>;
   logout: () => void;
   deleteAccount: (password: string) => Promise<void>;
   clearError: () => void;
@@ -44,6 +46,34 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const { data } = await apiClient.post<AuthResponse>('/auth/register', { name, email, password });
+          localStorage.setItem('mob_token', data.token);
+          set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err) {
+          set({ error: getErrorMessage(err), isLoading: false });
+          throw err;
+        }
+      },
+
+      loginWithGoogle: async (idToken: string) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { data } = await apiClient.post<AuthResponse>('/auth/google', { id_token: idToken });
+          localStorage.setItem('mob_token', data.token);
+          set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
+        } catch (err) {
+          set({ error: getErrorMessage(err), isLoading: false });
+          throw err;
+        }
+      },
+
+      loginWithApple: async ({ identityToken, authorizationCode, name }) => {
+        set({ isLoading: true, error: null });
+        try {
+          const { data } = await apiClient.post<AuthResponse>('/auth/apple', {
+            identity_token: identityToken,
+            authorization_code: authorizationCode,
+            ...(name ? { name } : {}),
+          });
           localStorage.setItem('mob_token', data.token);
           set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
