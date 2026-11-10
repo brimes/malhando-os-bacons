@@ -72,6 +72,8 @@ const ONLINE_ONLY_PATHS: RegExp[] = [
   /^\/nutrition\/plans\/automatic/,
   /^\/nutrition\/plans\/\d+\/adjust/,
   /^\/nutrition\/photos/,
+  // Geração de imagem ao vivo contra a IA: enfileirada, chegaria sem ninguém olhando.
+  /^\/exercise-illustrations/,
   /^\/nutrition\/suggestion/,
   // Conversa viva com o assistente para montar um registro: replayed depois,
   // chegaria uma pergunta sem ninguém para responder.

@@ -93,6 +93,14 @@ export interface TrainingPlanExercise {
   last_weight_kg?: number;
   video?: ExerciseVideo;
   /**
+   * 'not_found' só quando o servidor já decidiu que o catálogo não tem este
+   * exercício (recusa gravada). Ausente = ainda não associado: NÃO é "não
+   * localizado".
+   */
+  video_status?: 'not_found';
+  /** Ilustração gerada por IA já pronta para este nome. */
+  illustration?: { status: 'ready' };
+  /**
    * Presente só na sessão ativa, e só quando o exercício foi trocado com
    * "Trocar só hoje": o nome original, para a tela explicar a troca sem a
    * pessoa achar que o plano mudou sozinho. `id` continua o do exercício do

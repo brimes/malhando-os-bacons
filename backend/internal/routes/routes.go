@@ -32,6 +32,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	llmSettingsHandler := handlers.NewLLMSettingsHandler(database)
 	workoutChatHandler := handlers.NewWorkoutChatHandler(database, resolver)
 	exerciseVideoHandler := handlers.NewExerciseVideoHandler(database, videoSigner)
+	exerciseIllustrationHandler := handlers.NewExerciseIllustrationHandler(database, resolver, photoDir)
 	// Recebe os dois handlers de plano porque aplicar a avaliação reusa a
 	// reconciliação in-place deles — é ela que preserva o histórico treinado.
 	progressReviewHandler := handlers.NewProgressReviewHandler(database, resolver, trainingPlanHandler, nutritionHandler)
@@ -130,6 +131,11 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /api/exercise-videos/catalog", chain(exerciseVideoHandler.Catalog, auth))
 	mux.HandleFunc("POST /api/exercise-videos/urls", chain(exerciseVideoHandler.SignURLs, auth))
 
+	// Ilustrações por IA dos exercícios sem vídeo: cache global por nome,
+	// geração assíncrona (POST inicia, GET status faz polling).
+	mux.HandleFunc("POST /api/exercise-illustrations", chain(exerciseIllustrationHandler.Request, auth))
+	mux.HandleFunc("GET /api/exercise-illustrations", chain(exerciseIllustrationHandler.Status, auth))
+	mux.HandleFunc("GET /api/exercise-illustrations/image", chain(exerciseIllustrationHandler.Image, auth))
 
 	// Nutrition routes
 	mux.HandleFunc("GET /api/nutrition/plans", chain(nutritionHandler.ListPlans, auth))

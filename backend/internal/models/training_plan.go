@@ -60,6 +60,14 @@ type TrainingPlanExercise struct {
 	// ainda não foi resolvido, ou porque foi resolvido como "não existe".
 	// O app trata os dois casos igual: mostra o exercício sem vídeo.
 	Video *ExerciseVideo `json:"video,omitempty"`
+	// VideoStatus é "not_found" só quando o associador JÁ decidiu que o
+	// catálogo não tem este exercício (recusa gravada em exercise_video_links).
+	// Vazio significa "ainda não associado" — que não é o mesmo e não deve
+	// mostrar "não localizamos o vídeo", porque a associação pode acontecer.
+	VideoStatus string `json:"video_status,omitempty"`
+	// Illustration vem só quando já existe ilustração gerada por IA pronta
+	// para este nome (cache global em exercise_illustrations).
+	Illustration *ExerciseIllustration `json:"illustration,omitempty"`
 	// SubstitutedFrom só vem preenchido pela sessão ativa (ActiveWorkout), e só
 	// quando o exercício foi trocado com scope="session" — o plano (e este
 	// mesmo campo em qualquer outra leitura) nunca vê essa troca, porque ela
@@ -78,6 +86,12 @@ type ExerciseVideo struct {
 	CatalogName string `json:"catalog_name"`
 	WebM        string `json:"webm"`
 	MP4         string `json:"mp4"`
+}
+
+// ExerciseIllustration indica que há ilustração pronta; a imagem em si é
+// buscada em GET /api/exercise-illustrations/image.
+type ExerciseIllustration struct {
+	Status string `json:"status"`
 }
 
 type TrainingPlanInput struct {
