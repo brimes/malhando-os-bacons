@@ -47,9 +47,10 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "password must be between 8 and 72 characters"})
 		return
 	}
-	err := h.svc.PasswordReset.Reset(r.Context(), req.Email, req.Code, req.NewPassword)
+	userID, err := h.svc.PasswordReset.Reset(r.Context(), req.Email, req.Code, req.NewPassword)
 	switch {
 	case err == nil:
+		h.invalidateVersion(userID)
 		writeJSON(w, http.StatusOK, map[string]string{"message": "Senha redefinida. Entre com a nova senha."})
 	case errors.Is(err, services.ErrInvalidResetCode):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "código inválido ou expirado"})

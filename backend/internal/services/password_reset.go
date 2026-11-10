@@ -58,7 +58,8 @@ type PasswordResetStore interface {
 	// conseguem testar mais palpites que o teto.
 	ClaimAttempt(ctx context.Context, userID int64, now time.Time, maxAttempts int) (*ResetCode, error) // nil, nil se não há
 	// Redeem marca o código como usado (uso único), grava a senha nova e apaga
-	// os demais códigos do usuário, tudo numa transação. false se já fora usado.
+	// os demais códigos do usuário e incrementa token_version (derruba as sessões
+	// abertas), tudo numa transação. false se já fora usado.
 	Redeem(ctx context.Context, codeID, userID int64, passwordHash string) (bool, error)
 }
 
@@ -149,36 +150,37 @@ func (s *PasswordResetService) RequestCode(ctx context.Context, email string) er
 
 // Reset valida o código e troca a senha. Qualquer falha de validação é
 // ErrInvalidResetCode.
-func (s *PasswordResetService) Reset(ctx context.Context, email, code, newPassword string) error {
+// Devolve o id do usuário para que o chamador limpe o cache de sessões.
+func (s *PasswordResetService) Reset(ctx context.Context, email, code, newPassword string) (int64, error) {
 	user, err := s.store.UserByEmail(ctx, email)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if user == nil {
-		return ErrInvalidResetCode
+		return 0, ErrInvalidResetCode
 	}
 	claimed, err := s.store.ClaimAttempt(ctx, user.ID, s.now(), ResetMaxAttempts)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if claimed == nil {
-		return ErrInvalidResetCode
+		return 0, ErrInvalidResetCode
 	}
 	if !hmac.Equal([]byte(claimed.CodeHash), []byte(s.HashResetCode(user.ID, code))) {
-		return ErrInvalidResetCode
+		return 0, ErrInvalidResetCode
 	}
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	ok, err := s.store.Redeem(ctx, claimed.ID, user.ID, string(passwordHash))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !ok {
-		return ErrInvalidResetCode
+		return 0, ErrInvalidResetCode
 	}
-	return nil
+	return user.ID, nil
 }
 
 // PGPasswordResetStore implementa o store sobre o Postgres.
@@ -261,7 +263,7 @@ func (p *PGPasswordResetStore) Redeem(ctx context.Context, codeID, userID int64,
 	if tag.RowsAffected() != 1 {
 		return false, nil
 	}
-	if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $1 WHERE id = $2`, passwordHash, userID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE users SET password_hash = $1, token_version = token_version + 1 WHERE id = $2`, passwordHash, userID); err != nil {
 		return false, err
 	}
 	// Códigos restantes não podem sobreviver a uma senha nova.

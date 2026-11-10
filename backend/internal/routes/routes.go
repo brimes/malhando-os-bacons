@@ -1,8 +1,12 @@
 package routes
 
 import (
+	"context"
+	"errors"
 	"net/http"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/handlers"
 	"github.com/mob/backend/internal/middleware"
@@ -17,7 +21,15 @@ import (
 func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *services.GCSSigner, jwtSecret, allowedOrigins, photoDir string, authServices handlers.AuthServices) http.Handler {
 	mux := http.NewServeMux()
 
-	authHandler := handlers.NewAuthHandler(database, jwtSecret, photoDir, authServices)
+	versions := middleware.NewTokenVersionCache(func(ctx context.Context, userID int64) (int, error) {
+		var v int
+		err := database.Pool.QueryRow(ctx, `SELECT token_version FROM users WHERE id = $1`, userID).Scan(&v)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, middleware.ErrUserNotFound
+		}
+		return v, err
+	}, 30*time.Second)
+	authHandler := handlers.NewAuthHandler(database, jwtSecret, photoDir, authServices, versions)
 	workoutHandler := handlers.NewWorkoutHandler(database)
 	sessionHandler := handlers.NewWorkoutSessionHandler(database, resolver)
 	nutritionHandler := handlers.NewNutritionHandler(database, resolver, photoDir)
@@ -37,7 +49,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	// reconciliação in-place deles — é ela que preserva o histórico treinado.
 	progressReviewHandler := handlers.NewProgressReviewHandler(database, resolver, trainingPlanHandler, nutritionHandler)
 
-	auth := middleware.AuthMiddleware(jwtSecret)
+	auth := middleware.AuthMiddleware(jwtSecret, versions)
 
 	// Auth routes (public)
 	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
