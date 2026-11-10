@@ -136,36 +136,47 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
 
   if (fase === 'pronta') {
     if (!imagem) {
-      return <div className={`animate-pulse rounded-2xl bg-zinc-800 ${className}`} />;
+      return <div className={`min-h-[160px] animate-pulse rounded-lg bg-surface-2 ${className}`} />;
     }
     return (
       <figure className={`flex flex-col items-center ${className}`}>
-        <img src={imagem} alt={`Ilustração de ${nome}`} className="min-h-0 w-full rounded-2xl bg-white object-contain" />
-        <figcaption className="mt-1 text-[11px] text-zinc-500">Ilustração</figcaption>
+        <img src={imagem} alt={`Ilustração de ${nome}`} className="min-h-0 w-full rounded-lg bg-white object-contain" />
+        <figcaption className="mt-1 text-[12px] text-dim">Ilustração</figcaption>
       </figure>
     );
   }
 
   const offline = !isNetworkOnline();
+  // Sem `overflow-hidden` nem altura fixa: a proporção dá o respiro em telas
+  // grandes e o `min-h` garante espaço para o botão em 320 px; se o texto pedir
+  // mais, o cartão cresce em vez de cortar o botão.
   return (
-    <div className={`rounded-2xl border border-zinc-800 bg-zinc-900 p-3 text-center ${className}`}>
-      {fase === 'gerando' ? (
-        <>
-          <div className="mx-auto h-1.5 w-full overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-label="Gerando ilustração">
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-primary-500" />
-          </div>
-          <p className="mt-2 text-xs text-zinc-400">Gerando a ilustração, isso leva alguns segundos...</p>
-        </>
-      ) : (
-        <>
-          <p className="text-xs text-zinc-400">Não localizamos o vídeo deste exercício.</p>
-          {fase === 'falhou' && erro && <p className="mt-1 text-xs text-red-400">{erro}</p>}
-          <Button size="sm" variant="secondary" className="mt-2" onClick={gerar} disabled={offline}>
-            {fase === 'falhou' ? 'Tentar novamente' : 'Gerar ilustração'}
-          </Button>
-          {offline && <p className="mt-1 text-[11px] text-zinc-500">Precisa de internet.</p>}
-        </>
-      )}
+    <div className={`relative flex min-h-[208px] aspect-[16/10] items-center justify-center rounded-lg p-3 ${className}`}>
+      <div className="stripes absolute inset-0 rounded-lg" aria-hidden="true" />
+      <div className="relative flex w-full flex-col items-center rounded-md bg-surface p-4 text-center shadow-card">
+        {fase === 'gerando' ? (
+          <>
+            <div className="h-1.5 w-full overflow-hidden rounded-chip bg-surface-2" role="progressbar" aria-label="Gerando ilustração">
+              <div className="h-full w-1/3 animate-pulse rounded-chip bg-brand-fg" />
+            </div>
+            <p className="mt-3 text-[15px] leading-[1.45] text-muted">Gerando a ilustração, isso leva alguns segundos...</p>
+          </>
+        ) : (
+          <>
+            <p className="text-[16px] font-semibold leading-snug text-fg">Não encontramos o vídeo deste exercício</p>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">Podemos criar uma ilustração do movimento para você.</p>
+            {fase === 'falhou' && erro && <p role="alert" className="mt-2 text-[15px] leading-[1.45] text-danger">{erro}</p>}
+            <Button size="md" variant="secondary" className="mt-3" onClick={gerar} disabled={offline}>
+              <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+                <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />
+              </svg>
+              {fase === 'falhou' ? 'Tentar novamente' : 'Gerar ilustração'}
+            </Button>
+            {offline && <p className="mt-2 text-[13px] text-dim">Precisa de internet.</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

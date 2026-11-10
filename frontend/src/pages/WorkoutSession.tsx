@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
+import { Ring, Bar } from '../components/Ring';
+import { Sparks } from '../components/Sparks';
+import { CountUp } from '../components/CountUp';
 import { workoutsApi } from '../api/workouts';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
@@ -34,48 +38,140 @@ type Phase = WorkoutSessionPhase;
 // the moment it fires. Anything older than this is treated as a late resume.
 const STALE_ALERT_SECONDS = 5;
 
-// One colour per phase so a glance mid-set tells you whether you are working or
-// resting. Rest is blue against the orange brand — the two never read alike,
-// including for the common red/green colour blindness.
-const timerPanel = {
-  countdown: { box: 'bg-amber-950/40 ring-1 ring-amber-800', label: 'text-amber-400', value: 'text-amber-300' },
-  executing: { box: 'bg-primary-950/60 ring-1 ring-primary-700', label: 'text-primary-400', value: 'text-primary-200' },
-  resting: { box: 'bg-sky-950/50 ring-1 ring-sky-800', label: 'text-sky-400', value: 'text-sky-300' },
-  rest_done: { box: 'bg-sky-900/60 ring-2 ring-sky-500 animate-pulse', label: 'text-sky-300', value: 'text-sky-100' },
+// Cada fase tem a sua cor (MASTER, "Fases do treino guiado"): ela tinge o selo do
+// cronômetro, a série atual e o botão principal. Prepare-se é amarelo, esforço é
+// laranja, descanso é teal — nunca parecem iguais, nem para daltonismo.
+const phaseTone = {
+  countdown: { text: 'text-sun', soft: 'bg-sun-soft', solid: 'bg-sun text-on-sun', label: 'Prepare-se' },
+  executing: { text: 'text-brand-fg', soft: 'bg-brand-soft', solid: 'bg-brand text-white', label: 'Executando' },
+  resting: { text: 'text-teal', soft: 'bg-teal-soft', solid: 'bg-teal text-on-teal', label: 'Descanso' },
+  rest_done: { text: 'text-teal', soft: 'bg-teal-soft', solid: 'bg-teal text-on-teal', label: 'Descanso' },
 } as const;
+
+const EYEBROW = 'text-[12px] font-bold uppercase tracking-[0.06em] leading-[1.2]';
+
+/** Botão principal da fase: 58 px, na cor dela. `pulse` é o pulso duplo do fim do descanso. */
+function PhaseButton({ fase, onClick, disabled, pulse, children }: {
+  fase: keyof typeof phaseTone;
+  onClick: () => void;
+  disabled?: boolean;
+  pulse?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`press min-h-[58px] w-full rounded-md px-6 text-[17px] font-bold leading-tight disabled:cursor-not-allowed disabled:opacity-[.45] ${phaseTone[fase].solid} ${pulse ? 'pulse-double' : ''}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Ação secundária em linha: 48 px (ou 44 px quando discreta), sem preenchimento forte. */
+const ACAO_SECUNDARIA = 'press min-h-[48px] rounded-md bg-surface-2 px-3 text-[15px] font-semibold text-fg disabled:cursor-not-allowed disabled:opacity-[.45]';
+const ACAO_DISCRETA = 'press min-h-[44px] rounded-md px-3 text-[15px] font-semibold';
 
 /**
  * O alvo da série — repetições, ou tempo quando o exercício é por duração.
- *
- * Aparece em dois tamanhos porque muda de papel conforme a fase: durante o
- * esforço divide a linha com o cronômetro e é referência de canto de olho;
- * no descanso sobe sozinho acima do cronômetro grande, que é quando a pessoa
- * está de fato lendo quantas repetições vêm.
+ * Cartão sem borda, valor em display condensado.
  */
-function AlvoDaSerie({ exercise, grande = false }: { exercise: TrainingPlanExercise; grande?: boolean }) {
+function AlvoDaSerie({ exercise }: { exercise: TrainingPlanExercise }) {
   const porTempo = exercise.tracking_type === 'time';
   const valor = porTempo ? formatClock(exercise.duration_seconds ?? 0) : String(exercise.reps);
   const rotulo = porTempo ? 'de execução' : 'repetições';
   return (
-    <div className={`rounded-2xl bg-primary-950 ring-1 ring-primary-800 ${grande ? 'px-5 py-3' : 'px-3 py-3'}`}>
-      <p className={`font-black tabular-nums text-primary-200 ${grande ? 'text-4xl' : 'text-3xl'}`}>{valor}</p>
-      <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary-400">{rotulo}</p>
+    <div className="flex min-w-0 flex-col items-center justify-center rounded-lg bg-surface px-3 py-3 shadow-card">
+      <p className="num text-[44px] leading-none text-fg">{valor}</p>
+      <p className={`mt-1.5 text-muted ${EYEBROW}`}>{rotulo}</p>
     </div>
   );
 }
 
-/** O cronômetro compacto que divide a linha com o alvo, no preparo e na execução. */
-function CronometroCompacto({ fase, valor }: { fase: 'countdown' | 'executing'; valor: string }) {
-  const cores = timerPanel[fase];
+/**
+ * O selo do cronômetro no preparo e na execução. Na contagem do preparo o número
+ * é grande e pulsa a cada segundo: `key` no segundo remonta o elemento e reinicia
+ * a animação, então o pulso acompanha o relógio em vez de correr solto.
+ */
+function SeloDoCronometro({ fase, valor }: { fase: 'countdown' | 'executing'; valor: string }) {
+  const tom = phaseTone[fase];
   return (
-    // `key` na fase para o painel remontar ao passar de "Prepare-se" para
-    // "Executando": sem isso a cor e o rótulo trocariam secamente no lugar, que
-    // é justamente a transição que a pessoa mais vê — uma por série.
-    <div key={fase} className={`animate-scale-in rounded-2xl px-3 py-3 ${cores.box}`}>
-      <p className={`text-3xl font-black tabular-nums ${cores.value}`}>{valor}</p>
-      <p className={`mt-0.5 text-[11px] font-bold uppercase tracking-wide ${cores.label}`}>
-        {fase === 'countdown' ? 'Prepare-se' : 'Executando'}
-      </p>
+    // `key` na fase para o selo remontar ao passar de "Prepare-se" para
+    // "Executando": a cor e o rótulo entram com fade em vez de trocar secos.
+    <div key={fase} className={`fade-in-mob flex min-w-0 flex-col items-center justify-center rounded-lg px-3 py-3 ${tom.soft}`}>
+      {fase === 'countdown' ? (
+        <p key={valor} className={`pulse-count num text-[64px] leading-none ${tom.text}`}>{valor}</p>
+      ) : (
+        <p className={`num text-[44px] leading-none ${tom.text}`}>{valor}</p>
+      )}
+      <p className={`mt-1.5 ${tom.text} ${EYEBROW}`}>{tom.label}</p>
+    </div>
+  );
+}
+
+/**
+ * Faixa compacta de séries: concluídas em `ok`, a atual na cor da fase, as
+ * futuras apagadas. Só apresentação — o número vem da lógica da sessão.
+ */
+function FaixaDeSeries({ total, feitas, fase }: { total: number; feitas: number; fase: keyof typeof phaseTone }) {
+  return (
+    <ol className="flex shrink-0 flex-wrap justify-center gap-2" aria-label={`${feitas} de ${total} séries concluídas`}>
+      {Array.from({ length: total }, (_, index) => {
+        const numero = index + 1;
+        const concluida = numero <= feitas;
+        const atual = numero === feitas + 1;
+        const cor = concluida
+          ? 'bg-ok-soft text-ok'
+          : atual
+            ? phaseTone[fase].solid
+            : 'bg-surface-2 text-dim';
+        return (
+          <li
+            key={numero}
+            aria-current={atual ? 'step' : undefined}
+            className={`num flex h-10 min-w-[40px] items-center justify-center rounded-sm px-2 text-[20px] leading-none transition-colors duration-press ease-mob ${cor}`}
+          >
+            {numero}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Stepper de carga: −/+ de 56 px, valor em num-lg, passo de 2,5 kg. */
+function StepperDeCarga({ value, placeholder, onChange, onStep }: {
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  onStep: (delta: number) => void;
+}) {
+  const botao = 'press num flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-surface-2 text-[28px] leading-none text-fg';
+  return (
+    <div className="shrink-0">
+      <p className={`mb-1.5 text-center text-muted ${EYEBROW}`}>Carga (kg)</p>
+      <div className="flex items-center justify-center gap-3">
+        <button type="button" onClick={() => onStep(-2.5)} aria-label="Diminuir 2,5 kg" className={botao}>−</button>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={0.5}
+          aria-label="Carga em quilos"
+          // O peso da última vez vira o placeholder: informa a mesma coisa
+          // que a linha "última vez" informava, sem gastar uma linha.
+          placeholder={placeholder}
+          value={value}
+          // Selecting on focus makes the first digit replace the old value
+          // instead of being appended to it.
+          onFocus={(event) => event.target.select()}
+          onChange={(event) => onChange(event.target.value)}
+          className="input-num min-w-0 flex-1 text-center"
+        />
+        <button type="button" onClick={() => onStep(2.5)} aria-label="Aumentar 2,5 kg" className={botao}>+</button>
+      </div>
     </div>
   );
 }
@@ -126,10 +222,16 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[80vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">Escolher outro exercício</h3>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+    <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="sheet-in max-h-[80vh] w-full overflow-y-auto rounded-t-xl bg-surface p-5 shadow-sheet pb-safe"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Escolher outro exercício"
+      >
+        <h3 className="num text-[28px] leading-[1.05] text-fg">Escolher outro exercício</h3>
+        <p className="mt-1.5 text-[15px] leading-[1.45] text-muted">
           O exercício atual continua pendente e volta a aparecer depois.
         </p>
         <div className="mt-4 space-y-2">
@@ -138,10 +240,10 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
               key={exercise.id}
               type="button"
               onClick={() => exercise.id && onPick(exercise.id)}
-              className={`w-full rounded-2xl p-4 text-left ${exercise.id === currentId ? 'bg-primary-950 ring-1 ring-primary-700' : 'bg-zinc-950'}`}
+              className={`press w-full rounded-md p-4 text-left ${exercise.id === currentId ? 'bg-brand-soft' : 'bg-surface-2'}`}
             >
-              <p className="font-semibold text-white">{exercise.exercise_name}</p>
-              <p className="mt-1 text-xs text-zinc-500">
+              <p className="text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</p>
+              <p className="mt-1 text-[15px] leading-[1.45] text-muted">
                 {remainingFor(exercise)} de {exercise.sets} séries restantes
                 {exercise.id === currentId && ' · atual'}
                 {exercise.substituted_from && ' · trocado hoje'}
@@ -149,7 +251,7 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
             </button>
           ))}
         </div>
-        <button type="button" onClick={onClose} className="mt-4 w-full py-3 text-sm text-zinc-500">
+        <button type="button" onClick={onClose} className="press mt-3 min-h-[48px] w-full rounded-md text-[16px] font-semibold text-muted">
           Cancelar
         </button>
       </div>
@@ -186,6 +288,23 @@ export function WorkoutSessionPage() {
   const isRecording = useRef(false);
 
   const completedSets: WorkoutSet[] = useMemo(() => active?.workout.sets ?? [], [active]);
+
+  // Faíscas (só apresentação): disparam quando uma série nova aparece no
+  // histórico — vale para o toque e para o fim automático de um exercício por
+  // tempo — e se desmontam sozinhas em 500 ms, sem segurar o próximo toque.
+  // O primeiro valor visto (carga da sessão) não conta como conclusão.
+  const [sparking, setSparking] = useState(false);
+  const seenSets = useRef<number | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const count = (active.workout.sets ?? []).length;
+    const previous = seenSets.current;
+    seenSets.current = count;
+    if (previous === null || count <= previous) return;
+    setSparking(true);
+    const id = window.setTimeout(() => setSparking(false), 500);
+    return () => window.clearTimeout(id);
+  }, [active]);
 
   const doneCountFor = useCallback(
     (exerciseId?: number) => completedSets.filter((set) => set.training_plan_exercise_id === exerciseId).length,
@@ -539,14 +658,14 @@ export function WorkoutSessionPage() {
     }
   };
 
-  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
+  if (isLoading) return <div className="py-20 text-center text-[16px] text-muted">Carregando treino...</div>;
   if (error && !active) {
     return (
       <>
         <Header title="Treino" showBack />
-        <div className="space-y-4 px-4 py-10 text-center">
-          <p className="text-zinc-400">{error}</p>
-          <Button fullWidth onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
+        <div className="space-y-4 px-5 py-10 text-center">
+          <p className="text-[16px] text-muted">{error}</p>
+          <Button fullWidth size="lg" onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
         </div>
       </>
     );
@@ -555,6 +674,9 @@ export function WorkoutSessionPage() {
 
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const doneSets = completedSets.length;
+  const errorBox = error && (
+    <div role="alert" className="rounded-md bg-danger-soft p-3 text-[15px] leading-[1.45] text-danger">{error}</div>
+  );
 
   // The chat sits in the header slot on purpose: it is reachable at any point of
   // the session — usually while resting — without taking space next to
@@ -564,7 +686,7 @@ export function WorkoutSessionPage() {
       type="button"
       onClick={() => setShowChat(true)}
       aria-label="Tirar dúvida sobre o treino"
-      className="rounded-full bg-zinc-800 px-3.5 py-2 text-xs font-semibold text-primary-300"
+      className="press min-h-[44px] rounded-chip bg-brand-soft px-4 text-[15px] font-semibold text-brand-fg"
     >
       Dúvidas
     </button>
@@ -594,10 +716,16 @@ export function WorkoutSessionPage() {
   // Rendered by both the main screen and the handover, so finishing early is
   // always one tap away wherever the session happens to be.
   const finishSheetNode = finishSheet && (
-    <div className="fixed inset-0 z-[110] flex items-end bg-black/85 backdrop-blur-sm" onClick={() => setFinishSheet(null)}>
-      <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
-        <h3 className="text-lg font-bold text-white">Finalizar treino agora</h3>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+    <div className="fixed inset-0 z-[110] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => setFinishSheet(null)}>
+      <div
+        className="sheet-in max-h-[85vh] w-full overflow-y-auto rounded-t-xl bg-surface p-5 shadow-sheet pb-safe"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Finalizar treino agora"
+      >
+        <h3 className="num text-[28px] leading-[1.05] text-fg">Finalizar treino agora</h3>
+        <p className="mt-1.5 text-[15px] leading-[1.45] text-muted">
           Já vem marcado o que você concluiu. Ajuste o que fez fora do acompanhamento e finalize.
         </p>
         <div className="mt-4">
@@ -610,7 +738,7 @@ export function WorkoutSessionPage() {
         </div>
         <div className="mt-5 space-y-2">
           <Button fullWidth size="lg" onClick={confirmFinishSheet} isLoading={isBusy}>Finalizar treino</Button>
-          <button type="button" onClick={() => setFinishSheet(null)} className="w-full py-3 text-sm text-zinc-500">
+          <button type="button" onClick={() => setFinishSheet(null)} className="press min-h-[48px] w-full rounded-md text-[16px] font-semibold text-muted">
             Voltar ao treino
           </button>
         </div>
@@ -623,22 +751,28 @@ export function WorkoutSessionPage() {
     return (
       <>
         <Header title="Treino concluído" />
-        <div className="space-y-5 px-4 py-6 pb-24">
-          <Card className="text-center">
-            <p className="text-5xl">🎉</p>
-            <h2 className="mt-3 text-xl font-black text-white">{active.day_name || active.workout.name}</h2>
-            <p className="mt-1 text-sm text-zinc-500">{doneSets} séries concluídas</p>
-            {volume > 0 && <p className="mt-1 text-sm text-primary-300">{volume.toLocaleString('pt-BR')} kg de volume total</p>}
-          </Card>
-          <div className="space-y-2">
-            {exercises.map((exercise) => (
-              <Card key={exercise.id} className="flex items-center justify-between py-3">
-                <span className="text-sm text-white">{exercise.exercise_name}</span>
-                <span className="text-xs text-zinc-500">{doneCountFor(exercise.id)}/{exercise.sets}</span>
-              </Card>
-            ))}
+        <div className="space-y-4 px-5 py-6 pb-24">
+          {/* O degradê da marca fica neste cartão: é o único da tela. */}
+          <div className="enter rounded-xl bg-hero p-5 text-center text-white shadow-card">
+            <p className="text-[15px] font-semibold leading-[1.45] opacity-90">{active.day_name || active.workout.name}</p>
+            <p className="num mt-2 text-[44px] leading-none"><CountUp value={doneSets} /></p>
+            <p className="mt-1 text-[15px] font-semibold">séries concluídas</p>
+            {volume > 0 && (
+              <p className="mt-3 text-[15px] font-semibold">{volume.toLocaleString('pt-BR')} kg de volume total</p>
+            )}
           </div>
-          {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+          <div className="space-y-3">
+            {exercises.map((exercise) => {
+              const feitas = doneCountFor(exercise.id);
+              return (
+                <Card key={exercise.id} className="enter flex items-center justify-between gap-3 !py-3">
+                  <span className="min-w-0 text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</span>
+                  <span className={`num shrink-0 text-[20px] ${feitas >= exercise.sets ? 'text-ok' : 'text-muted'}`}>{feitas}/{exercise.sets}</span>
+                </Card>
+              );
+            })}
+          </div>
+          {errorBox}
           <Button fullWidth size="lg" onClick={finish} isLoading={isBusy}>Finalizar treino</Button>
         </div>
       </>
@@ -657,6 +791,7 @@ export function WorkoutSessionPage() {
     // handover is visible from the first second instead of after the countdown.
     const handoverRest = finished?.rest_seconds ?? 0;
     const handoverRestLeft = handoverRest - elapsed;
+    const handoverDone = handoverRestLeft <= 0;
     const startNext = () => {
       setFinishedExerciseId(null);
       setCurrentExerciseId(currentExercise.id ?? null);
@@ -666,25 +801,20 @@ export function WorkoutSessionPage() {
     return (
       <>
         <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
-        <div className="space-y-4 px-4 py-5 pb-32">
-          {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        <div className="space-y-4 px-5 py-4 pb-32">
+          {errorBox}
 
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${totalSets ? (doneSets / totalSets) * 100 : 0}%` }} />
-          </div>
+          <Bar progress={totalSets ? doneSets / totalSets : 0} />
 
           {finished && (
-            <Card className="border-emerald-900 bg-emerald-950/20">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">✓</span>
-                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">Exercício concluído</p>
-              </div>
-              <h2 className="mt-1 text-xl font-black leading-tight text-white">{finished.exercise_name}</h2>
-              <div className="mt-3 space-y-1.5">
+            <Card tint="ok" className="enter">
+              <p className={`text-ok ${EYEBROW}`}>Exercício concluído</p>
+              <h2 className="num mt-1 text-[28px] leading-[1.05] text-fg">{finished.exercise_name}</h2>
+              <div className="mt-3 space-y-2">
                 {finishedSets.map((set, index) => (
-                  <div key={set.id} className="flex items-center justify-between rounded-lg bg-black/30 px-3 py-2 text-sm">
-                    <span className="text-zinc-500">{index + 1}ª série</span>
-                    <span className="font-medium text-zinc-200">
+                  <div key={set.id} className="flex items-center justify-between gap-3 rounded-sm bg-surface-2 px-3 py-2.5 text-[15px]">
+                    <span className="text-muted">{index + 1}ª série</span>
+                    <span className="num text-[18px] text-fg">
                       {set.tracking_type === 'time'
                         ? formatClock(set.duration_seconds ?? 0)
                         : `${set.reps} reps${set.weight_kg > 0 ? ` · ${set.weight_kg} kg` : ''}`}
@@ -693,88 +823,86 @@ export function WorkoutSessionPage() {
                 ))}
               </div>
               {finishedVolume > 0 && (
-                <p className="mt-3 text-xs text-emerald-300">Volume: {finishedVolume.toLocaleString('pt-BR')} kg</p>
+                <p className="mt-3 text-[15px] font-semibold text-ok">Volume: {finishedVolume.toLocaleString('pt-BR')} kg</p>
               )}
             </Card>
           )}
 
           {handoverRest > 0 && (
-            <div className={`rounded-2xl px-4 py-4 text-center ${handoverRestLeft > 0 ? timerPanel.resting.box : timerPanel.rest_done.box}`}>
-              <p className={`text-sm font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
-              <p className={`mt-1 text-5xl font-black tabular-nums ${handoverRestLeft > 0 ? timerPanel.resting.value : timerPanel.rest_done.value}`}>
-                {formatClock(Math.max(0, handoverRestLeft))}
-              </p>
-              {handoverRestLeft <= 0 && <p className="mt-1 text-sm font-semibold text-sky-200">Pronto para o próximo exercício</p>}
+            <div className="flex flex-col items-center gap-2 py-1">
+              <div className={handoverDone ? 'pulse-double' : ''}>
+                <Ring progress={handoverDone ? 1 : handoverRestLeft / handoverRest} size={160} stroke={12} colorClass="text-teal">
+                  <div className="text-center">
+                    <p className="num text-[44px] leading-none text-teal">{formatClock(Math.max(0, handoverRestLeft))}</p>
+                    <p className={`mt-1 text-muted ${EYEBROW}`}>Descanso</p>
+                  </div>
+                </Ring>
+              </div>
+              {handoverDone && <p className="text-[15px] font-semibold text-teal">Pronto para o próximo exercício</p>}
             </div>
           )}
 
-          <div className="flex items-center gap-3 px-1">
-            <div className="h-px flex-1 bg-zinc-800" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-600">A seguir</span>
-            <div className="h-px flex-1 bg-zinc-800" />
-          </div>
+          <p className={`text-center text-dim ${EYEBROW}`}>A seguir</p>
 
-          <Card className="border-primary-800 bg-primary-950/40 text-center">
-            <p className="text-xs uppercase tracking-wide text-primary-400">
+          <Card tint="brand" className="enter text-center">
+            <p className={`text-brand-fg ${EYEBROW}`}>
               Exercício {exercises.length - pendingExercises.length + 1} de {exercises.length}
             </p>
-            <h2 className="mt-1 text-2xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
+            <h2 className="num mt-1 text-[28px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
             {currentExercise.substituted_from && (
-              <p className="mt-0.5 text-[11px] text-zinc-500">no lugar de {currentExercise.substituted_from}</p>
+              <p className="mt-1 text-[13px] text-muted">no lugar de {currentExercise.substituted_from}</p>
             )}
             {/* Aqui é onde o vídeo serve para alguma coisa: a pessoa está
                 prestes a executar e ainda dá tempo de conferir o movimento.
                 Não renderiza nada quando não há vídeo. */}
-            <ExerciseVideoPlayer video={currentExercise.video} className="mt-3 aspect-square" />
+            <ExerciseVideoPlayer video={currentExercise.video} className="mx-auto mt-3 aspect-square w-full max-w-[320px]" />
             {!currentExercise.video && <ExerciseIllustration exercise={currentExercise} className="mt-3" />}
-            <div className="mt-3 inline-flex items-baseline gap-2 rounded-2xl bg-primary-950 px-5 py-2.5 ring-1 ring-primary-800">
+            <div className="mt-3 inline-flex items-baseline gap-2 rounded-lg bg-surface px-5 py-3 shadow-card">
               {currentExercise.tracking_type === 'time' ? (
                 <>
-                  <span className="text-3xl font-black tabular-nums text-primary-200">{formatClock(currentExercise.duration_seconds ?? 0)}</span>
-                  <span className="text-sm font-semibold text-primary-400">de execução</span>
+                  <span className="num text-[38px] leading-none text-fg">{formatClock(currentExercise.duration_seconds ?? 0)}</span>
+                  <span className="text-[15px] font-semibold text-muted">de execução</span>
                 </>
               ) : (
                 <>
-                  <span className="text-4xl font-black tabular-nums text-primary-200">{currentExercise.reps}</span>
-                  <span className="text-sm font-semibold uppercase tracking-wide text-primary-400">repetições</span>
+                  <span className="num text-[38px] leading-none text-fg">{currentExercise.reps}</span>
+                  <span className="text-[15px] font-semibold text-muted">repetições</span>
                 </>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
-              <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-300">{currentExercise.sets} séries</span>
-              {currentExercise.rest_seconds > 0 && (
-                <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-400">{currentExercise.rest_seconds}s descanso</span>
-              )}
-              {currentExercise.last_weight_kg ? (
-                <span className="rounded-lg bg-black/40 px-2 py-1 text-zinc-300">última vez: {currentExercise.last_weight_kg} kg</span>
-              ) : null}
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Chip>{currentExercise.sets} séries</Chip>
+              {currentExercise.rest_seconds > 0 && <Chip>{currentExercise.rest_seconds}s descanso</Chip>}
+              {currentExercise.last_weight_kg ? <Chip>última vez: {currentExercise.last_weight_kg} kg</Chip> : null}
             </div>
             {currentExercise.notes && (
-              <p className="mt-3 text-xs leading-relaxed text-zinc-500">{currentExercise.notes}</p>
+              <p className="mt-3 text-[15px] leading-[1.45] text-muted">{currentExercise.notes}</p>
             )}
           </Card>
 
           <div className="space-y-2">
-            <Button fullWidth size="lg" onClick={startNext}>Iniciar {currentExercise.exercise_name}</Button>
+            <PhaseButton fase="executing" onClick={startNext}>Iniciar {currentExercise.exercise_name}</PhaseButton>
             <button
               type="button"
               onClick={() => setShowPostpone(true)}
               disabled={pendingExercises.length < 2}
-              className="w-full rounded-2xl bg-zinc-800 py-3.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+              className={`${ACAO_SECUNDARIA} w-full`}
             >
               Escolher outro exercício
             </button>
-            <button
-              type="button"
-              onClick={goBack}
-              disabled={isBusy || completedSets.length === 0}
-              className="w-full py-3 text-xs text-zinc-500 disabled:opacity-40"
-            >
-              ← Refazer a última série
-            </button>
-            <button type="button" onClick={openFinishSheet} className="w-full py-2 text-xs font-semibold text-primary-400">
-              Finalizar treino agora
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={goBack}
+                disabled={isBusy || completedSets.length === 0}
+                className={`${ACAO_DISCRETA} text-muted disabled:opacity-[.45]`}
+              >
+                Refazer última série
+              </button>
+              <button type="button" onClick={openFinishSheet} className={`${ACAO_DISCRETA} text-brand-fg`}>
+                Finalizar treino agora
+              </button>
+            </div>
           </div>
         </div>
 
@@ -804,6 +932,8 @@ export function WorkoutSessionPage() {
   const executionLeft = plannedDuration - elapsed;
   const restLeft = restSeconds - elapsed;
   const emDescanso = phase === 'resting' || phase === 'rest_done';
+  const restDone = phase === 'rest_done';
+  const nextWeight = parseWeight(weightText);
 
   return (
     <>
@@ -819,56 +949,67 @@ export function WorkoutSessionPage() {
       <div className="flex h-[100dvh] flex-col">
         <Header title={active.day_name || active.workout.name} rightAction={chatButton} />
 
-        <div className="shrink-0 px-4 pt-3">
-          {error && <div className="mb-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
-          <div className="flex items-center justify-between text-xs text-zinc-500">
+        <div className="shrink-0 px-5 pt-1">
+          {errorBox && <div className="mb-3">{errorBox}</div>}
+          <div className="flex items-center justify-between gap-3 text-[13px] font-semibold text-muted">
             <span>{doneSets} de {totalSets} séries</span>
             <span>{pendingExercises.length} exercício{pendingExercises.length === 1 ? '' : 's'} restante{pendingExercises.length === 1 ? '' : 's'}</span>
           </div>
-          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${totalSets ? (doneSets / totalSets) * 100 : 0}%` }} />
-          </div>
+          <Bar className="mt-2" progress={totalSets ? doneSets / totalSets : 0} />
         </div>
 
         {/* O miolo. `min-h-0` é o que permite ele encolher dentro do flex — sem
-            isso o conteúdo empurra a coluna e o rodapé sai da tela de novo. */}
-        <div className="flex min-h-0 flex-1 flex-col px-4 pt-3 text-center">
-          <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-primary-400">
-            Série {currentSetNumber} de {currentExercise.sets}
-          </p>
-          <h2 className="shrink-0 text-xl font-black leading-tight text-white">{currentExercise.exercise_name}</h2>
-          {currentExercise.substituted_from && (
-            <p className="shrink-0 text-[10px] text-zinc-500">no lugar de {currentExercise.substituted_from}</p>
-          )}
+            isso o conteúdo empurra a coluna e o rodapé sai da tela de novo.
+            `overflow-y-auto` é a rede de segurança: em tela baixa o que não cabe
+            rola em vez de ser cortado. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4 text-center">
+          <div className="shrink-0">
+            <p className={`${phaseTone[phase].text} ${EYEBROW}`}>
+              Série {currentSetNumber} de {currentExercise.sets}
+            </p>
+            <h2 className="num mt-1 line-clamp-2 text-[28px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
+            {currentExercise.substituted_from && (
+              <p className="mt-0.5 text-[13px] text-muted">no lugar de {currentExercise.substituted_from}</p>
+            )}
+          </div>
+
+          <FaixaDeSeries total={currentExercise.sets} feitas={currentSetNumber - 1} fase={phase} />
 
           {/* Duas leituras da mesma tela, conforme o que a pessoa está fazendo.
               Durante o esforço o que importa é ver o movimento, então o vídeo
               fica com toda a folga e cronômetro e alvo dividem uma linha acima.
-              No descanso não há movimento para conferir: o vídeo sai e o
-              cronômetro assume, porque aí ele é a única coisa que interessa. */}
+              No descanso não há movimento para conferir: o anel assume, porque
+              aí o tempo é a única coisa que interessa. */}
           {emDescanso ? (
-            <div key="descanso" className="flex min-h-0 flex-1 animate-scale-in flex-col justify-center gap-3">
-              <div className="flex shrink-0 justify-center">
-                <AlvoDaSerie exercise={currentExercise} grande />
+            <div key="descanso" className="enter flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+              <div className={restDone ? 'pulse-double' : ''}>
+                <Ring
+                  progress={restDone || restSeconds <= 0 ? 1 : Math.max(0, restLeft) / restSeconds}
+                  size={184}
+                  stroke={12}
+                  colorClass="text-teal"
+                >
+                  <div className="text-center">
+                    <p className="num text-[44px] leading-none text-teal">{restDone ? '0:00' : formatClock(restLeft)}</p>
+                    <p className={`mt-1 text-muted ${EYEBROW}`}>Descanso</p>
+                  </div>
+                </Ring>
               </div>
-              {/* Maior que na fase de esforço: aqui o descanso é a única coisa
-                  acontecendo, e o espaço que o vídeo deixou vago é dele. Deixar
-                  o painel pequeno abriria um vazio no meio da tela. */}
-              <div className={`shrink-0 rounded-2xl px-4 py-8 ${phase === 'rest_done' ? timerPanel.rest_done.box : timerPanel.resting.box}`}>
-                <p className={`text-xs font-bold uppercase tracking-widest ${timerPanel.resting.label}`}>Descanso</p>
-                <p className={`mt-1 text-7xl font-black tabular-nums ${phase === 'rest_done' ? timerPanel.rest_done.value : timerPanel.resting.value}`}>
-                  {phase === 'rest_done' ? '0:00' : formatClock(restLeft)}
+              {restDone && <p className="text-[15px] font-semibold text-teal">Pronto para a próxima série</p>}
+              <div className="w-full rounded-lg bg-surface px-4 py-3 shadow-card">
+                <p className={`text-dim ${EYEBROW}`}>Próxima série · {currentSetNumber} de {currentExercise.sets}</p>
+                <p className="mt-1 text-[16px] font-semibold leading-snug text-fg">{currentExercise.exercise_name}</p>
+                <p className="num mt-1 text-[24px] leading-[1.1] text-teal">
+                  {isTimed
+                    ? formatClock(currentExercise.duration_seconds ?? 0)
+                    : `${nextWeight > 0 ? `${String(nextWeight).replace('.', ',')} kg × ` : ''}${currentExercise.reps} reps`}
                 </p>
-                {phase === 'rest_done' && <p className="mt-1 text-sm font-semibold text-sky-200">Pronto para a próxima série</p>}
               </div>
             </div>
           ) : (
-            // `justify-center` só faz efeito quando não há vídeo — com ele, o
-            // player já consome a folga. Sem, centra o cronômetro em vez de
-            // deixá-lo grudado no topo com um vazio embaixo.
-            <div key="esforco" className="mt-2 flex min-h-0 flex-1 animate-fade-in flex-col justify-center gap-2">
-              <div className="grid shrink-0 grid-cols-2 gap-2">
-                <CronometroCompacto
+            <div key="esforco" className="fade-in-mob flex min-h-0 flex-1 flex-col gap-3">
+              <div className="grid shrink-0 grid-cols-2 gap-3">
+                <SeloDoCronometro
                   fase={phase === 'countdown' ? 'countdown' : 'executing'}
                   valor={
                     phase === 'countdown'
@@ -880,92 +1021,68 @@ export function WorkoutSessionPage() {
                 />
                 <AlvoDaSerie exercise={currentExercise} />
               </div>
-              {/* Absorve toda a folga que sobrar, em vez de ter altura própria:
-                  é o único elemento aqui que pode encolher sem perder função,
-                  então é ele que se ajusta ao aparelho.
-
-                  `h-full w-auto` em vez de largura cheia: o vídeo é quadrado, e
-                  esticá-lo na largura deixava duas faixas cinza nas laterais.
-                  Assim o elemento tem exatamente o tamanho da imagem. */}
-              <div className="flex min-h-0 flex-1 items-center justify-center">
-                <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-auto object-contain" />
-                {!currentExercise.video && <ExerciseIllustration exercise={currentExercise} className="h-full" />}
-              </div>
+              {currentExercise.video ? (
+                // Absorve toda a folga que sobrar, em vez de ter altura própria:
+                // é o único elemento aqui que pode encolher sem perder função.
+                // `h-full w-auto`: o vídeo é quadrado, e esticá-lo na largura
+                // deixava duas faixas nas laterais.
+                <div className="flex min-h-[96px] flex-1 items-center justify-center">
+                  <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-auto max-w-full object-contain" />
+                </div>
+              ) : (
+                // Sem vídeo: o estado "não encontramos" ocupa a altura que o
+                // conteúdo pede (nunca altura fixa, para o botão não ser cortado);
+                // o miolo rola se a tela for baixa demais.
+                <div className="my-auto shrink-0">
+                  <ExerciseIllustration exercise={currentExercise} className="w-full" />
+                </div>
+              )}
               {currentExercise.notes && (
-                <p className="line-clamp-2 shrink-0 text-[11px] leading-snug text-zinc-500">{currentExercise.notes}</p>
+                <p className="line-clamp-2 shrink-0 text-[13px] leading-snug text-muted">{currentExercise.notes}</p>
               )}
             </div>
           )}
 
           {!isTimed && (
-            <div className="mt-2 flex shrink-0 items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => stepWeight(-2.5)}
-                className="h-10 w-10 shrink-0 rounded-xl bg-zinc-800 text-xl font-bold text-white"
-              >
-                −
-              </button>
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={0.5}
-                // O peso da última vez vira o placeholder: informa a mesma coisa
-                // que a linha "última vez" informava, sem gastar uma linha.
-                placeholder={currentExercise.last_weight_kg ? String(currentExercise.last_weight_kg) : '0'}
-                value={weightText}
-                // Selecting on focus makes the first digit replace the old value
-                // instead of being appended to it.
-                onFocus={(event) => event.target.select()}
-                onChange={(event) => setWeightText(event.target.value)}
-                className="w-20 rounded-xl border border-zinc-700 bg-zinc-800 px-2 py-2 text-center text-lg font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
-              />
-              <span className="shrink-0 text-xs text-zinc-500">kg</span>
-              <button
-                type="button"
-                onClick={() => stepWeight(2.5)}
-                className="h-10 w-10 shrink-0 rounded-xl bg-zinc-800 text-xl font-bold text-white"
-              >
-                +
-              </button>
-            </div>
+            <StepperDeCarga
+              value={weightText}
+              placeholder={currentExercise.last_weight_kg ? String(currentExercise.last_weight_kg) : '0'}
+              onChange={setWeightText}
+              onStep={stepWeight}
+            />
           )}
         </div>
 
         {/* Rodapé ancorado. `pb-24` livra a barra de navegação, que é fixa e
             flutua por cima de tudo. */}
-        <div className="shrink-0 space-y-2 px-4 pb-24 pt-3">
-          {phase === 'executing' && !isTimed && (
-            <Button fullWidth size="lg" onClick={() => recordSet(elapsed)} isLoading={isBusy}>Próximo</Button>
-          )}
-          {phase === 'executing' && isTimed && (
-            <Button fullWidth size="lg" onClick={() => recordSet(elapsed)} isLoading={isBusy}>Concluir agora</Button>
-          )}
-          {phase === 'countdown' && (
-            <Button fullWidth size="lg" onClick={() => startPhase('executing')}>Começar agora</Button>
-          )}
-          {phase === 'resting' && (
-            <Button fullWidth size="lg" onClick={advanceAfterRest}>
-              Pular descanso
-            </Button>
-          )}
-          {phase === 'rest_done' && (
-            <Button fullWidth size="lg" onClick={advanceAfterRest}>
-              Continuar
-            </Button>
-          )}
+        <div className="shrink-0 space-y-2 px-5 pb-24 pt-3">
+          <div className="relative">
+            {phase === 'executing' && (
+              <PhaseButton fase="executing" onClick={() => recordSet(elapsed)} disabled={isBusy}>
+                {isTimed ? 'Concluir agora' : 'Concluí a série'}
+              </PhaseButton>
+            )}
+            {phase === 'countdown' && (
+              <PhaseButton fase="countdown" onClick={() => startPhase('executing')}>Começar agora</PhaseButton>
+            )}
+            {phase === 'resting' && (
+              <PhaseButton fase="resting" onClick={advanceAfterRest}>Pular descanso</PhaseButton>
+            )}
+            {phase === 'rest_done' && (
+              <PhaseButton fase="rest_done" onClick={advanceAfterRest} pulse>Continuar</PhaseButton>
+            )}
+            {sparking && <Sparks />}
+          </div>
 
-          {/* As quatro ações secundárias em duas linhas rasas. Finalizar e
-              descartar viraram texto: são saídas, não o caminho normal, e
-              ocupavam dois botões inteiros logo abaixo do que se aperta a cada
-              série. */}
+          {/* Secundárias em linha, 48 px. Finalizar e descartar são saídas, não o
+              caminho normal: discretas, 44 px, logo abaixo do que se aperta a
+              cada série. */}
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={goBack}
               disabled={isBusy || completedSets.length === 0}
-              className="rounded-xl bg-zinc-800 py-2.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+              className={ACAO_SECUNDARIA}
             >
               ← Voltar série
             </button>
@@ -973,16 +1090,16 @@ export function WorkoutSessionPage() {
               type="button"
               onClick={() => setShowPostpone(true)}
               disabled={pendingExercises.length < 2}
-              className="rounded-xl bg-zinc-800 py-2.5 text-sm font-semibold text-zinc-300 disabled:opacity-40"
+              className={ACAO_SECUNDARIA}
             >
               Adiar exercício
             </button>
           </div>
-          <div className="flex items-center justify-between px-1">
-            <button type="button" onClick={openFinishSheet} className="py-1 text-xs font-semibold text-primary-300">
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={openFinishSheet} className={`${ACAO_DISCRETA} text-brand-fg`}>
               Finalizar treino agora
             </button>
-            <button type="button" onClick={cancel} className="py-1 text-xs text-red-400">Descartar</button>
+            <button type="button" onClick={cancel} className={`${ACAO_DISCRETA} text-danger`}>Descartar</button>
           </div>
         </div>
       </div>

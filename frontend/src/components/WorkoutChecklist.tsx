@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Card } from './Card';
+import { Chip } from './Chip';
 import { ExerciseVideoPlayer } from './ExerciseVideoPlayer';
 import { ExerciseIllustration } from './ExerciseIllustration';
 import { temVideoLocal } from '../lib/videos/videoStore';
@@ -45,11 +46,11 @@ function BotaoVerMovimento({ exercise }: { exercise: TrainingPlanExercise }) {
       <button
         type="button"
         onClick={() => setAberto((atual) => !atual)}
-        className="text-xs font-semibold text-primary-400"
+        className="press min-h-[44px] rounded-sm text-[15px] font-semibold text-brand-fg"
       >
         {aberto ? 'Ocultar movimento' : 'Ver movimento'}
       </button>
-      {aberto && <ExerciseVideoPlayer video={exercise.video} className="mt-2 aspect-square w-full bg-zinc-900 object-cover" />}
+      {aberto && <ExerciseVideoPlayer video={exercise.video} className="mt-2 aspect-square w-full object-cover" />}
     </div>
   );
 }
@@ -81,53 +82,42 @@ export function WorkoutChecklist({ exercises, state, onChange, lockedFor }: {
         const setSetsDone = (value: number) => onChange(id, { ...entry, setsDone: Math.max(locked, value) });
 
         return (
-          <Card
-            key={id}
-            className={`transition-colors ${
-              isComplete ? 'border-emerald-800 bg-emerald-950/20' : isPartial ? 'border-amber-900 bg-amber-950/10' : ''
-            }`}
-          >
+          <Card key={id} tint={isComplete ? 'ok' : isPartial ? 'sun' : undefined}>
             <div className="flex items-start gap-3">
               <button
                 type="button"
                 aria-label={isComplete ? `Desmarcar ${exercise.exercise_name}` : `Marcar ${exercise.exercise_name}`}
                 aria-pressed={isComplete}
                 onClick={() => setSetsDone(isComplete ? 0 : exercise.sets)}
-                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 transition-all active:scale-90 ${
-                  isComplete
-                    ? 'border-emerald-500 bg-emerald-500 text-white'
-                    : isPartial
-                      ? 'border-amber-500 bg-amber-500/20 text-amber-400'
-                      : 'border-zinc-600 bg-transparent text-transparent'
-                }`}
+                className="press -ml-2 -mt-2 flex h-12 w-12 shrink-0 items-center justify-center"
               >
-                {isPartial ? <span className="h-1 w-3 rounded-full bg-amber-400" /> : (
-                  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-                    <path d="M4 10.5l4 4 8-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-sm transition-colors duration-press ease-mob ${
+                    isComplete
+                      ? 'bg-ok text-bg'
+                      : isPartial
+                        ? 'bg-sun-soft text-sun'
+                        : 'bg-surface-2 text-transparent'
+                  }`}
+                >
+                  {isPartial ? <span className="h-1 w-3 rounded-chip bg-sun" /> : (
+                    <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden="true">
+                      <path d="M4 10.5l4 4 8-9" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </span>
               </button>
 
               <div className="min-w-0 flex-1">
-                <p className={`font-semibold leading-tight ${isComplete ? 'text-emerald-100' : 'text-white'}`}>
-                  {exercise.exercise_name}
-                </p>
-                <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs">
-                  <span className="rounded-lg bg-zinc-950 px-2 py-0.5 text-primary-300">
-                    {exercise.sets} × {formatTarget(exercise)}
-                  </span>
-                  {exercise.rest_seconds > 0 && (
-                    <span className="rounded-lg bg-zinc-950 px-2 py-0.5 text-zinc-500">{exercise.rest_seconds}s descanso</span>
-                  )}
-                  {entry.setsDone > 0 && (
-                    <span className="rounded-lg bg-zinc-950 px-2 py-0.5 text-emerald-400">
-                      {entry.setsDone} de {exercise.sets} feitas
-                    </span>
-                  )}
+                <p className="text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Chip tone="brand">{exercise.sets} × {formatTarget(exercise)}</Chip>
+                  {exercise.rest_seconds > 0 && <Chip>{exercise.rest_seconds}s descanso</Chip>}
+                  {entry.setsDone > 0 && <Chip tone="ok">{entry.setsDone} de {exercise.sets} feitas</Chip>}
                 </div>
 
                 {exercise.sets > 1 && (
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {Array.from({ length: exercise.sets }, (_, index) => index + 1).map((number) => {
                       const filled = entry.setsDone >= number;
                       const isLocked = number <= locked;
@@ -137,12 +127,12 @@ export function WorkoutChecklist({ exercises, state, onChange, lockedFor }: {
                           type="button"
                           aria-label={`${number} série${number === 1 ? '' : 's'} concluída${number === 1 ? '' : 's'}`}
                           onClick={() => setSetsDone(entry.setsDone === number ? number - 1 : number)}
-                          className={`h-7 w-7 rounded-lg text-xs font-bold transition-colors ${
+                          className={`press num h-10 w-10 rounded-sm text-[18px] leading-none ${
                             filled
                               ? isLocked
-                                ? 'bg-emerald-800 text-emerald-200'
-                                : 'bg-emerald-600 text-white'
-                              : 'bg-zinc-800 text-zinc-500'
+                                ? 'bg-ok-soft text-ok'
+                                : 'bg-ok text-bg'
+                              : 'bg-surface-2 text-dim'
                           }`}
                         >
                           {number}
@@ -154,24 +144,25 @@ export function WorkoutChecklist({ exercises, state, onChange, lockedFor }: {
 
                 <BotaoVerMovimento exercise={exercise} />
 
-                {exercise.notes && <p className="mt-2 text-xs leading-relaxed text-zinc-500">{exercise.notes}</p>}
+                {exercise.notes && <p className="mt-2 text-[15px] leading-[1.45] text-muted">{exercise.notes}</p>}
 
                 {exercise.tracking_type !== 'time' && entry.setsDone > 0 && (
-                  <div className="mt-2.5 flex items-center gap-2">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     <input
                       type="number"
                       inputMode="decimal"
                       min={0}
                       step={0.5}
+                      aria-label={`Carga de ${exercise.exercise_name} em quilos`}
                       placeholder={exercise.last_weight_kg ? String(exercise.last_weight_kg) : '0'}
                       value={entry.weight}
                       onFocus={(event) => event.target.select()}
                       onChange={(event) => onChange(id, { ...entry, weight: event.target.value })}
-                      className="w-20 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-center text-sm font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+                      className="w-24 text-center font-bold"
                     />
-                    <span className="text-xs text-zinc-500">kg</span>
+                    <span className="text-[15px] text-muted">kg</span>
                     {exercise.last_weight_kg ? (
-                      <span className="text-xs text-zinc-600">última vez: {exercise.last_weight_kg} kg</span>
+                      <span className="text-[13px] text-dim">última vez: {exercise.last_weight_kg} kg</span>
                     ) : null}
                   </div>
                 )}

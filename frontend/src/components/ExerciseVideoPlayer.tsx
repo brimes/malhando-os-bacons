@@ -78,7 +78,7 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
       // preenchendo a largura, outro quer ele cabendo na altura que sobrou.
       // Definir os dois aqui faria as classes brigarem pela ordem do CSS — não
       // pela ordem em que aparecem no `className`, que é o que se esperaria.
-      className={`rounded-2xl ${className}`}
+      className={`rounded-lg bg-surface-2 ${className}`}
     />
   );
 }

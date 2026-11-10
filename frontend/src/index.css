@@ -231,3 +231,24 @@
   .bar-draw { animation: none; }
 }
 @keyframes mob-exit-fade { from { opacity: 1; } to { opacity: 0; } }
+
+/* Campo numérico grande do stepper de carga (num-lg, 38 px). O bloco global de
+   `pointer: coarse` força 16 px com `!important`; este seletor tem mais
+   especificidade e devolve o tamanho do valor. */
+input.input-num {
+  font-family: 'Archivo Variable', 'Arial Narrow', 'Roboto Condensed', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  font-size: 38px;
+  line-height: 1.05;
+  height: 56px;
+  min-height: 56px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+@media (pointer: coarse) {
+  input.input-num:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']) {
+    font-size: 38px !important;
+  }
+}
