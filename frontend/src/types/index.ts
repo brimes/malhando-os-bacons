@@ -350,6 +350,18 @@ export interface NextWorkout {
   day_name: string;
   focus: string;
   last_done_at?: string;
+  exercises: NextWorkoutExercise[];
+  total_sets: number;
+  session_duration_minutes?: number;
+}
+
+export interface NextWorkoutExercise {
+  name: string;
+  sets: number;
+  reps: number;
+  tracking_type: string;
+  duration_seconds?: number;
+  last_weight_kg?: number;
 }
 
 export interface WeeklyPerformance {
