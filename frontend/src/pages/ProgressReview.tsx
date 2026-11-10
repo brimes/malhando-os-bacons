@@ -15,24 +15,24 @@ const POLL_MS = 4000;
 const DEADLINE_MS = 9 * 60 * 1000;
 
 const GOAL_STATUS: Record<ProgressReview['goal_status'], { label: string; badge: string; card: string }> = {
-  on_track: { label: 'No caminho', badge: 'bg-emerald-950 text-emerald-300', card: 'border-emerald-900' },
-  needs_change: { label: 'Precisa de ajuste', badge: 'bg-amber-950 text-amber-300', card: 'border-amber-900' },
-  at_risk: { label: 'Em risco', badge: 'bg-red-950 text-red-300', card: 'border-red-900' },
+  on_track: { label: 'No caminho', badge: 'bg-ok-soft text-ok', card: '' },
+  needs_change: { label: 'Precisa de ajuste', badge: 'bg-sun-soft text-sun', card: '' },
+  at_risk: { label: 'Em risco', badge: 'bg-danger-soft text-danger', card: '' },
 };
 
 const formatDate = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR');
 
 const LINE_STYLE: Record<DiffLine['kind'], string> = {
-  added: 'text-emerald-400',
-  removed: 'text-red-400',
-  changed: 'text-amber-300',
+  added: 'text-ok',
+  removed: 'text-danger',
+  changed: 'text-sun',
 };
 
 const LINE_MARK: Record<DiffLine['kind'], string> = { added: '+', removed: '−', changed: '~' };
 
 function DiffList({ lines }: { lines: DiffLine[] }) {
   if (lines.length === 0) {
-    return <p className="mt-2 text-xs text-zinc-600">O assistente reescreveu o plano sem alterar nada estrutural.</p>;
+    return <p className="mt-2 text-xs text-dim">O assistente reescreveu o plano sem alterar nada estrutural.</p>;
   }
   return (
     <ul className="mt-2 space-y-1">
@@ -64,24 +64,24 @@ function ChangeCard({
 }) {
   const [showDetail, setShowDetail] = useState(false);
   return (
-    <Card className={selected ? 'border-primary-800 bg-primary-950/20' : ''}>
+    <Card className={selected ? 'bg-violet-soft' : ''}>
       <label className="flex items-start gap-3">
         <input
           type="checkbox"
           checked={selected}
           disabled={disabled}
           onChange={onToggle}
-          className="mt-1 h-5 w-5 shrink-0 accent-primary-600"
+          className="mt-1 h-5 w-5 shrink-0 accent-brand"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-white">{title}</p>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-300">{summary}</p>
+          <p className="text-sm font-bold text-fg">{title}</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted">{summary}</p>
         </div>
       </label>
       <button
         type="button"
         onClick={() => setShowDetail((value) => !value)}
-        className="mt-3 text-xs font-medium text-primary-400"
+        className="mt-3 text-xs font-medium text-violet"
       >
         {showDetail ? 'Ocultar o que muda' : `Ver o que muda (${lines.length})`}
       </button>
@@ -219,15 +219,15 @@ export function ProgressReviewPage() {
     <>
       <Header title="Avaliação" showBack />
       <div className="space-y-4 px-4 py-5 pb-24">
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
-        {isLoading && <div className="py-20 text-center text-zinc-500">Carregando...</div>}
+        {isLoading && <div className="py-20 text-center text-muted">Carregando...</div>}
 
         {!isLoading && !review && (
           <Card className="text-center">
             <p className="text-4xl">🧭</p>
-            <h2 className="mt-3 font-bold text-white">Avaliar o resultado</h2>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+            <h2 className="mt-3 font-bold text-fg">Avaliar o resultado</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
               O assistente lê tudo o que você registrou desde o início do plano — treinos executados, cargas,
               alimentação e medições — e compara com o seu objetivo. Se fizer sentido mudar o treino ou a
               nutrição, ele propõe a mudança e você decide se aplica.
@@ -241,8 +241,8 @@ export function ProgressReviewPage() {
         {review?.status === 'pending' && (
           <Card className="text-center">
             <p className="animate-pulse text-4xl">🧭</p>
-            <h2 className="mt-3 font-bold text-white">Analisando o período</h2>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+            <h2 className="mt-3 font-bold text-fg">Analisando o período</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
               Lendo treinos, alimentação e medições de {formatDate(review.period_start)} até{' '}
               {formatDate(review.period_end)}. Isso leva alguns minutos — pode sair da tela e voltar depois.
             </p>
@@ -251,38 +251,38 @@ export function ProgressReviewPage() {
 
         {review?.status === 'failed' && (
           <Card>
-            <h2 className="font-bold text-white">Não foi possível avaliar</h2>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-400">{review.error || 'O assistente não respondeu.'}</p>
+            <h2 className="font-bold text-fg">Não foi possível avaliar</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">{review.error || 'O assistente não respondeu.'}</p>
             <Button fullWidth className="mt-4" isLoading={isStarting} onClick={start}>Tentar de novo</Button>
           </Card>
         )}
 
         {review && review.status !== 'pending' && review.status !== 'failed' && (
           <>
-            <p className="px-1 text-xs text-zinc-600">
+            <p className="px-1 text-xs text-dim">
               Período de {formatDate(review.period_start)} a {formatDate(review.period_end)}
             </p>
 
             <Card>
-              <h2 className="text-xs uppercase tracking-wide text-zinc-500">Desempenho</h2>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-zinc-200">{review.performance}</p>
+              <h2 className="text-xs uppercase tracking-wide text-dim">Desempenho</h2>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-fg">{review.performance}</p>
             </Card>
 
             <Card className={GOAL_STATUS[review.goal_status].card}>
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xs uppercase tracking-wide text-zinc-500">Objetivo</h2>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${GOAL_STATUS[review.goal_status].badge}`}>
+                <h2 className="text-xs uppercase tracking-wide text-dim">Objetivo</h2>
+                <span className={`rounded-full px-2 py-1 text-xs font-bold ${GOAL_STATUS[review.goal_status].badge}`}>
                   {GOAL_STATUS[review.goal_status].label}
                 </span>
               </div>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-zinc-200">{review.goal_assessment}</p>
+              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-fg">{review.goal_assessment}</p>
             </Card>
 
             {hasProposal && (
               <div className="space-y-3">
                 <div className="px-1">
-                  <h2 className="text-xs uppercase tracking-wide text-zinc-500">Alterações sugeridas</h2>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-600">
+                  <h2 className="text-xs uppercase tracking-wide text-dim">Alterações sugeridas</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-dim">
                     Nada muda até você confirmar. O que já foi treinado e registrado continua no histórico, e a
                     versão anterior do plano fica guardada.
                   </p>
@@ -318,7 +318,7 @@ export function ProgressReviewPage() {
                     type="button"
                     disabled={isApplying}
                     onClick={discard}
-                    className="w-full py-3 text-sm text-zinc-500 disabled:opacity-50"
+                    className="w-full py-3 text-sm text-muted disabled:opacity-50"
                   >
                     Manter os planos como estão
                   </button>
@@ -335,14 +335,14 @@ export function ProgressReviewPage() {
             */}
             {advice.length > 0 && (
               <Card>
-                <h2 className="text-xs uppercase tracking-wide text-zinc-500">Recomendações</h2>
-                <p className="mt-1 text-xs text-zinc-600">
+                <h2 className="text-xs uppercase tracking-wide text-dim">Recomendações</h2>
+                <p className="mt-1 text-xs text-dim">
                   Orientação para seguir o plano que você já tem — não há alteração a confirmar aqui.
                 </p>
                 <ul className="mt-2 space-y-2">
                   {advice.map((text) => (
-                    <li key={text} className="flex gap-2 text-sm leading-relaxed text-zinc-300">
-                      <span className="text-primary-500">•</span>
+                    <li key={text} className="flex gap-2 text-sm leading-relaxed text-muted">
+                      <span className="text-violet">•</span>
                       <span>{text}</span>
                     </li>
                   ))}
@@ -352,8 +352,8 @@ export function ProgressReviewPage() {
 
             {review.status === 'ready' && !hasProposal && advice.length === 0 && !proposalError
               && review.goal_status === 'on_track' && (
-              <Card className="border-emerald-900">
-                <p className="text-sm leading-relaxed text-zinc-300">
+              <Card className="">
+                <p className="text-sm leading-relaxed text-muted">
                   Nenhuma alteração proposta: o assistente considerou que os planos atuais continuam adequados ao
                   seu objetivo.
                 </p>
@@ -361,10 +361,10 @@ export function ProgressReviewPage() {
             )}
 
             {review.status === 'ready' && !hasProposal && proposalError && (
-              <Card className="border-amber-900 bg-amber-950/20">
-                <h2 className="text-sm font-bold text-amber-300">A alteração não ficou pronta</h2>
-                <p className="mt-1 text-sm leading-relaxed text-zinc-300">{proposalError}</p>
-                <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+              <Card className="bg-sun-soft">
+                <h2 className="text-sm font-bold text-sun">A alteração não ficou pronta</h2>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{proposalError}</p>
+                <p className="mt-2 text-xs leading-relaxed text-dim">
                   Seus planos continuam como estavam. Vale refazer a avaliação — ou perguntar abaixo o que
                   mudar, e aplicar você mesmo pelo ajuste do plano.
                 </p>
@@ -373,8 +373,8 @@ export function ProgressReviewPage() {
             )}
 
             {review.status === 'applied' && (
-              <Card className="border-emerald-900 bg-emerald-950/20">
-                <p className="text-sm leading-relaxed text-emerald-300">
+              <Card className="bg-ok-soft">
+                <p className="text-sm leading-relaxed text-ok">
                   Planos atualizados{review.applied_training && review.applied_nutrition
                     ? ' (treino e nutrição)'
                     : review.applied_training
@@ -386,7 +386,7 @@ export function ProgressReviewPage() {
 
             {review.status === 'discarded' && (
               <Card>
-                <p className="text-sm leading-relaxed text-zinc-400">
+                <p className="text-sm leading-relaxed text-muted">
                   Você optou por manter os planos como estavam.
                 </p>
               </Card>

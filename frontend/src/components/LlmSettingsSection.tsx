@@ -70,23 +70,23 @@ export function LlmSettingsSection() {
   if (isLoading) {
     return (
       <Card>
-        <p className="text-sm text-zinc-500">Carregando configurações de IA...</p>
+        <p className="text-sm text-muted">Carregando configurações de IA...</p>
       </Card>
     );
   }
 
   return (
     <div className="space-y-3">
-      {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
-      {notice && <div className="rounded-xl border border-primary-900 bg-primary-950/40 p-3 text-sm text-primary-200">{notice}</div>}
+      {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      {notice && <div className="rounded-md bg-brand-soft p-3 text-sm text-brand-fg">{notice}</div>}
 
       {/* Current state, first thing on screen: the person needs to know whose credits pay for the AI. */}
-      <Card className={settings.using_shared_credits ? 'border-amber-900 bg-amber-950/20' : 'border-primary-900 bg-primary-950/20'}>
-        <p className="text-xs uppercase tracking-wide text-zinc-500">Situação atual</p>
+      <Card className={settings.using_shared_credits ? 'bg-sun-soft' : 'bg-brand-soft'}>
+        <p className="text-xs uppercase tracking-wide text-dim">Situação atual</p>
         {settings.using_shared_credits ? (
           <>
-            <p className="mt-1 text-sm font-bold text-amber-200">Usando o crédito compartilhado</p>
-            <p className="mt-2 text-xs leading-relaxed text-amber-200/80">
+            <p className="mt-1 text-sm font-bold text-sun">Usando o crédito compartilhado</p>
+            <p className="mt-2 text-xs leading-relaxed text-sun/80">
               O MOB gratuito usa modelos de IA gratuitos, com um crédito compartilhado entre todos os usuários. Esse
               crédito é limitado e <strong>pode acabar</strong> — quando isso acontece, criar planos e tirar dúvidas
               param de funcionar até o crédito voltar. Se você não quiser dividir esse crédito, cadastre a sua própria
@@ -95,12 +95,12 @@ export function LlmSettingsSection() {
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm font-bold text-primary-200">
+            <p className="mt-1 text-sm font-bold text-brand-fg">
               {settings.key_preview
                 ? `Usando a sua chave ${settings.key_preview}`
                 : 'Usando a sua chave de API'}
             </p>
-            <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+            <p className="mt-2 text-xs leading-relaxed text-muted">
               {providerLabel(settings.provider)}
               {settings.model ? ` · ${settings.model}` : ''} — seu uso não depende do crédito compartilhado.
             </p>
@@ -110,14 +110,14 @@ export function LlmSettingsSection() {
 
       <Card className="space-y-4">
         <div>
-          <h4 className="text-sm font-semibold text-white">Usar a minha própria chave</h4>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          <h4 className="text-sm font-semibold text-fg">Usar a minha própria chave</h4>
+          <p className="mt-1 text-xs leading-relaxed text-dim">
             A chave fica guardada na sua conta e é usada só nas suas requisições. O custo passa a ser cobrado
             diretamente pelo provedor que você escolher.
           </p>
         </div>
 
-        <label className="block text-sm text-zinc-300">
+        <label className="block text-sm text-muted">
           Provedor
           <select
             value={provider}
@@ -125,7 +125,7 @@ export function LlmSettingsSection() {
               setProvider(event.target.value);
               setModel('');
             }}
-            className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3.5 text-white focus:border-primary-500 focus:outline-none"
+            className="mt-2 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg"
           >
             {/* Keeps an unknown provider coming from the backend selectable instead of silently switching it. */}
             {!KNOWN_LLM_PROVIDERS.some((item) => item.value === provider) && provider && (
@@ -137,7 +137,7 @@ export function LlmSettingsSection() {
           </select>
         </label>
 
-        <label className="block text-sm text-zinc-300">
+        <label className="block text-sm text-muted">
           Modelo
           <input
             value={model}
@@ -146,7 +146,7 @@ export function LlmSettingsSection() {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            className="mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3.5 text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+            className="mt-2 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg placeholder:text-dim"
           />
           {suggestions.length > 0 && (
             <span className="mt-2 flex flex-wrap gap-2">
@@ -156,7 +156,7 @@ export function LlmSettingsSection() {
                   type="button"
                   onClick={() => setModel(item)}
                   className={`rounded-full border px-3 py-2 text-xs ${
-                    model === item ? 'border-primary-500 bg-primary-950 text-primary-200' : 'border-zinc-700 text-zinc-400'
+                    model === item ? 'bg-brand-soft text-brand-fg' : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {item}
@@ -166,7 +166,7 @@ export function LlmSettingsSection() {
           )}
         </label>
 
-        <label className="block text-sm text-zinc-300">
+        <label className="block text-sm text-muted">
           Chave de API
           <span className="mt-2 flex items-stretch gap-2">
             <input
@@ -177,17 +177,17 @@ export function LlmSettingsSection() {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3.5 text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+              className="min-w-0 flex-1 rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg placeholder:text-dim"
             />
             <button
               type="button"
               onClick={() => setShowKey((current) => !current)}
-              className="shrink-0 rounded-xl border border-zinc-700 px-4 text-xs font-semibold text-zinc-300"
+              className="shrink-0 rounded-md bg-surface-2 px-4 text-xs font-semibold text-muted"
             >
               {showKey ? 'Ocultar' : 'Mostrar'}
             </button>
           </span>
-          <span className="mt-2 block text-xs leading-relaxed text-zinc-600">
+          <span className="mt-2 block text-xs leading-relaxed text-dim">
             {KNOWN_LLM_PROVIDERS.find((item) => item.value === provider)?.keyHint ?? 'Chave fornecida pelo provedor.'}
             {settings.configured && ' Por segurança a chave salva não é exibida — para trocar de provedor ou modelo, informe a chave de novo.'}
           </span>
@@ -203,7 +203,7 @@ export function LlmSettingsSection() {
           {settings.configured ? 'Atualizar minha chave' : 'Salvar minha chave'}
         </Button>
         {!isOnline && (
-          <p className="text-center text-xs text-zinc-500">Isso precisa de internet. Conecte-se e tente de novo.</p>
+          <p className="text-center text-xs text-dim">Isso precisa de internet. Conecte-se e tente de novo.</p>
         )}
 
         {settings.configured && (

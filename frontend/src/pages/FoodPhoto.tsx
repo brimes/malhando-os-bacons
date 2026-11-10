@@ -154,11 +154,11 @@ export function FoodPhotoPage() {
   return (
     <>
       <Header title={title} showBack />
-      <div className="space-y-4 px-4 py-4 pb-24">
+ <div className="space-y-4 px-4 py-4 pb-24">
         {!hasAnalysis && (
           <>
-            <Card className="border-primary-900 bg-primary-950/30">
-              <p className="text-sm text-primary-200">
+ <Card className="border-brand bg-brand-soft">
+ <p className="text-sm text-brand-fg">
                 {isPlate
                   ? 'Fotografe o prato de frente, com boa luz. A IA estima os alimentos e as porções — confira antes de registrar.'
                   : 'Fotografe a tabela de informação nutricional do rótulo, bem próxima e legível.'}
@@ -170,33 +170,33 @@ export function FoodPhotoPage() {
               disabled={isUploading}
             />
             {isUploading && (
-              <p className="text-center text-sm text-zinc-500">
-                <span className="animate-pulse">Analisando a foto...</span>
+ <p className="text-center text-sm text-dim">
+ <span className="animate-pulse">Analisando a foto...</span>
               </p>
             )}
           </>
         )}
 
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         {isPlate && plateItems && (
           <>
             {confidence && (
-              <Card className={confidence === 'low' ? 'border-amber-900 bg-amber-950/30' : ''}>
-                <p className="text-sm font-semibold text-white">{CONFIDENCE_LABEL[confidence] ?? confidence}</p>
-                {caveat && <p className="mt-1 text-xs leading-relaxed text-zinc-400">{caveat}</p>}
+ <Card className={confidence === 'low' ? ' bg-sun-soft' : ''}>
+ <p className="text-sm font-semibold text-fg">{CONFIDENCE_LABEL[confidence] ?? confidence}</p>
+ {caveat && <p className="mt-1 text-xs leading-relaxed text-muted">{caveat}</p>}
               </Card>
             )}
 
             <div>
-              <label className="block text-xs uppercase tracking-wide text-zinc-400 mb-2">Refeição</label>
-              <div className="grid grid-cols-2 gap-2">
+ <label className="block text-xs uppercase tracking-wide text-muted mb-2">Refeição</label>
+ <div className="grid grid-cols-2 gap-2">
                 {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, mealLabel]) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setMealType(type)}
-                    className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${mealType === type ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+ className={`py-2.5 rounded-md text-sm font-medium transition-colors ${mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}
                   >
                     {mealLabel}
                   </button>
@@ -204,32 +204,32 @@ export function FoodPhotoPage() {
               </div>
             </div>
 
-            <div className="space-y-3">
+ <div className="space-y-3">
               {plateItems.map((item, index) => (
-                <Card key={index} className="space-y-2">
-                  <div className="flex items-center gap-2">
+ <Card key={index} className="space-y-2">
+ <div className="flex items-center gap-2">
                     <input
                       value={item.food_name}
                       onChange={(e) => updatePlateItem(index, 'food_name', e.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-white"
+ className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg"
                     />
-                    <button type="button" onClick={() => removePlateItem(index)} className="text-xs text-red-400">Remover</button>
+ <button type="button" onClick={() => removePlateItem(index)} className="text-xs text-danger">Remover</button>
                   </div>
-                  <div className="grid grid-cols-5 gap-2 text-center">
-                    <label className="text-[10px] text-zinc-500">g
-                      <input type="number" value={item.estimated_grams} onChange={(e) => updatePlateItem(index, 'estimated_grams', e.target.value)} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-white" />
+ <div className="grid grid-cols-5 gap-2 text-center">
+ <label className="text-xs text-dim">g
+ <input type="number" value={item.estimated_grams} onChange={(e) => updatePlateItem(index, 'estimated_grams', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-fg" />
                     </label>
-                    <label className="text-[10px] text-zinc-500">kcal
-                      <input type="number" value={item.calories} onChange={(e) => updatePlateItem(index, 'calories', e.target.value)} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-primary-400" />
+ <label className="text-xs text-dim">kcal
+ <input type="number" value={item.calories} onChange={(e) => updatePlateItem(index, 'calories', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-brand-fg" />
                     </label>
-                    <label className="text-[10px] text-zinc-500">P
-                      <input type="number" value={item.protein_g} onChange={(e) => updatePlateItem(index, 'protein_g', e.target.value)} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-blue-400" />
+ <label className="text-xs text-dim">P
+ <input type="number" value={item.protein_g} onChange={(e) => updatePlateItem(index, 'protein_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-teal" />
                     </label>
-                    <label className="text-[10px] text-zinc-500">C
-                      <input type="number" value={item.carbs_g} onChange={(e) => updatePlateItem(index, 'carbs_g', e.target.value)} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-amber-400" />
+ <label className="text-xs text-dim">C
+ <input type="number" value={item.carbs_g} onChange={(e) => updatePlateItem(index, 'carbs_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-sun" />
                     </label>
-                    <label className="text-[10px] text-zinc-500">G
-                      <input type="number" value={item.fat_g} onChange={(e) => updatePlateItem(index, 'fat_g', e.target.value)} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-red-400" />
+ <label className="text-xs text-dim">G
+ <input type="number" value={item.fat_g} onChange={(e) => updatePlateItem(index, 'fat_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-danger" />
                     </label>
                   </div>
                 </Card>
@@ -244,51 +244,51 @@ export function FoodPhotoPage() {
 
         {!isPlate && label && (
           <>
-            <Card className="space-y-3">
-              <label className="block text-sm text-zinc-300">Nome
-                <input value={label.name} onChange={(e) => setLabel({ ...label, name: e.target.value })} className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white" />
+ <Card className="space-y-3">
+ <label className="block text-sm text-fg">Nome
+ <input value={label.name} onChange={(e) => setLabel({ ...label, name: e.target.value })} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-fg" />
               </label>
-              <label className="block text-sm text-zinc-300">Marca
-                <input value={label.brand} onChange={(e) => setLabel({ ...label, brand: e.target.value })} className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white" />
+ <label className="block text-sm text-fg">Marca
+ <input value={label.brand} onChange={(e) => setLabel({ ...label, brand: e.target.value })} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-fg" />
               </label>
-              <p className="text-xs uppercase tracking-wide text-zinc-500">Por 100g</p>
-              <div className="grid grid-cols-4 gap-2 text-center">
-                <label className="text-[10px] text-zinc-500">kcal
-                  <input type="number" value={label.calories_per_100g} onChange={(e) => setLabel({ ...label, calories_per_100g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-primary-400" />
+ <p className="text-xs uppercase tracking-wide text-dim">Por 100g</p>
+ <div className="grid grid-cols-4 gap-2 text-center">
+ <label className="text-xs text-dim">kcal
+ <input type="number" value={label.calories_per_100g} onChange={(e) => setLabel({ ...label, calories_per_100g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-brand-fg" />
                 </label>
-                <label className="text-[10px] text-zinc-500">P
-                  <input type="number" value={label.protein_g} onChange={(e) => setLabel({ ...label, protein_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-blue-400" />
+ <label className="text-xs text-dim">P
+ <input type="number" value={label.protein_g} onChange={(e) => setLabel({ ...label, protein_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-teal" />
                 </label>
-                <label className="text-[10px] text-zinc-500">C
-                  <input type="number" value={label.carbs_g} onChange={(e) => setLabel({ ...label, carbs_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-amber-400" />
+ <label className="text-xs text-dim">C
+ <input type="number" value={label.carbs_g} onChange={(e) => setLabel({ ...label, carbs_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-sun" />
                 </label>
-                <label className="text-[10px] text-zinc-500">G
-                  <input type="number" value={label.fat_g} onChange={(e) => setLabel({ ...label, fat_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-zinc-900 px-1 py-1.5 text-sm text-red-400" />
+ <label className="text-xs text-dim">G
+ <input type="number" value={label.fat_g} onChange={(e) => setLabel({ ...label, fat_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-danger" />
                 </label>
               </div>
             </Card>
 
-            <Card className="space-y-3">
-              <label className="flex items-center gap-2 text-sm text-zinc-300">
+ <Card className="space-y-3">
+ <label className="flex items-center gap-2 text-sm text-fg">
                 <input type="checkbox" checked={logAfterSaving} onChange={(e) => setLogAfterSaving(e.target.checked)} />
                 Registrar no diário agora também
               </label>
               {logAfterSaving && (
                 <>
-                  <div className="grid grid-cols-2 gap-2">
+ <div className="grid grid-cols-2 gap-2">
                     {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, mealLabel]) => (
                       <button
                         key={type}
                         type="button"
                         onClick={() => setMealType(type)}
-                        className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${mealType === type ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+ className={`py-2.5 rounded-md text-sm font-medium transition-colors ${mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}
                       >
                         {mealLabel}
                       </button>
                     ))}
                   </div>
-                  <label className="block text-xs text-zinc-400">Quantidade (g)
-                    <input type="number" value={servingQuantity} onChange={(e) => setServingQuantity(e.target.value)} className="mt-1.5 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-center text-white" />
+ <label className="block text-xs text-muted">Quantidade (g)
+ <input type="number" value={servingQuantity} onChange={(e) => setServingQuantity(e.target.value)} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-center text-fg" />
                   </label>
                 </>
               )}

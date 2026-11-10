@@ -122,7 +122,7 @@ export function TrainingPlanDayPage() {
       <>
         <Header title="Treino" showBack />
         <div className="space-y-4 px-4 py-10 text-center">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted">
             Este treino ainda não foi aberto neste aparelho. Conecte-se uma vez para poder iniciá-lo sem internet.
           </p>
           <Button onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
@@ -131,7 +131,7 @@ export function TrainingPlanDayPage() {
     );
   }
 
-  if (!plan || !day) return <div className="py-20 text-center text-zinc-500">Carregando treino...</div>;
+  if (!plan || !day) return <div className="py-20 text-center text-muted">Carregando treino...</div>;
 
   const exercises = day.exercises.filter((exercise) => exercise.id);
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -186,23 +186,23 @@ export function TrainingPlanDayPage() {
       <Header title={day.name} showBack />
       <div className="space-y-4 px-4 py-5 pb-28">
         <div>
-          <p className="text-sm text-zinc-500">{day.focus}</p>
-          <p className="mt-1 text-xs text-zinc-600">
+          <p className="text-sm text-muted">{day.focus}</p>
+          <p className="mt-1 text-xs text-dim">
             Última vez: {day.last_done_at ? new Date(day.last_done_at).toLocaleDateString('pt-BR') : 'ainda não realizado'}
           </p>
         </div>
 
         {session && (
-          <Card className="border-primary-800 bg-primary-950/40 text-sm text-primary-100">
+          <Card className="bg-brand-soft text-sm text-brand-fg">
             Treino em andamento — marque o que já fez ou volte para o acompanhamento.
           </Card>
         )}
 
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
-        {day.instructions && <Card className="text-sm leading-relaxed text-zinc-400">{day.instructions}</Card>}
+        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+        {day.instructions && <Card className="text-sm leading-relaxed text-muted">{day.instructions}</Card>}
 
         <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-zinc-500">{markedSets} de {totalSets} séries marcadas</p>
+          <p className="text-xs text-dim">{markedSets} de {totalSets} séries marcadas</p>
           <button
             type="button"
             onClick={() => setChecklist(Object.fromEntries(
@@ -213,7 +213,7 @@ export function TrainingPlanDayPage() {
                   : { setsDone: exercise.sets, weight: checklist[exercise.id as number]?.weight || (exercise.last_weight_kg ? String(exercise.last_weight_kg) : '') },
               ]),
             ))}
-            className="text-xs font-semibold text-primary-400"
+            className="text-xs font-semibold text-brand-fg"
           >
             {markedSets >= totalSets ? 'Limpar marcações' : 'Marcar todos'}
           </button>

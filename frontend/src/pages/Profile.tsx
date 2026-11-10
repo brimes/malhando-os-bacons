@@ -43,50 +43,50 @@ export function ProfilePage() {
             <img
               src={user.avatar_url}
               alt={user.name}
-              className="w-16 h-16 rounded-2xl object-cover"
+              className="w-16 h-16 rounded-lg object-cover"
             />
           ) : (
-            <div className="w-16 h-16 bg-primary-700 rounded-2xl flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">
+            <div className="w-16 h-16 bg-brand rounded-lg flex items-center justify-center">
+              <span className="text-2xl font-bold text-fg">
                 {user?.name?.charAt(0).toUpperCase()}
               </span>
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-white text-lg">{user?.name}</p>
-            <p className="text-sm text-zinc-400">{user?.email}</p>
-            <p className="text-xs text-zinc-600 mt-1">
+            <p className="font-bold text-fg text-lg">{user?.name}</p>
+            <p className="text-sm text-muted">{user?.email}</p>
+            <p className="text-xs text-dim mt-1">
               Membro desde {user?.created_at
                 ? new Date(user.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                 : '—'}
             </p>
           </div>
-          <span className="shrink-0 text-zinc-600">›</span>
+          <span className="shrink-0 text-dim">›</span>
         </Card>
 
         {state?.profile?.training_experience && (
           <div>
-            <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Perfil de treino</h3>
+            <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Perfil de treino</h3>
             <Card className="space-y-3">
-              <div className="flex items-center justify-between text-sm"><span className="text-zinc-500">Experiência</span><span className="font-medium text-white">{state.profile.training_experience === 'beginner' ? 'Iniciante' : 'Experiente'}</span></div>
-              {state.profile.training_experience === 'beginner' && state.profile.adaptation_ends_at && <div className="flex items-center justify-between text-sm"><span className="text-zinc-500">Adaptação até</span><span className="font-medium text-primary-400">{new Date(`${state.profile.adaptation_ends_at.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>}
-              <div className="border-t border-zinc-800 pt-3"><p className="text-xs uppercase tracking-wide text-zinc-600">Lesões ou limitações</p><p className="mt-1 text-sm leading-relaxed text-zinc-300">{state.profile.injuries_or_limitations || 'Nenhuma informada'}</p></div>
+              <div className="flex items-center justify-between text-sm"><span className="text-muted">Experiência</span><span className="font-medium text-fg">{state.profile.training_experience === 'beginner' ? 'Iniciante' : 'Experiente'}</span></div>
+              {state.profile.training_experience === 'beginner' && state.profile.adaptation_ends_at && <div className="flex items-center justify-between text-sm"><span className="text-muted">Adaptação até</span><span className="font-medium text-brand-fg">{new Date(`${state.profile.adaptation_ends_at.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>}
+              <div className="border-t border-line pt-3"><p className="text-xs uppercase tracking-wide text-dim">Lesões ou limitações</p><p className="mt-1 text-sm leading-relaxed text-muted">{state.profile.injuries_or_limitations || 'Nenhuma informada'}</p></div>
             </Card>
           </div>
         )}
 
         {state?.goal && (
           <div>
-            <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Meu objetivo</h3>
-            <Card className="border-primary-900 bg-primary-950/30">
-              <p className="text-sm leading-relaxed text-zinc-200">{state.goal.summary}</p>
-              {state.goal.target_weight_kg && <p className="mt-3 text-xs font-semibold text-primary-400">Peso-alvo: {state.goal.target_weight_kg} kg</p>}
-              {state.goal.target_body_fat_percentage && <p className="mt-1 text-xs font-semibold text-primary-400">Gordura corporal alvo: {state.goal.target_body_fat_percentage}%</p>}
-              {state.goal.target_muscle_mass_kg && <p className="mt-1 text-xs font-semibold text-primary-400">Massa muscular alvo: {state.goal.target_muscle_mass_kg} kg</p>}
-              {state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-primary-400">Caminhada de 6 min: {state.goal.target_six_minute_walk_meters} m</p>}
-              {state.goal.conditioning_focus && !state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-primary-400">Foco em condicionamento físico</p>}
-              {state.goal.target_date && <p className="mt-1 text-xs text-zinc-500">Data-meta: {new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</p>}
-              {state.goal.feasibility_warning && <p className="mt-3 rounded-xl border border-amber-900 bg-amber-950/30 p-3 text-xs leading-relaxed text-amber-200">{state.goal.feasibility_warning}</p>}
+            <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Meu objetivo</h3>
+            <Card className="bg-brand-soft">
+              <p className="text-sm leading-relaxed text-fg">{state.goal.summary}</p>
+              {state.goal.target_weight_kg && <p className="mt-3 text-xs font-semibold text-brand-fg">Peso-alvo: {state.goal.target_weight_kg} kg</p>}
+              {state.goal.target_body_fat_percentage && <p className="mt-1 text-xs font-semibold text-brand-fg">Gordura corporal alvo: {state.goal.target_body_fat_percentage}%</p>}
+              {state.goal.target_muscle_mass_kg && <p className="mt-1 text-xs font-semibold text-brand-fg">Massa muscular alvo: {state.goal.target_muscle_mass_kg} kg</p>}
+              {state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-brand-fg">Caminhada de 6 min: {state.goal.target_six_minute_walk_meters} m</p>}
+              {state.goal.conditioning_focus && !state.goal.target_six_minute_walk_meters && <p className="mt-1 text-xs font-semibold text-brand-fg">Foco em condicionamento físico</p>}
+              {state.goal.target_date && <p className="mt-1 text-xs text-dim">Data-meta: {new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</p>}
+              {state.goal.feasibility_warning && <p className="mt-3 rounded-md bg-sun-soft p-3 text-xs leading-relaxed text-sun">{state.goal.feasibility_warning}</p>}
               <Button variant="secondary" fullWidth onClick={redefineObjective} isLoading={isLoading} className="mt-4">
                 Redefinir objetivo
               </Button>
@@ -96,22 +96,22 @@ export function ProfilePage() {
         )}
 
         <div>
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Aparência</h3>
+          <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Aparência</h3>
           <ThemeSelector />
         </div>
 
         <div className="space-y-3">
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Treino</h3>
+          <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Treino</h3>
           <button type="button" onClick={() => navigate('/settings')} className="w-full text-left">
             <Card className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl">⚙️</span>
                 <div>
-                  <p className="text-sm font-medium text-white">Configurações do treino</p>
-                  <p className="text-xs text-zinc-500">Contagem para iniciar, vibração e avanço automático</p>
+                  <p className="text-sm font-medium text-fg">Configurações do treino</p>
+                  <p className="text-xs text-dim">Contagem para iniciar, vibração e avanço automático</p>
                 </div>
               </div>
-              <span className="text-zinc-600">›</span>
+              <span className="text-dim">›</span>
             </Card>
           </button>
           <button type="button" onClick={() => navigate('/gyms')} className="w-full text-left">
@@ -119,35 +119,35 @@ export function ProfilePage() {
               <div className="flex items-center gap-3">
                 <span className="text-xl">🏋️</span>
                 <div>
-                  <p className="text-sm font-medium text-white">Minhas academias</p>
-                  <p className="text-xs text-zinc-500">Aparelhos disponíveis em cada lugar onde você treina</p>
+                  <p className="text-sm font-medium text-fg">Minhas academias</p>
+                  <p className="text-xs text-dim">Aparelhos disponíveis em cada lugar onde você treina</p>
                 </div>
               </div>
-              <span className="text-zinc-600">›</span>
+              <span className="text-dim">›</span>
             </Card>
           </button>
         </div>
 
         <div>
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Inteligência artificial</h3>
+          <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Inteligência artificial</h3>
           {/* Deep link to the AI block inside the settings screen. */}
           <button type="button" onClick={() => navigate('/settings#ia')} className="w-full text-left">
             <Card className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl">🤖</span>
                 <div>
-                  <p className="text-sm font-medium text-white">IA e assinatura</p>
-                  <p className="text-xs text-zinc-500">Crédito compartilhado, sua própria chave de API ou assinatura</p>
+                  <p className="text-sm font-medium text-fg">IA e assinatura</p>
+                  <p className="text-xs text-dim">Crédito compartilhado, sua própria chave de API ou assinatura</p>
                 </div>
               </div>
-              <span className="text-zinc-600">›</span>
+              <span className="text-dim">›</span>
             </Card>
           </button>
         </div>
 
         {/* Features */}
         <div>
-          <h3 className="text-xs text-zinc-500 uppercase tracking-wide mb-3 px-1">Recursos</h3>
+          <h3 className="text-xs text-dim uppercase tracking-wide mb-3 px-1">Recursos</h3>
           <Card className="space-y-3">
             {[
               { icon: '💪', label: 'Registro de treinos', desc: 'Log de exercícios com séries, reps e carga' },
@@ -158,8 +158,8 @@ export function ProfilePage() {
               <div key={f.label} className="flex items-center gap-3">
                 <span className="text-xl">{f.icon}</span>
                 <div>
-                  <p className="text-sm font-medium text-white">{f.label}</p>
-                  <p className="text-xs text-zinc-500">{f.desc}</p>
+                  <p className="text-sm font-medium text-fg">{f.label}</p>
+                  <p className="text-xs text-dim">{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -177,12 +177,12 @@ export function ProfilePage() {
         <button
           type="button"
           onClick={() => setDeleteOpen(true)}
-          className="w-full py-2 text-center text-sm text-zinc-500 underline underline-offset-4"
+          className="w-full py-2 text-center text-sm text-muted underline underline-offset-4"
         >
           Excluir minha conta
         </button>
 
-        <p className="pt-2 text-center text-xs text-zinc-700">{appVersion ? `MOB versão ${appVersion}` : 'MOB no navegador'}</p>
+        <p className="pt-2 text-center text-xs text-dim">{appVersion ? `MOB versão ${appVersion}` : 'MOB no navegador'}</p>
       </div>
 
       {isDeleteOpen && (

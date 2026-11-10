@@ -11,7 +11,7 @@ const urlCache = new Map<number, string>();
 
 interface PhotoThumbProps {
   photoId: number;
-  className?: string;
+ className?: string;
   alt?: string;
 }
 
@@ -40,7 +40,7 @@ export function PhotoThumb({ photoId, className, alt = '' }: PhotoThumbProps) {
   }, [photoId]);
 
   if (!url) {
-    return <div className={`animate-pulse bg-zinc-800 ${className ?? ''}`} />;
+ return <div className={`animate-pulse bg-surface-2 ${className ?? ''}`} />;
   }
-  return <img src={url} alt={alt} className={className} />;
+ return <img src={url} alt={alt} className={className} />;
 }

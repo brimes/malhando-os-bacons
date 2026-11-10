@@ -100,12 +100,12 @@ export function WorkoutHistoryPage() {
       <Header title="Histórico de treinos" showBack />
       <div className="space-y-4 px-4 py-5 pb-24">
         <div>
-          <p className="text-sm text-zinc-500">Total no mês</p>
-          <p className="text-3xl font-black text-primary-400">{total} <span className="text-sm font-normal text-zinc-500">treinos</span></p>
+          <p className="text-sm text-muted">Total no mês</p>
+          <p className="text-3xl font-black text-brand-fg">{total} <span className="text-sm font-normal text-muted">treinos</span></p>
         </div>
 
         {isLoading ? (
-          <div className="py-16 text-center text-zinc-500">Carregando...</div>
+          <div className="py-16 text-center text-muted">Carregando...</div>
         ) : (
           <MonthlyCalendar
             month={month}
@@ -116,13 +116,13 @@ export function WorkoutHistoryPage() {
           />
         )}
 
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         {selectedDate ? (
           <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-zinc-500">{formatDayLabel(selectedDate)}</h3>
+            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">{formatDayLabel(selectedDate)}</h3>
             {isLoadingDay ? (
-              <div className="py-8 text-center text-sm text-zinc-500">Carregando treinos...</div>
+              <div className="py-8 text-center text-sm text-muted">Carregando treinos...</div>
             ) : (
               <div className="space-y-2">
                 {(dayWorkouts ?? []).map((workout) => (
@@ -133,19 +133,19 @@ export function WorkoutHistoryPage() {
                         onClick={() => navigate(`/workouts/${workout.id}`)}
                         className="min-w-0 flex-1 text-left"
                       >
-                        <p className="truncate font-semibold text-white">{workout.name}</p>
-                        <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-zinc-500">
+                        <p className="truncate font-semibold text-fg">{workout.name}</p>
+                        <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-dim">
                           <span>{formatTime(workout.date)}</span>
                           {workout.duration_minutes ? <span>{workout.duration_minutes} min</span> : null}
                           {workout.set_count ? <span>{workout.set_count} {workout.set_count === 1 ? 'série' : 'séries'}</span> : null}
                         </div>
-                        {workout.notes && <p className="mt-1 truncate text-xs italic text-zinc-600">{workout.notes}</p>}
+                        {workout.notes && <p className="mt-1 truncate text-xs italic text-dim">{workout.notes}</p>}
                       </button>
                       <button
                         type="button"
                         onClick={() => remove(workout)}
                         aria-label={`Apagar ${workout.name}`}
-                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-red-400"
+                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-danger"
                       >
                         Apagar
                       </button>
@@ -153,13 +153,13 @@ export function WorkoutHistoryPage() {
                   </Card>
                 ))}
                 {dayWorkouts?.length === 0 && (
-                  <p className="py-6 text-center text-sm text-zinc-600">Nenhum treino neste dia.</p>
+                  <p className="py-6 text-center text-sm text-dim">Nenhum treino neste dia.</p>
                 )}
               </div>
             )}
           </div>
         ) : (
-          <p className="text-center text-xs text-zinc-600">Toque num dia destacado para ver os treinos realizados.</p>
+          <p className="text-center text-xs text-dim">Toque num dia destacado para ver os treinos realizados.</p>
         )}
       </div>
     </>

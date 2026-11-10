@@ -47,21 +47,21 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm"
       onClick={() => !isDeleting && onClose()}
     >
       <div
-        className="max-h-[88vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5"
+        className="max-h-[88vh] w-full overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5"
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Excluir minha conta"
       >
-        <h3 className="text-lg font-bold text-white">Excluir minha conta</h3>
-        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+        <h3 className="text-lg font-bold text-fg">Excluir minha conta</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted">
           Isto apaga a sua conta e tudo que está nela, no aparelho e no servidor:
         </p>
-        <ul className="mt-3 space-y-1.5 text-sm text-zinc-300">
+        <ul className="mt-3 space-y-1.5 text-sm text-muted">
           {[
             'Perfil, objetivo e medições',
             'Planos de treino, treinos feitos e cargas registradas',
@@ -69,33 +69,33 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
             'Conversas com a IA',
           ].map((item) => (
             <li key={item} className="flex gap-2">
-              <span className="text-red-400">•</span>
+              <span className="text-danger">•</span>
               <span>{item}</span>
             </li>
           ))}
         </ul>
-        <div className="mt-4 rounded-xl border border-red-900 bg-red-950/30 p-3 text-xs font-semibold leading-relaxed text-red-200">
+        <div className="mt-4 rounded-md bg-danger-soft p-3 text-xs font-semibold leading-relaxed text-danger">
           A exclusão é imediata e não tem como desfazer. Não há backup para restaurar depois.
         </div>
 
         {error && (
-          <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>
+          <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>
         )}
 
         {hasPassword && (
-          <label className="mt-4 block text-xs uppercase tracking-wide text-zinc-500">
+          <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
             Sua senha
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
-              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-base text-white"
+              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 p-3 text-base text-fg"
             />
           </label>
         )}
 
-        <label className="mt-4 block text-xs uppercase tracking-wide text-zinc-500">
+        <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
           Digite {CONFIRMATION} para confirmar
           <input
             type="text"
@@ -104,7 +104,7 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
-            className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-base text-white"
+            className="mt-1 w-full rounded-md border border-transparent bg-surface-2 p-3 text-base text-fg"
           />
         </label>
 
@@ -119,7 +119,7 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
         >
           Excluir definitivamente
         </Button>
-        <button type="button" onClick={onClose} disabled={isDeleting} className="mt-2 w-full py-3 text-sm text-zinc-500">
+        <button type="button" onClick={onClose} disabled={isDeleting} className="mt-2 w-full py-3 text-sm text-muted">
           Cancelar
         </button>
       </div>

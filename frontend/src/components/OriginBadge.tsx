@@ -24,7 +24,7 @@ export function OriginBadge({ origin }: { origin: FoodLog['origin'] }) {
   const label = ORIGIN_LABELS[origin];
   if (!label) return null;
   return (
-    <span className="ml-2 rounded-full bg-zinc-800 px-1.5 py-0.5 align-middle text-[10px] font-medium text-zinc-400">
+ <span className="ml-2 rounded-full bg-surface-2 px-1.5 py-0.5 align-middle text-xs font-medium text-muted">
       {label}
     </span>
   );

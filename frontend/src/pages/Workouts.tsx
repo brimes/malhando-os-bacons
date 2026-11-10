@@ -65,8 +65,8 @@ export function WorkoutsPage() {
       <div className="space-y-4 px-4 py-4 pb-24">
         {progress && trackedPlan && <PlanWeekCard progress={progress} />}
 
-        {isLoading ? <div className="py-16 text-center text-zinc-500">Carregando planos...</div> : visiblePlans.length === 0 ? (
-          <div className="space-y-4 py-14 text-center"><img src="/mob-icon.png" alt="" className="mx-auto h-24 w-24 rounded-3xl object-cover opacity-80" /><h2 className="text-xl font-bold text-white">Seu treino começa com um plano</h2><p className="mx-auto max-w-xs text-sm text-zinc-500">Deixe o assistente criar tudo com base no seu objetivo ou monte cada treino manualmente.</p><Button onClick={() => navigate('/training-plans/new')}>Criar primeiro plano</Button></div>
+        {isLoading ? <div className="py-16 text-center text-muted">Carregando planos...</div> : visiblePlans.length === 0 ? (
+          <div className="space-y-4 py-14 text-center"><img src="/mob-icon.png" alt="" className="mx-auto h-24 w-24 rounded-3xl object-cover opacity-80" /><h2 className="text-xl font-bold text-fg">Seu treino começa com um plano</h2><p className="mx-auto max-w-xs text-sm text-muted">Deixe o assistente criar tudo com base no seu objetivo ou monte cada treino manualmente.</p><Button onClick={() => navigate('/training-plans/new')}>Criar primeiro plano</Button></div>
         ) : (
           <div className="space-y-3">{visiblePlans.map((plan) => {
             // O treino da vez só existe para o plano acompanhado, e vive dentro
@@ -74,10 +74,10 @@ export function WorkoutsPage() {
             const next = plan.id === trackedPlan?.id ? progress?.days.find((entry) => entry.isNext) : undefined;
             return (
             <Card key={plan.id} onClick={() => navigate(`/training-plans/${plan.id}`)}>
-              <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 flex-wrap"><h2 className="font-bold text-white">{plan.name}</h2>{plan.creation_method === 'automatic' && <span className="rounded-full bg-primary-950 px-2 py-0.5 text-[9px] font-semibold text-primary-300">IA</span>}{plan.kind === 'dynamic' && <span className="rounded-full bg-sky-950 px-2 py-0.5 text-[9px] font-semibold text-sky-300">Dinâmico</span>}</div><p className="mt-1 line-clamp-2 text-xs text-zinc-500">{plan.description}</p></div><span className="text-zinc-600">›</span></div>
+              <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 flex-wrap"><h2 className="font-bold text-fg">{plan.name}</h2>{plan.creation_method === 'automatic' && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-fg">IA</span>}{plan.kind === 'dynamic' && <span className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-semibold text-teal">Dinâmico</span>}</div><p className="mt-1 line-clamp-2 text-xs text-dim">{plan.description}</p></div><span className="text-dim">›</span></div>
 
               {progress?.daysUnknown && plan.id === trackedPlan?.id && (
-                <p className="mt-3 rounded-xl bg-zinc-950 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
+                <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
                   Abra este plano uma vez com internet para que o treino da vez fique disponível offline.
                 </p>
               )}
@@ -86,13 +86,13 @@ export function WorkoutsPage() {
                 <button
                   type="button"
                   onClick={(event) => { event.stopPropagation(); navigate(`/training-plans/${plan.id}`); }}
-                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-sky-950/60 px-3 py-3 text-left ring-1 ring-sky-800"
+                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-md bg-teal-soft px-3 py-3 text-left"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[10px] font-semibold uppercase tracking-widest text-sky-400">Sob demanda</span>
-                    <span className="mt-0.5 block truncate font-bold text-white">Gerar o treino de hoje</span>
+                    <span className="block text-xs font-semibold uppercase tracking-widest text-teal">Sob demanda</span>
+                    <span className="mt-0.5 block truncate font-bold text-fg">Gerar o treino de hoje</span>
                   </span>
-                  <span className="shrink-0 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white">Abrir ›</span>
+                  <span className="shrink-0 rounded-lg bg-teal px-3 py-1.5 text-xs font-bold text-fg">Abrir ›</span>
                 </button>
               )}
 
@@ -102,30 +102,30 @@ export function WorkoutsPage() {
                   // O cartão inteiro navega para o plano; sem isto, tocar em
                   // Iniciar abriria o plano em vez de começar o treino.
                   onClick={(event) => { event.stopPropagation(); navigate(`/training-plans/${(detail ?? plan).id}/days/${next.day.id}`); }}
-                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-xl bg-primary-950/60 px-3 py-3 text-left ring-1 ring-primary-800"
+                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-md bg-brand-soft px-3 py-3 text-left"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[10px] font-semibold uppercase tracking-widest text-primary-400">Treino da vez</span>
-                    <span className="mt-0.5 block truncate font-bold text-white">{next.day.name}</span>
-                    <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                    <span className="block text-xs font-semibold uppercase tracking-widest text-brand-fg">Treino da vez</span>
+                    <span className="mt-0.5 block truncate font-bold text-fg">{next.day.name}</span>
+                    <span className="mt-0.5 block truncate text-xs text-dim">
                       {next.day.focus ? `${next.day.focus} · ` : ''}{lastDoneLabel(next.lastDoneAt)}
                     </span>
                   </span>
-                  <span className="shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-bold text-white">Iniciar ›</span>
+                  <span className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white">Iniciar ›</span>
                 </button>
               )}
 
-              <div className="mt-4 flex items-center gap-4 border-t border-zinc-800 pt-3 text-xs text-zinc-400"><span><strong className="text-white">{plan.days_per_week}x</strong> semana</span><span><strong className="text-white">{plan.session_duration_minutes}</strong> min</span><span className="ml-auto">até {new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
+              <div className="mt-4 flex items-center gap-4 border-t border-line pt-3 text-xs text-muted"><span><strong className="text-fg">{plan.days_per_week}x</strong> semana</span><span><strong className="text-fg">{plan.session_duration_minutes}</strong> min</span><span className="ml-auto">até {new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
             </Card>
             );
           })}</div>
         )}
 
-        <button onClick={() => navigate('/workouts/history')} className="flex w-full items-center justify-between rounded-2xl border border-primary-900 bg-primary-950/50 px-4 py-3 text-left"><div><p className="text-sm font-semibold text-primary-300">Histórico de treinos</p><p className="text-xs text-zinc-500">Calendário e sessões já realizadas</p></div><span className="text-xl text-primary-400">›</span></button>
+        <button onClick={() => navigate('/workouts/history')} className="flex w-full items-center justify-between rounded-lg bg-brand-soft px-4 py-3 text-left"><div><p className="text-sm font-semibold text-brand-fg">Histórico de treinos</p><p className="text-xs text-dim">Calendário e sessões já realizadas</p></div><span className="text-xl text-brand-fg">›</span></button>
 
-        <button onClick={() => navigate('/training-plans/archived')} className="flex w-full items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-left"><div><p className="text-sm font-semibold text-zinc-300">Planos arquivados</p><p className="text-xs text-zinc-500">Planos encerrados após a data-alvo</p></div><span className="text-xl text-zinc-500">›</span></button>
+        <button onClick={() => navigate('/training-plans/archived')} className="flex w-full items-center justify-between rounded-lg bg-surface shadow-card px-4 py-3 text-left"><div><p className="text-sm font-semibold text-muted">Planos arquivados</p><p className="text-xs text-dim">Planos encerrados após a data-alvo</p></div><span className="text-xl text-dim">›</span></button>
 
-        <button onClick={() => navigate('/workouts/new')} className="w-full py-2 text-sm text-zinc-600 hover:text-zinc-400">Registrar treino livre</button>
+        <button onClick={() => navigate('/workouts/new')} className="w-full py-2 text-sm text-dim hover:text-muted">Registrar treino livre</button>
       </div>
     </>
   );

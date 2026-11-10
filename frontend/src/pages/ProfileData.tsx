@@ -86,37 +86,37 @@ export function ProfileDataPage() {
       <Header title="Meus dados" showBack />
       <form onSubmit={submit} className="space-y-4 px-4 py-5 pb-28">
         <Card>
-          <p className="font-bold text-white">{user?.name}</p>
-          <p className="text-sm text-zinc-400">{user?.email}</p>
+          <p className="font-bold text-fg">{user?.name}</p>
+          <p className="text-sm text-muted">{user?.email}</p>
         </Card>
 
         <Card className="space-y-4">
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Data de nascimento</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Data de nascimento</span>
             <input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)}
               onChange={(e) => setBirthDate(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-white" />
+              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Altura (cm)</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-dim">Altura (cm)</span>
               <input type="number" inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-white" />
+                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Peso (kg)</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-dim">Peso (kg)</span>
               <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-white" />
+                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
             </label>
           </div>
 
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sexo biológico</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Sexo biológico</span>
             <div className="mt-2 flex gap-2">
               {SEXOS.map((option) => (
                 <button key={option.value} type="button" onClick={() => setSex(option.value)}
-                  className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${sex === option.value ? 'bg-primary-600 text-white' : 'bg-zinc-950 text-zinc-400 ring-1 ring-zinc-800'}`}>
+                  className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${sex === option.value ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}>
                   {option.label}
                 </button>
               ))}
@@ -124,11 +124,11 @@ export function ProfileDataPage() {
           </div>
 
           <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Experiência</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Experiência</span>
             <div className="mt-2 flex gap-2">
               {EXPERIENCIAS.map((option) => (
                 <button key={option.value} type="button" onClick={() => setExperience(option.value)}
-                  className={`flex-1 rounded-xl px-2 py-2 text-xs font-semibold ${experience === option.value ? 'bg-primary-600 text-white' : 'bg-zinc-950 text-zinc-400 ring-1 ring-zinc-800'}`}>
+                  className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold ${experience === option.value ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}>
                   {option.label}
                 </button>
               ))}
@@ -136,15 +136,15 @@ export function ProfileDataPage() {
           </div>
 
           <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Lesões ou limitações</span>
+            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Lesões ou limitações</span>
             <textarea value={injuries} onChange={(e) => setInjuries(e.target.value)} rows={3}
               placeholder="Deixe em branco se não houver"
-              className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-white placeholder:text-zinc-600" />
+              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg placeholder:text-dim" />
           </label>
         </Card>
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        {saved && <p className="text-sm text-emerald-400">Dados salvos.</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {saved && <p className="text-sm text-ok">Dados salvos.</p>}
 
         <Button type="submit" fullWidth size="lg" disabled={!podeSalvar} isLoading={isSaving}>Salvar</Button>
         <Button type="button" variant="ghost" fullWidth onClick={() => navigate('/profile')}>Voltar</Button>

@@ -26,7 +26,7 @@ export function WorkoutDetailPage() {
       <>
         <Header title="Treino" showBack />
         <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" />
         </div>
       </>
     );
@@ -52,34 +52,34 @@ export function WorkoutDetailPage() {
         <Card>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wide">Data</p>
-              <p className="text-sm font-semibold text-white mt-1">
+              <p className="text-xs text-dim uppercase tracking-wide">Data</p>
+              <p className="text-sm font-semibold text-fg mt-1">
                 {new Date(selectedWorkout.date).toLocaleDateString('pt-BR')}
               </p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wide">Exercícios</p>
-              <p className="text-sm font-semibold text-white mt-1">{selectedWorkout.sets?.length ?? 0}</p>
+              <p className="text-xs text-dim uppercase tracking-wide">Exercícios</p>
+              <p className="text-sm font-semibold text-fg mt-1">{selectedWorkout.sets?.length ?? 0}</p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wide">Volume</p>
-              <p className="text-sm font-semibold text-white mt-1">{Math.round(totalVolume)}kg</p>
+              <p className="text-xs text-dim uppercase tracking-wide">Volume</p>
+              <p className="text-sm font-semibold text-fg mt-1">{Math.round(totalVolume)}kg</p>
             </div>
           </div>
         </Card>
 
         {selectedWorkout.notes && (
           <Card>
-            <p className="text-xs text-zinc-500 uppercase tracking-wide mb-1">Anotações</p>
-            <p className="text-sm text-zinc-300">{selectedWorkout.notes}</p>
+            <p className="text-xs text-dim uppercase tracking-wide mb-1">Anotações</p>
+            <p className="text-sm text-muted">{selectedWorkout.notes}</p>
           </Card>
         )}
 
         {/* Exercises */}
         <div>
-          <h3 className="font-semibold text-white mb-3">Exercícios</h3>
+          <h3 className="font-semibold text-fg mb-3">Exercícios</h3>
           {(selectedWorkout.sets ?? []).length === 0 ? (
-            <Card className="text-center text-zinc-500 py-6 text-sm">
+            <Card className="text-center text-muted py-6 text-sm">
               Nenhum exercício registrado
             </Card>
           ) : (
@@ -87,15 +87,15 @@ export function WorkoutDetailPage() {
               {selectedWorkout.sets!.map((set) => (
                 <Card key={set.id}>
                   <div className="flex items-center justify-between">
-                    <p className="font-medium text-white">{set.exercise_name}</p>
+                    <p className="font-medium text-fg">{set.exercise_name}</p>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-primary-400">
+                      <p className="text-sm font-semibold text-brand-fg">
                         {set.tracking_type === 'time' ? `${set.sets} × ${set.duration_seconds ?? 0}s` : `${set.sets}x${set.reps}`}
                       </p>
-                      {set.tracking_type !== 'time' && <p className="text-xs text-zinc-400">{set.weight_kg}kg</p>}
+                      {set.tracking_type !== 'time' && <p className="text-xs text-muted">{set.weight_kg}kg</p>}
                     </div>
                   </div>
-                  {set.tracking_type !== 'time' && <p className="text-xs text-zinc-500 mt-1">
+                  {set.tracking_type !== 'time' && <p className="text-xs text-dim mt-1">
                     Volume: {set.sets * set.reps * set.weight_kg}kg
                   </p>}
                 </Card>

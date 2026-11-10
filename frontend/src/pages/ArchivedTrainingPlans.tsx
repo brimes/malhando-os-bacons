@@ -25,24 +25,24 @@ export function ArchivedTrainingPlansPage() {
   return (
     <>
       <Header title="Planos arquivados" showBack />
-      <div className="space-y-3 px-4 py-5 pb-24">
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ <div className="space-y-3 px-4 py-5 pb-24">
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         {isLoading ? (
-          <div className="py-16 text-center text-zinc-500">Carregando planos arquivados...</div>
+ <div className="py-16 text-center text-dim">Carregando planos arquivados...</div>
         ) : plans.length === 0 ? (
-          <p className="py-14 text-center text-sm text-zinc-500">Nenhum plano arquivado ainda.</p>
+ <p className="py-14 text-center text-sm text-dim">Nenhum plano arquivado ainda.</p>
         ) : (
           plans.map((plan) => (
             <Card key={plan.id} onClick={() => navigate(`/training-plans/${plan.id}`)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="font-bold text-white">{plan.name}</h2>
-                  <p className="mt-1 text-xs text-zinc-500">
+ <div className="flex items-start justify-between gap-3">
+ <div className="min-w-0">
+ <h2 className="font-bold text-fg">{plan.name}</h2>
+ <p className="mt-1 text-xs text-dim">
                     Encerrado em {plan.archived_at ? new Date(plan.archived_at).toLocaleDateString('pt-BR') : '—'}
                   </p>
                 </div>
-                <span className="shrink-0 text-zinc-600">›</span>
+ <span className="shrink-0 text-dim">›</span>
               </div>
             </Card>
           ))

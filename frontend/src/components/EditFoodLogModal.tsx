@@ -16,9 +16,9 @@ function roundMacro(value: number): number {
 }
 
 const fieldClass =
-  'w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:border-primary-500 focus:outline-none disabled:opacity-50';
+  'w-full rounded-md border border-line bg-surface-2 px-4 py-3 text-fg  focus:outline-none disabled:opacity-50';
 const smallFieldClass =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-2 text-center text-sm text-white focus:border-primary-500 focus:outline-none disabled:opacity-50';
+  'w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-center text-sm text-fg  focus:outline-none disabled:opacity-50';
 
 /**
  * Full editor for one food log entry — name, meal, quantity and every
@@ -142,35 +142,35 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={close}>
+ <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={close}>
       <div
-        className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+ className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-white">Editar registro</h3>
-        {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+ <h3 className="text-lg font-bold text-fg">Editar registro</h3>
+ {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 
-        <form onSubmit={handleSubmit} className="mt-3 space-y-4">
+ <form onSubmit={handleSubmit} className="mt-3 space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-400">Nome</label>
+ <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Nome</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={fieldClass}
+ className={fieldClass}
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-400">Refeição</label>
-            <div className="grid grid-cols-2 gap-2">
+ <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Refeição</label>
+ <div className="grid grid-cols-2 gap-2">
               {MEAL_ORDER.map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => setMealType(option)}
-                  className={`rounded-xl py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                    mealType === option ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'
+ className={`rounded-md py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+                    mealType === option ? 'bg-brand text-white' : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {MEAL_TYPE_LABELS[option]}
@@ -179,80 +179,80 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-400">Quantidade (g)</label>
+ <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Quantidade (g)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
                 value={quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
-                className={`${fieldClass} text-center`}
+ className={`${fieldClass} text-center`}
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs uppercase tracking-wide text-zinc-400">Calorias (kcal)</label>
+ <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Calorias (kcal)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
                 value={calories}
                 onChange={(e) => handleMacroChange('calories', e.target.value)}
-                className={`${fieldClass} text-center`}
+ className={`${fieldClass} text-center`}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+ <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="mb-1 block text-[11px] text-zinc-500">Proteína (g)</label>
+ <label className="mb-1 block text-xs text-dim">Proteína (g)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
                 value={protein}
                 onChange={(e) => handleMacroChange('protein', e.target.value)}
-                className={smallFieldClass}
+ className={smallFieldClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] text-zinc-500">Carbs (g)</label>
+ <label className="mb-1 block text-xs text-dim">Carbs (g)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
                 value={carbs}
                 onChange={(e) => handleMacroChange('carbs', e.target.value)}
-                className={smallFieldClass}
+ className={smallFieldClass}
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] text-zinc-500">Gordura (g)</label>
+ <label className="mb-1 block text-xs text-dim">Gordura (g)</label>
               <input
                 type="number"
                 min={0}
                 step="any"
                 value={fat}
                 onChange={(e) => handleMacroChange('fat', e.target.value)}
-                className={smallFieldClass}
+ className={smallFieldClass}
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-2 pt-1">
+ <div className="flex items-center gap-2 pt-1">
             <Button type="submit" fullWidth isLoading={isSaving} disabled={!valid}>
               Salvar
             </Button>
-            <button type="button" onClick={onClose} className="shrink-0 px-3 text-xs text-zinc-500">
+ <button type="button" onClick={onClose} className="shrink-0 px-3 text-xs text-dim">
               Cancelar
             </button>
           </div>
 
           {onDelete && (
-            <div className="border-t border-zinc-800 pt-3">
+ <div className="border-t border-line pt-3">
               {confirmarExclusao ? (
-                <div className="flex items-center gap-2">
+ <div className="flex items-center gap-2">
                   <button
                     type="button"
                     disabled={isDeleting}
@@ -268,7 +268,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                         setConfirmarExclusao(false);
                       }
                     }}
-                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+ className="flex-1 rounded-md bg-danger px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     {isDeleting ? 'Apagando...' : 'Apagar de verdade'}
                   </button>
@@ -276,7 +276,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                     type="button"
                     disabled={isDeleting}
                     onClick={() => setConfirmarExclusao(false)}
-                    className="shrink-0 px-3 text-xs text-zinc-500"
+ className="shrink-0 px-3 text-xs text-dim"
                   >
                     Não
                   </button>
@@ -285,7 +285,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                 <button
                   type="button"
                   onClick={() => setConfirmarExclusao(true)}
-                  className="w-full py-2 text-sm font-medium text-red-400"
+ className="w-full py-2 text-sm font-medium text-danger"
                 >
                   Apagar registro
                 </button>

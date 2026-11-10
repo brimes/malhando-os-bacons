@@ -62,20 +62,20 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={() => !isSaving && onClose()}>
+    <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => !isSaving && onClose()}>
       <div
-        className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+        className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
         onClick={(event) => event.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-white">Dia normal — {dateLabel}</h3>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+        <h3 className="text-lg font-bold text-fg">Dia normal — {dateLabel}</h3>
+        <p className="mt-1 text-xs leading-relaxed text-dim">
           Estimativa a partir do que você costuma comer. Remova o que não bate antes de confirmar.
         </p>
 
         <div className="mt-4 space-y-4">
           {meals.map((meal) => (
             <div key={meal.meal_type}>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-dim">
                 {MEAL_TYPE_LABELS[meal.meal_type]}
               </h4>
               <div className="mt-2 space-y-2">
@@ -85,15 +85,15 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
                   return (
                     <div
                       key={key}
-                      className={`flex items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-3 ${
+                      className={`flex items-center justify-between gap-2 rounded-md bg-surface-2 p-3 ${
                         isRemoved ? 'opacity-40' : ''
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-medium text-white ${isRemoved ? 'line-through' : ''}`}>
+                        <p className={`text-sm font-medium text-fg ${isRemoved ? 'line-through' : ''}`}>
                           {item.food_name}
                         </p>
-                        <p className="text-xs text-zinc-500">
+                        <p className="text-xs text-dim">
                           {item.quantity_g}g · {Math.round(item.calories)} kcal · em {item.days_seen} de{' '}
                           {item.days_considered} dias
                         </p>
@@ -102,7 +102,7 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
                         type="button"
                         disabled={isSaving}
                         onClick={() => toggleRemoved(key)}
-                        className="shrink-0 rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] font-medium text-zinc-300 disabled:opacity-50"
+                        className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted disabled:opacity-50"
                       >
                         {isRemoved ? 'Voltar' : 'Remover'}
                       </button>
@@ -114,12 +114,12 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
           ))}
         </div>
 
-        <div className="mt-4 flex items-baseline justify-between border-t border-zinc-800 pt-3">
-          <span className="text-sm text-zinc-400">Total</span>
-          <span className="text-sm font-bold text-primary-400">{Math.round(totalCalories)} kcal</span>
+        <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
+          <span className="text-sm text-muted">Total</span>
+          <span className="text-sm font-bold text-brand-fg">{Math.round(totalCalories)} kcal</span>
         </div>
 
-        {error && <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         <div className="mt-5 space-y-2">
           <Button fullWidth size="lg" isLoading={isSaving} disabled={remainingMeals.length === 0} onClick={confirm}>
@@ -129,7 +129,7 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
             type="button"
             disabled={isSaving}
             onClick={onClose}
-            className="w-full py-3 text-sm text-zinc-500 disabled:opacity-50"
+            className="w-full py-3 text-sm text-muted disabled:opacity-50"
           >
             Cancelar
           </button>

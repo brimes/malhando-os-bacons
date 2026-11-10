@@ -52,7 +52,7 @@ function ProtectedRoute({ children, allowIncomplete = false }: { children: React
   // `offlineStore.ts`'s `isHydrated` field and `offlineBoot.ts`.
   const isOfflineHydrated = useOfflineStore((offlineState) => offlineState.isHydrated);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (isLoading || !state || !isOfflineHydrated) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500">Carregando...</div>;
+  if (isLoading || !state || !isOfflineHydrated) return <div className="min-h-screen bg-surface-2 flex items-center justify-center text-muted">Carregando...</div>;
   const onboardingReady = state.completed && Boolean(state.profile?.training_experience);
   if (!allowIncomplete && !onboardingReady) return <Navigate to="/onboarding" replace />;
   return <>{children}</>;
@@ -94,7 +94,7 @@ export default function App() {
   }, [isAuthenticated, user?.id, fetchMe, fetchState, reset]);
 
   return (
-    <div className="min-h-screen bg-zinc-950">
+    <div className="min-h-screen bg-surface-2">
       {/* Liability disclaimer gate: while it is pending, no protected route renders at all. */}
       <TermsGate active={isAuthenticated}>
         {/* Last line of defense against a render crash — see ErrorBoundary.tsx for why

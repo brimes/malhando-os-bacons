@@ -187,25 +187,25 @@ export function NutritionHistoryPage() {
   return (
     <>
       <Header title="Histórico de nutrição" showBack />
-      <div className="space-y-4 px-4 py-5 pb-24">
-        <div><p className="text-sm text-zinc-500">Calorias registradas no mês</p><p className="text-3xl font-black text-primary-400">{Math.round(total).toLocaleString('pt-BR')} <span className="text-sm font-normal text-zinc-500">kcal</span></p></div>
+ <div className="space-y-4 px-4 py-5 pb-24">
+ <div><p className="text-sm text-dim">Calorias registradas no mês</p><p className="text-3xl font-black text-brand-fg">{Math.round(total).toLocaleString('pt-BR')} <span className="text-sm font-normal text-dim">kcal</span></p></div>
         {!monthFullyLocal && !isNetworkOnline() && (
-          <p className="text-xs text-zinc-600">Alguns dias mais antigos podem não aparecer offline.</p>
+ <p className="text-xs text-dim">Alguns dias mais antigos podem não aparecer offline.</p>
         )}
         <MonthlyCalendar month={month} values={values} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
 
         {selectedDate ? (
           <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-zinc-500">{formatDayLabel(selectedDate)}</h3>
+ <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">{formatDayLabel(selectedDate)}</h3>
             {isLoadingDayFallback ? (
-              <div className="py-8 text-center text-sm text-zinc-500">Carregando...</div>
+ <div className="py-8 text-center text-sm text-dim">Carregando...</div>
             ) : dayFallbackError ? (
-              <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{dayFallbackError}</div>
+ <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{dayFallbackError}</div>
             ) : (
-              <div className="space-y-4">
-                <Card className="py-3">
-                  <p className="text-lg font-bold text-primary-400">{Math.round(dayTotals.calories)} <span className="text-xs font-normal text-zinc-500">kcal</span></p>
-                  <p className="text-xs text-zinc-500">P:{Math.round(dayTotals.protein)}g C:{Math.round(dayTotals.carbs)}g G:{Math.round(dayTotals.fat)}g</p>
+ <div className="space-y-4">
+ <Card className="py-3">
+ <p className="text-lg font-bold text-brand-fg">{Math.round(dayTotals.calories)} <span className="text-xs font-normal text-dim">kcal</span></p>
+ <p className="text-xs text-dim">P:{Math.round(dayTotals.protein)}g C:{Math.round(dayTotals.carbs)}g G:{Math.round(dayTotals.fat)}g</p>
                 </Card>
 
                 {/* Diferente da tela de hoje, uma refeição sem registro simplesmente não aparece: isto é histórico, não um checklist do dia. */}
@@ -214,25 +214,25 @@ export function NutritionHistoryPage() {
                   const mealCal = logs.reduce((sum, log) => sum + log.calories, 0);
                   return (
                     <div key={meal}>
-                      <div className="mb-2 flex items-center justify-between">
-                        <h4 className="text-sm font-semibold text-white">{MEAL_TYPE_LABELS[meal]}</h4>
-                        <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>
+ <div className="mb-2 flex items-center justify-between">
+ <h4 className="text-sm font-semibold text-fg">{MEAL_TYPE_LABELS[meal]}</h4>
+ <span className="text-xs text-dim">{Math.round(mealCal)} kcal</span>
                       </div>
-                      <div className="space-y-2">
+ <div className="space-y-2">
                         {logs.map((log) => (
-                          <Card key={log.id} className="py-3">
-                            <div className="flex items-center gap-2">
-                            <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setEditingLog(log)}>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-white">
+ <Card key={log.id} className="py-3">
+ <div className="flex items-center gap-2">
+ <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setEditingLog(log)}>
+ <div className="min-w-0 flex-1">
+ <p className="truncate text-sm font-medium text-fg">
                                   {log.food_name}
                                   <OriginBadge origin={log.origin} />
                                 </p>
-                                <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
+ <p className="text-xs text-dim">{log.quantity_g}g</p>
                               </div>
-                              <div className="shrink-0 text-right">
-                                <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
-                                <p className="text-xs text-zinc-500">
+ <div className="shrink-0 text-right">
+ <p className="text-sm font-semibold text-brand-fg">{Math.round(log.calories)} kcal</p>
+ <p className="text-xs text-dim">
                                   P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
                                 </p>
                               </div>
@@ -241,7 +241,7 @@ export function NutritionHistoryPage() {
                               type="button"
                               aria-label={`Copiar ${log.food_name} para outro dia`}
                               onClick={() => setCopyingLog(log)}
-                              className="shrink-0 rounded-lg border border-zinc-700 px-2.5 py-2 text-xs text-zinc-400 active:bg-zinc-800"
+ className="shrink-0 rounded-lg border border-line px-2.5 py-2 text-xs text-muted active:bg-surface-2"
                             >
                               Copiar
                             </button>
@@ -256,7 +256,7 @@ export function NutritionHistoryPage() {
             )}
           </div>
         ) : (
-          <p className="text-center text-xs text-zinc-600">Toque num dia destacado para ver o que você comeu.</p>
+ <p className="text-center text-xs text-dim">Toque num dia destacado para ver o que você comeu.</p>
         )}
       </div>
 

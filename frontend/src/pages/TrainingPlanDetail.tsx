@@ -91,8 +91,8 @@ export function TrainingPlanDetailPage() {
     [plan, history, queue],
   );
 
-  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando plano...</div>;
-  if (!plan) return <div className="py-20 text-center text-zinc-500">Plano não encontrado</div>;
+  if (isLoading) return <div className="py-20 text-center text-muted">Carregando plano...</div>;
+  if (!plan) return <div className="py-20 text-center text-muted">Plano não encontrado</div>;
 
   const deletePlan = async () => {
     if (!window.confirm(`Excluir completamente o plano "${plan.name}"? Os treinos já realizados continuarão no histórico.`)) return;
@@ -196,39 +196,39 @@ export function TrainingPlanDetailPage() {
 
   return (
     <>
-      <Header title={plan.name} showBack rightAction={<div className="relative"><button aria-label="Opções do plano" onClick={() => setMenuOpen((value) => !value)} className="rounded-lg px-3 py-1 text-xl text-zinc-400 hover:bg-zinc-800">⋮</button>{menuOpen && <div className="absolute right-0 top-10 z-50 w-52 rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-2xl"><button onClick={() => { setShowDetails((value) => !value); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">{showDetails ? 'Ocultar detalhes' : 'Detalhes do plano'}</button><button onClick={() => { setShowAdjust(true); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-primary-300 hover:bg-zinc-800">Ajustar plano com IA</button><button onClick={() => navigate('/workouts/history')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Histórico de treinos</button><button onClick={() => navigate('/workouts/new')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-300 hover:bg-zinc-800">Registrar treino livre</button><div className="my-1 border-t border-zinc-800" /><button disabled={isDeleting} onClick={deletePlan} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-red-950/40 disabled:opacity-50">{isDeleting ? 'Excluindo...' : 'Excluir plano'}</button></div>}</div>} />
+      <Header title={plan.name} showBack rightAction={<div className="relative"><button aria-label="Opções do plano" onClick={() => setMenuOpen((value) => !value)} className="rounded-lg px-3 py-1 text-xl text-muted hover:bg-surface-2">⋮</button>{menuOpen && <div className="absolute right-0 top-10 z-50 w-52 rounded-md border border-transparent bg-surface-2 p-1 shadow-2xl"><button onClick={() => { setShowDetails((value) => !value); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface-2">{showDetails ? 'Ocultar detalhes' : 'Detalhes do plano'}</button><button onClick={() => { setShowAdjust(true); setMenuOpen(false); }} className="w-full rounded-lg px-3 py-2 text-left text-sm text-brand-fg hover:bg-surface-2">Ajustar plano com IA</button><button onClick={() => navigate('/workouts/history')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface-2">Histórico de treinos</button><button onClick={() => navigate('/workouts/new')} className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted hover:bg-surface-2">Registrar treino livre</button><div className="my-1 border-t border-line" /><button disabled={isDeleting} onClick={deletePlan} className="w-full rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-danger-soft disabled:opacity-50">{isDeleting ? 'Excluindo...' : 'Excluir plano'}</button></div>}</div>} />
       <div className="space-y-5 px-4 py-5 pb-24">
-        <Card className="border-primary-900 bg-primary-950/30">
-          <div className="flex items-start justify-between gap-3"><p className="text-xs uppercase tracking-wide text-primary-400">{plan.creation_method === 'automatic' ? 'Criado pelo assistente' : 'Plano manual'}</p>{plan.adaptation_phase && <span className="rounded-full bg-amber-950 px-2 py-1 text-[10px] text-amber-300">Adaptação</span>}</div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div><p className="text-lg font-bold text-white">{plan.days_per_week}x</p><p className="text-[10px] text-zinc-600">por semana</p></div><div><p className="text-lg font-bold text-white">{plan.session_duration_minutes}</p><p className="text-[10px] text-zinc-600">minutos</p></div><div><p className="text-sm font-bold text-white">{new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</p><p className="text-[10px] text-zinc-600">data-alvo</p></div></div>
-          {showDetails && <p className="mt-4 border-t border-primary-900/60 pt-4 text-sm leading-relaxed text-zinc-400">{plan.description}</p>}
-          <button onClick={() => setShowDetails((value) => !value)} className="mt-3 text-xs font-medium text-primary-400">{showDetails ? 'Ocultar detalhes' : 'Ver detalhes do plano'}</button>
+        <Card className="bg-brand-soft">
+          <div className="flex items-start justify-between gap-3"><p className="text-xs uppercase tracking-wide text-brand-fg">{plan.creation_method === 'automatic' ? 'Criado pelo assistente' : 'Plano manual'}</p>{plan.adaptation_phase && <span className="rounded-full bg-sun-soft px-2 py-1 text-xs text-sun">Adaptação</span>}</div>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center"><div><p className="text-lg font-bold text-fg">{plan.days_per_week}x</p><p className="text-xs text-dim">por semana</p></div><div><p className="text-lg font-bold text-fg">{plan.session_duration_minutes}</p><p className="text-xs text-dim">minutos</p></div><div><p className="text-sm font-bold text-fg">{new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</p><p className="text-xs text-dim">data-alvo</p></div></div>
+          {showDetails && <p className="mt-4 border-t pt-4 text-sm leading-relaxed text-muted">{plan.description}</p>}
+          <button onClick={() => setShowDetails((value) => !value)} className="mt-3 text-xs font-medium text-brand-fg">{showDetails ? 'Ocultar detalhes' : 'Ver detalhes do plano'}</button>
         </Card>
 
-        {archiveError && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{archiveError}</div>}
+        {archiveError && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{archiveError}</div>}
         {isArchived ? (
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-zinc-300">Plano encerrado</p>
-            <p className="text-xs text-zinc-500">Encerrado em {plan.archived_at ? new Date(plan.archived_at).toLocaleDateString('pt-BR') : '—'}.</p>
+            <p className="text-sm font-semibold text-muted">Plano encerrado</p>
+            <p className="text-xs text-dim">Encerrado em {plan.archived_at ? new Date(plan.archived_at).toLocaleDateString('pt-BR') : '—'}.</p>
             <Button variant="secondary" fullWidth onClick={reopenPlan} isLoading={isArchiving}>Reabrir plano</Button>
           </Card>
         ) : isPastTargetDate ? (
-          <Card className="space-y-3 border-amber-900 bg-amber-950/30">
-            <p className="text-sm font-semibold text-amber-200">O prazo deste plano terminou</p>
-            <p className="text-xs leading-relaxed text-amber-300/80">A data-alvo já passou. Você pode continuar usando normalmente ou fechar o plano.</p>
+          <Card className="space-y-3 bg-sun-soft">
+            <p className="text-sm font-semibold text-sun">O prazo deste plano terminou</p>
+            <p className="text-xs leading-relaxed text-sun/80">A data-alvo já passou. Você pode continuar usando normalmente ou fechar o plano.</p>
             <Button variant="secondary" fullWidth onClick={closePlan} isLoading={isArchiving}>Fechar plano</Button>
           </Card>
         ) : null}
 
         {plan.kind === 'dynamic' ? (
           <div className="space-y-4">
-            <Card className="space-y-3 border-primary-900 bg-primary-950/30">
-              <p className="text-sm font-semibold text-primary-200">Treino gerado sob demanda</p>
-              <p className="text-xs leading-relaxed text-zinc-500">
+            <Card className="space-y-3 bg-brand-soft">
+              <p className="text-sm font-semibold text-brand-fg">Treino gerado sob demanda</p>
+              <p className="text-xs leading-relaxed text-dim">
                 Cada toque em "Gerar o treino de hoje" cria um treino novo, pensado pra agora — não
                 dá para reabrir um já gerado para editar. Gere só na hora de treinar.
               </p>
-              {generateError && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{generateError}</div>}
+              {generateError && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{generateError}</div>}
               <Button fullWidth size="lg" onClick={generateToday} isLoading={isGeneratingDay}>
                 {isGeneratingDay ? 'Gerando...' : 'Gerar o treino de hoje'}
               </Button>
@@ -236,19 +236,19 @@ export function TrainingPlanDetailPage() {
 
             {Boolean(plan.days?.length) && (
               <div className="space-y-3">
-                <h3 className="px-1 text-xs uppercase tracking-wide text-zinc-500">Treinos já gerados</h3>
+                <h3 className="px-1 text-xs uppercase tracking-wide text-dim">Treinos já gerados</h3>
                 {plan.days!.map((day) => (
                   <Card key={day.id} onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)}>
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <h2 className="font-bold text-white">{day.name}</h2>
-                        <p className="mt-1 text-xs text-zinc-500">
+                        <h2 className="font-bold text-fg">{day.name}</h2>
+                        <p className="mt-1 text-xs text-dim">
                           {day.generated_for
                             ? new Date(`${day.generated_for.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')
                             : (day.focus || 'Sem foco definido')}
                         </p>
                       </div>
-                      <span className="text-2xl text-zinc-600">›</span>
+                      <span className="text-2xl text-dim">›</span>
                     </div>
                   </Card>
                 ))}
@@ -268,34 +268,34 @@ export function TrainingPlanDetailPage() {
                     onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)}
                     // The ring is the "comece por aqui" cue: it has to survive a
                     // glance at arm's length, with the phone on a bench.
-                    className={entry.isNext ? 'border-primary-600 bg-primary-950/40 ring-1 ring-primary-700' : undefined}
+                    className={entry.isNext ? 'bg-brand-soft' : undefined}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-xs font-semibold uppercase text-primary-400">Treino {day.day_number}</p>
+                          <p className="text-xs font-semibold uppercase text-brand-fg">Treino {day.day_number}</p>
                           {entry.isNext && (
-                            <span className="rounded-full bg-primary-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                            <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
                               Comece por aqui
                             </span>
                           )}
                           {entry.doneThisWeek > 0 && (
-                            <span className="rounded-full bg-emerald-950 px-2 py-0.5 text-[9px] font-semibold text-emerald-300">
+                            <span className="rounded-full bg-ok-soft px-2 py-0.5 text-xs font-semibold text-ok">
                               {entry.doneThisWeek}x nesta semana
                             </span>
                           )}
                           {entry.fromPendingQueue && (
-                            <span className="rounded-full bg-sky-950 px-2 py-0.5 text-[9px] font-semibold text-sky-300">
+                            <span className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-semibold text-teal">
                               aguardando envio
                             </span>
                           )}
                         </div>
-                        <h2 className="mt-0.5 text-lg font-bold text-white">{day.name}</h2>
-                        <p className="mt-1 text-xs text-zinc-500">
+                        <h2 className="mt-0.5 text-lg font-bold text-fg">{day.name}</h2>
+                        <p className="mt-1 text-xs text-dim">
                           Última vez: {entry.lastDoneAt ? new Date(entry.lastDoneAt).toLocaleDateString('pt-BR') : 'ainda não feito'}
                         </p>
                       </div>
-                      <span className="text-2xl text-zinc-600">›</span>
+                      <span className="text-2xl text-dim">›</span>
                     </div>
                   </Card>
                 );
@@ -306,15 +306,15 @@ export function TrainingPlanDetailPage() {
       </div>
 
       {showAdjust && (
-        <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={() => !isAdjusting && setShowAdjust(false)}>
-          <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5" onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Ajustar plano</h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+        <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => !isAdjusting && setShowAdjust(false)}>
+          <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold text-fg">Ajustar plano</h3>
+            <p className="mt-1 text-xs leading-relaxed text-dim">
               Escreva o que quer mudar. O assistente reescreve só o que você pediu e mantém o resto
               como está — pode trocar exercícios, renomear o plano ou os treinos, e mudar o foco.
             </p>
 
-            {adjustError && <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{adjustError}</div>}
+            {adjustError && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{adjustError}</div>}
 
             <textarea
               value={instructions}
@@ -323,15 +323,15 @@ export function TrainingPlanDetailPage() {
               maxLength={2000}
               disabled={isAdjusting}
               placeholder="Ex: troque o supino reto por supino com halteres e deixe o Treino B mais curto"
-              className="mt-4 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none disabled:opacity-50"
+              className="mt-4 w-full resize-none rounded-md border border-transparent bg-surface-2 px-4 py-3 text-fg placeholder:text-dim disabled:opacity-50"
             />
 
             {!isAdjusting && (
               <div className="mt-3 space-y-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-600">Exemplos</p>
+                <p className="text-xs uppercase tracking-wide text-dim">Exemplos</p>
                 {EXAMPLES.map((example) => (
                   <button key={example} type="button" onClick={() => setInstructions(example)}
-                    className="block w-full rounded-lg bg-zinc-950 px-3 py-2 text-left text-xs text-zinc-400">
+                    className="block w-full rounded-lg bg-surface-2 px-3 py-2 text-left text-xs text-muted">
                     {example}
                   </button>
                 ))}
@@ -343,7 +343,7 @@ export function TrainingPlanDetailPage() {
                 {isAdjusting ? 'Ajustando o plano...' : 'Aplicar ajuste'}
               </Button>
               <button type="button" disabled={isAdjusting} onClick={() => setShowAdjust(false)}
-                className="w-full py-3 text-sm text-zinc-500 disabled:opacity-40">
+                className="w-full py-3 text-sm text-muted disabled:opacity-40">
                 Cancelar
               </button>
             </div>
@@ -352,16 +352,16 @@ export function TrainingPlanDetailPage() {
       )}
 
       {isGeneratingDay && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 px-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg/80 px-6 backdrop-blur-sm">
           <div className="w-full max-w-sm text-center">
             <div className="relative mx-auto h-28 w-28">
-              <div className="absolute inset-0 animate-ping rounded-full bg-primary-700/20" />
+              <div className="absolute inset-0 animate-ping rounded-full bg-brand/20" />
               <img src="/mob-icon.png" alt="" className="relative h-28 w-28 animate-pulse rounded-3xl object-cover shadow-2xl" />
             </div>
-            <div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800"><div className="h-full w-2/3 animate-pulse rounded-full bg-primary-500" /></div>
-            <h2 className="mt-5 text-xl font-black text-white">Gerando o treino de hoje</h2>
-            <p className="mt-2 text-sm text-primary-300">{DYNAMIC_LOADING_MESSAGES[dynamicLoadingStep]}</p>
-            <p className="mt-4 text-xs text-zinc-600">Isso pode levar alguns minutos.</p>
+            <div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-surface-2"><div className="h-full w-2/3 animate-pulse rounded-full bg-brand" /></div>
+            <h2 className="mt-5 text-xl font-black text-fg">Gerando o treino de hoje</h2>
+            <p className="mt-2 text-sm text-brand-fg">{DYNAMIC_LOADING_MESSAGES[dynamicLoadingStep]}</p>
+            <p className="mt-4 text-xs text-dim">Isso pode levar alguns minutos.</p>
           </div>
         </div>
       )}

@@ -64,23 +64,23 @@ export function FoodPhotoCapture({ label, hint, onCapture, disabled }: FoodPhoto
   };
 
   return (
-    <div className="space-y-2">
+ <div className="space-y-2">
       <button
         type="button"
         disabled={disabled || isCapturing}
         onClick={capture}
-        className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-zinc-700 bg-zinc-900 px-4 py-8 text-center disabled:opacity-50"
+ className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface px-4 py-8 text-center disabled:opacity-50"
       >
-        <span className="text-3xl">📷</span>
-        <span className="text-sm font-semibold text-white">{isCapturing ? 'Processando...' : label}</span>
-        {hint && <span className="text-xs text-zinc-500">{hint}</span>}
+ <span className="text-3xl">📷</span>
+ <span className="text-sm font-semibold text-fg">{isCapturing ? 'Processando...' : label}</span>
+ {hint && <span className="text-xs text-dim">{hint}</span>}
       </button>
 
       <button
         type="button"
         disabled={disabled || isCapturing}
         onClick={() => fileInputRef.current?.click()}
-        className="w-full text-center text-xs text-zinc-500 underline disabled:opacity-50"
+ className="w-full text-center text-xs text-dim underline disabled:opacity-50"
       >
         Ou escolher um arquivo
       </button>
@@ -89,11 +89,11 @@ export function FoodPhotoCapture({ label, hint, onCapture, disabled }: FoodPhoto
         type="file"
         accept="image/*"
         capture="environment"
-        className="hidden"
+ className="hidden"
         onChange={handleFileInput}
       />
 
-      {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
     </div>
   );
 }

@@ -100,14 +100,14 @@ function sortHistory(entries: FoodLogHistoryEntry[]): FoodLogHistoryEntry[] {
 }
 
 function EmptyNote({ text }: { text: string }) {
-  return <p className="px-1 py-2 text-sm text-zinc-600">{text}</p>;
+ return <p className="px-1 py-2 text-sm text-dim">{text}</p>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
-      <div className="space-y-2">{children}</div>
+ <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-dim">{title}</h3>
+ <div className="space-y-2">{children}</div>
     </div>
   );
 }
@@ -125,10 +125,10 @@ function HistoryRow({
 }) {
   const favorited = Boolean(entry.favorite_id);
   return (
-    <Card className="flex items-center gap-2 py-3">
-      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-white">{entry.food_name}</p>
-        <p className="text-xs text-zinc-500">
+ <Card className="flex items-center gap-2 py-3">
+ <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+ <p className="truncate text-sm font-medium text-fg">{entry.food_name}</p>
+ <p className="text-xs text-dim">
           {entry.quantity_g}g · {MEAL_TYPE_LABELS[entry.meal_type]} · {Math.round(entry.calories)} kcal
         </p>
       </button>
@@ -137,8 +137,8 @@ function HistoryRow({
         onClick={onToggleFavorite}
         disabled={isTogglingFavorite}
         aria-label={favorited ? `Desfavoritar ${entry.food_name}` : `Favoritar ${entry.food_name}`}
-        className={`shrink-0 p-1.5 text-xl leading-none disabled:opacity-50 ${
-          favorited ? 'text-amber-400' : 'text-zinc-600'
+ className={`shrink-0 p-1.5 text-xl leading-none disabled:opacity-50 ${
+          favorited ? 'text-sun' : 'text-dim'
         }`}
       >
         {favorited ? '★' : '☆'}
@@ -149,12 +149,12 @@ function HistoryRow({
 
 function FoodItemRow({ food, onSelect }: { food: FoodItem; onSelect: () => void }) {
   return (
-    <button type="button" onClick={onSelect} className="w-full text-left">
-      <Card className="py-3">
-        <p className="text-sm font-medium text-white">
-          {food.name} {food.brand && <span className="text-zinc-500">· {food.brand}</span>}
+ <button type="button" onClick={onSelect} className="w-full text-left">
+ <Card className="py-3">
+ <p className="text-sm font-medium text-fg">
+ {food.name} {food.brand && <span className="text-dim">· {food.brand}</span>}
         </p>
-        <p className="text-xs text-zinc-500">
+ <p className="text-xs text-dim">
           {food.calories_per_100g} kcal/100g · P:{food.protein_g}g C:{food.carbs_g}g G:{food.fat_g}g
         </p>
       </Card>
@@ -387,10 +387,10 @@ export function FoodLogPage() {
   return (
     <>
       <Header title="Registrar Alimento" showBack />
-      <div className="px-4 py-4 pb-24 space-y-4">
+ <div className="px-4 py-4 pb-24 space-y-4">
         {aiMode && (
           <>
-            <button type="button" onClick={() => setAiMode(false)} className="text-sm text-zinc-500">
+ <button type="button" onClick={() => setAiMode(false)} className="text-sm text-dim">
               ← Voltar para a busca
             </button>
             <FoodLogAssistant onRegistrar={registrarDoAssistente} />
@@ -399,44 +399,44 @@ export function FoodLogPage() {
 
         {showList && (
           <>
-            <div className="relative">
+ <div className="relative">
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar alimento..."
                 autoFocus
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3.5 text-white placeholder-zinc-500 focus:outline-none focus:border-primary-500 transition-colors"
+ className="w-full bg-surface border border-line rounded-lg px-4 py-3.5 text-fg placeholder-dim focus:outline-none transition-colors"
               />
               {isSearching && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+ <div className="absolute right-3 top-1/2 -translate-y-1/2">
+ <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+ <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => { setSubmitError(null); setAiMode(true); }}
-                className="rounded-2xl border border-primary-800 bg-primary-950/30 px-4 py-3 text-center text-sm font-semibold text-primary-300"
+ className="rounded-lg bg-brand-soft px-4 py-3 text-center text-sm font-semibold text-brand-fg"
               >
                 Descrever conversando
               </button>
               <button
                 type="button"
                 onClick={openManual}
-                className="rounded-2xl border border-dashed border-zinc-700 px-4 py-3 text-center text-sm font-semibold text-primary-400"
+ className="rounded-lg border border-dashed border-line px-4 py-3 text-center text-sm font-semibold text-brand-fg"
               >
                 + Criar do zero
               </button>
             </div>
 
-            {favoriteError && <p className="text-xs text-red-400">{favoriteError}</p>}
+ {favoriteError && <p className="text-xs text-danger">{favoriteError}</p>}
 
             {isLoadingHistory && logHistory.length === 0 && (
-              <div className="flex justify-center py-4">
-                <div className="w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+ <div className="flex justify-center py-4">
+ <div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
               </div>
             )}
 
@@ -514,25 +514,25 @@ export function FoodLogPage() {
         )}
 
         {selection && (
-          <form onSubmit={handleSelectionSubmit} className="space-y-4">
-            <button type="button" onClick={backToList} className="text-xs text-zinc-500">
+ <form onSubmit={handleSelectionSubmit} className="space-y-4">
+ <button type="button" onClick={backToList} className="text-xs text-dim">
               ‹ Voltar à lista
             </button>
 
             <Card>
-              <p className="text-sm font-semibold text-white">{selection.name}</p>
+ <p className="text-sm font-semibold text-fg">{selection.name}</p>
             </Card>
 
             <div>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Refeição</label>
-              <div className="grid grid-cols-2 gap-2">
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Refeição</label>
+ <div className="grid grid-cols-2 gap-2">
                 {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, label]) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setMealType(type)}
-                    className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                      mealType === type ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+ className={`py-2.5 rounded-md text-sm font-medium transition-colors ${
+                      mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted hover:bg-surface-2'
                     }`}
                   >
                     {label}
@@ -542,39 +542,39 @@ export function FoodLogPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Data</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Data</label>
               <input
                 type="date"
                 value={date}
                 max={todayLocalDate()}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
               />
             </div>
 
             <Card>
               {selection.servingGrams && (
-                <div className="mb-3 grid grid-cols-2 rounded-xl bg-zinc-950 p-1">
+ <div className="mb-3 grid grid-cols-2 rounded-md bg-bg p-1">
                   <button
                     type="button"
                     onClick={() => {
                       setUseServing(true);
                       setQuantity(String(selection.servingGrams));
                     }}
-                    className={`rounded-lg py-2 text-xs font-semibold ${useServing ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}
+ className={`rounded-lg py-2 text-xs font-semibold ${useServing ? 'bg-brand text-white' : 'text-dim'}`}
                   >
                     {selection.servingLabel || 'Porção'}
                   </button>
                   <button
                     type="button"
                     onClick={() => setUseServing(false)}
-                    className={`rounded-lg py-2 text-xs font-semibold ${!useServing ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}
+ className={`rounded-lg py-2 text-xs font-semibold ${!useServing ? 'bg-brand text-white' : 'text-dim'}`}
                   >
                     Gramas
                   </button>
                 </div>
               )}
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">
                 {useServing ? `Quantidade (${selection.servingLabel || 'porções'})` : 'Quantidade (gramas)'}
               </label>
               <input
@@ -583,35 +583,35 @@ export function FoodLogPage() {
                 min={1}
                 step={1}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-center text-2xl font-bold focus:outline-none focus:border-primary-500 transition-colors"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
               />
             </Card>
 
             {computedMacros && (
               <Card>
-                <p className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Valores nutricionais</p>
-                <div className="grid grid-cols-4 gap-2 text-center">
+ <p className="text-xs text-dim uppercase tracking-wide mb-3">Valores nutricionais</p>
+ <div className="grid grid-cols-4 gap-2 text-center">
                   <div>
-                    <p className="text-lg font-bold text-primary-400">{Math.round(computedMacros.calories)}</p>
-                    <p className="text-xs text-zinc-500">kcal</p>
+ <p className="text-lg font-bold text-brand-fg">{Math.round(computedMacros.calories)}</p>
+ <p className="text-xs text-dim">kcal</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-blue-400">{Math.round(computedMacros.protein)}g</p>
-                    <p className="text-xs text-zinc-500">proteína</p>
+ <p className="text-lg font-bold text-teal">{Math.round(computedMacros.protein)}g</p>
+ <p className="text-xs text-dim">proteína</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-amber-400">{Math.round(computedMacros.carbs)}g</p>
-                    <p className="text-xs text-zinc-500">carbs</p>
+ <p className="text-lg font-bold text-sun">{Math.round(computedMacros.carbs)}g</p>
+ <p className="text-xs text-dim">carbs</p>
                   </div>
                   <div>
-                    <p className="text-lg font-bold text-red-400">{Math.round(computedMacros.fat)}g</p>
-                    <p className="text-xs text-zinc-500">gordura</p>
+ <p className="text-lg font-bold text-danger">{Math.round(computedMacros.fat)}g</p>
+ <p className="text-xs text-dim">gordura</p>
                   </div>
                 </div>
               </Card>
             )}
 
-            {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+ {submitError && <p className="text-xs text-danger">{submitError}</p>}
 
             <Button type="submit" fullWidth size="lg" disabled={!(Number(quantity) > 0)}>
               Registrar Alimento
@@ -620,33 +620,33 @@ export function FoodLogPage() {
         )}
 
         {manualMode && (
-          <form onSubmit={handleManualSubmit} className="space-y-4">
-            <button type="button" onClick={backToList} className="text-xs text-zinc-500">
+ <form onSubmit={handleManualSubmit} className="space-y-4">
+ <button type="button" onClick={backToList} className="text-xs text-dim">
               ‹ Voltar à lista
             </button>
 
             <Card>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Nome</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Nome</label>
               <input
                 type="text"
                 value={manualName}
                 onChange={(e) => setManualName(e.target.value)}
                 placeholder="Ex.: Marmita da vovó"
                 autoFocus
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
               />
             </Card>
 
             <div>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Refeição</label>
-              <div className="grid grid-cols-2 gap-2">
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Refeição</label>
+ <div className="grid grid-cols-2 gap-2">
                 {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, label]) => (
                   <button
                     key={type}
                     type="button"
                     onClick={() => setManualMealType(type)}
-                    className={`py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                      manualMealType === type ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+ className={`py-2.5 rounded-md text-sm font-medium transition-colors ${
+                      manualMealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted hover:bg-surface-2'
                     }`}
                   >
                     {label}
@@ -656,80 +656,80 @@ export function FoodLogPage() {
             </div>
 
             <div>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Data</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Data</label>
               <input
                 type="date"
                 value={manualDate}
                 max={todayLocalDate()}
                 onChange={(e) => setManualDate(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
               />
             </div>
 
             <Card>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Quantidade (gramas)</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Quantidade (gramas)</label>
               <input
                 type="number"
                 value={manualQuantity}
                 min={1}
                 step={1}
                 onChange={(e) => setManualQuantity(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-center text-2xl font-bold focus:outline-none focus:border-primary-500 transition-colors"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
               />
             </Card>
 
             <Card>
-              <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-2">Calorias (kcal)</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-2">Calorias (kcal)</label>
               <input
                 type="number"
                 value={manualCalories}
                 min={1}
                 step={1}
                 onChange={(e) => setManualCalories(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white text-center text-2xl font-bold focus:outline-none focus:border-primary-500 transition-colors"
+ className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
               />
             </Card>
 
             <Card>
-              <p className="text-xs text-zinc-500 uppercase tracking-wide mb-3">Macros (opcional)</p>
-              <div className="grid grid-cols-3 gap-2">
+ <p className="text-xs text-dim uppercase tracking-wide mb-3">Macros (opcional)</p>
+ <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Proteína (g)</label>
+ <label className="block text-xs text-dim mb-1">Proteína (g)</label>
                   <input
                     type="number"
                     value={manualProtein}
                     min={0}
                     step={1}
                     onChange={(e) => setManualProtein(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center text-sm focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Carbs (g)</label>
+ <label className="block text-xs text-dim mb-1">Carbs (g)</label>
                   <input
                     type="number"
                     value={manualCarbs}
                     min={0}
                     step={1}
                     onChange={(e) => setManualCarbs(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center text-sm focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-zinc-500 mb-1">Gordura (g)</label>
+ <label className="block text-xs text-dim mb-1">Gordura (g)</label>
                   <input
                     type="number"
                     value={manualFat}
                     min={0}
                     step={1}
                     onChange={(e) => setManualFat(e.target.value)}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center text-sm focus:outline-none focus:border-primary-500"
+ className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
                   />
                 </div>
               </div>
             </Card>
 
-            {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+ {submitError && <p className="text-xs text-danger">{submitError}</p>}
 
             <Button type="submit" fullWidth size="lg" disabled={!manualValid}>
               Registrar

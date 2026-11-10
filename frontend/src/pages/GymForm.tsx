@@ -92,40 +92,40 @@ export function GymFormPage() {
     }
   };
 
-  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando academia...</div>;
+ if (isLoading) return <div className="py-20 text-center text-dim">Carregando academia...</div>;
 
   return (
     <>
       <Header title={isEditing ? 'Editar academia' : 'Nova academia'} showBack />
-      <form onSubmit={submit} className="space-y-5 px-4 py-5 pb-24">
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ <form onSubmit={submit} className="space-y-5 px-4 py-5 pb-24">
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
-        <Card className="space-y-4">
-          <label className="block text-sm text-zinc-300">
+ <Card className="space-y-4">
+ <label className="block text-sm text-fg">
             Nome
             <input
               required
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Ex: Academia perto de casa"
-              className="mt-2 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:border-primary-500 focus:outline-none"
+ className="mt-2 w-full rounded-md border border-line bg-surface-2 px-4 py-3 text-fg focus:outline-none"
             />
           </label>
-          <label className="block text-sm text-zinc-300">
-            Observações <span className="text-zinc-600">(opcional)</span>
+ <label className="block text-sm text-fg">
+ Observações <span className="text-dim">(opcional)</span>
             <textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
               placeholder="Ex: horário de pico lotado, sem espaço para agachamento livre..."
-              className="mt-2 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:border-primary-500 focus:outline-none"
+ className="mt-2 w-full resize-none rounded-md border border-line bg-surface-2 px-4 py-3 text-fg focus:outline-none"
             />
           </label>
         </Card>
 
-        <Card className="space-y-3">
-          <p className="text-sm font-semibold text-white">Aparelhos disponíveis</p>
-          <div className="flex flex-wrap gap-2">
+ <Card className="space-y-3">
+ <p className="text-sm font-semibold text-fg">Aparelhos disponíveis</p>
+ <div className="flex flex-wrap gap-2">
             {EQUIPMENT_PRESETS.map((item) => {
               const marked = equipment.includes(item);
               return (
@@ -133,8 +133,8 @@ export function GymFormPage() {
                   key={item}
                   type="button"
                   onClick={() => togglePreset(item)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    marked ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'
+ className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    marked ? 'bg-brand text-white' : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {item}
@@ -144,28 +144,28 @@ export function GymFormPage() {
           </div>
 
           {customItems.length > 0 && (
-            <div className="border-t border-zinc-800 pt-3">
-              <p className="text-xs uppercase tracking-wide text-zinc-600">Adicionados por você</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+ <div className="border-t border-line pt-3">
+ <p className="text-xs uppercase tracking-wide text-dim">Adicionados por você</p>
+ <div className="mt-2 flex flex-wrap gap-2">
                 {customItems.map((item) => (
-                  <span key={item} className="flex items-center gap-1.5 rounded-full bg-primary-950 px-3 py-1.5 text-xs font-medium text-primary-200">
+ <span key={item} className="flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1.5 text-xs font-medium text-brand-fg">
                     {item}
-                    <button type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item}`} className="text-primary-400 hover:text-white">×</button>
+ <button type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item}`} className="text-brand-fg hover:text-fg">×</button>
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="flex gap-2 border-t border-zinc-800 pt-3">
+ <div className="flex gap-2 border-t border-line pt-3">
             <input
               value={customInput}
               onChange={(event) => setCustomInput(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addCustom(); } }}
               placeholder="Outro aparelho..."
-              className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-sm text-white focus:border-primary-500 focus:outline-none"
+ className="min-w-0 flex-1 rounded-md border border-line bg-surface-2 px-3 py-2.5 text-sm text-fg focus:outline-none"
             />
-            <button type="button" onClick={addCustom} className="shrink-0 rounded-xl bg-zinc-800 px-4 text-sm font-semibold text-primary-300">
+ <button type="button" onClick={addCustom} className="shrink-0 rounded-md bg-surface-2 px-4 text-sm font-semibold text-brand-fg">
               Adicionar
             </button>
           </div>
@@ -180,7 +180,7 @@ export function GymFormPage() {
             type="button"
             disabled={isDeleting}
             onClick={deleteGym}
-            className="w-full py-2 text-center text-sm text-red-400 disabled:opacity-50"
+ className="w-full py-2 text-center text-sm text-danger disabled:opacity-50"
           >
             {isDeleting ? 'Excluindo...' : 'Excluir academia'}
           </button>

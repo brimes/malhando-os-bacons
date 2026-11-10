@@ -46,9 +46,9 @@ function Sparkline({ series }: { series: MetricSeries }) {
     <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mt-2 h-8 w-full">
       {targetY != null && (
         <line x1="0" y1={targetY} x2={width} y2={targetY} stroke="currentColor" strokeWidth="0.5"
-          strokeDasharray="3 2" className="text-primary-600" />
+          strokeDasharray="3 2" className="text-violet" />
       )}
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary-400"
+      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-violet"
         vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -67,18 +67,18 @@ function SeriesCard({ series }: { series: MetricSeries }) {
   return (
     <Card>
       <div className="flex items-baseline justify-between">
-        <span className="text-sm font-medium text-white">{series.label}</span>
-        <span className="text-lg font-black tabular-nums text-white">
-          {last.value.toLocaleString('pt-BR')}<span className="ml-1 text-xs font-semibold text-zinc-500">{series.unit}</span>
+        <span className="text-sm font-medium text-fg">{series.label}</span>
+        <span className="text-lg font-black tabular-nums text-fg">
+          {last.value.toLocaleString('pt-BR')}<span className="ml-1 text-xs font-semibold text-dim">{series.unit}</span>
         </span>
       </div>
       <div className="mt-1 flex items-center justify-between text-xs">
-        <span className={towardTarget === null ? 'text-zinc-500' : towardTarget ? 'text-emerald-400' : 'text-amber-400'}>
+        <span className={towardTarget === null ? 'text-muted' : towardTarget ? 'text-ok' : 'text-sun'}>
           {series.points.length > 1
             ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} ${series.unit} desde ${formatDate(first.date)}`
             : 'primeiro registro'}
         </span>
-        {series.target != null && <span className="text-zinc-600">meta {series.target} {series.unit}</span>}
+        {series.target != null && <span className="text-dim">meta {series.target} {series.unit}</span>}
       </div>
       <Sparkline series={series} />
     </Card>
@@ -150,19 +150,19 @@ export function ResultsPage() {
     }
   };
 
-  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando resultados...</div>;
+  if (isLoading) return <div className="py-20 text-center text-muted">Carregando resultados...</div>;
 
   return (
     <>
       <Header title="Resultados" rightAction={<Button size="sm" onClick={openForm}>Registrar</Button>} />
       <div className="space-y-5 px-4 py-5 pb-24">
-        {error && !showForm && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {error && !showForm && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         {data && data.series.length === 0 && data.conditioning.length === 0 ? (
           <Card className="text-center">
             <p className="text-4xl">📊</p>
-            <h2 className="mt-3 font-bold text-white">Nenhum resultado ainda</h2>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-500">
+            <h2 className="mt-3 font-bold text-fg">Nenhum resultado ainda</h2>
+            <p className="mt-1 text-sm leading-relaxed text-muted">
               Registre peso, gordura corporal, massa muscular ou medidas. Cada registro vira um ponto na
               sua evolução ao longo do tempo.
             </p>
@@ -174,30 +174,30 @@ export function ResultsPage() {
           </div>
         )}
 
-        <Card onClick={() => navigate('/results/review')} className="border-primary-900 bg-primary-950/30">
+        <Card onClick={() => navigate('/results/review')} className="bg-violet-soft">
           <div className="flex items-center gap-3">
             <span className="text-2xl">🧭</span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-white">Avaliar o resultado</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+              <p className="text-sm font-bold text-fg">Avaliar o resultado</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">
                 O assistente lê treinos, alimentação e medições do período e compara com o seu objetivo.
               </p>
             </div>
-            <span className="text-lg text-zinc-600">›</span>
+            <span className="text-lg text-dim">›</span>
           </div>
         </Card>
 
         {data && data.conditioning.length > 0 && (
           <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-zinc-500">Condicionamento</h3>
+            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">Condicionamento</h3>
             <Card>
               <div className="flex items-baseline justify-between">
-                <span className="text-sm text-zinc-400">Caminhada de 6 minutos</span>
-                <span className="text-lg font-black text-white">
-                  {data.conditioning[0].distance_meters}<span className="ml-1 text-xs text-zinc-500">m</span>
+                <span className="text-sm text-muted">Caminhada de 6 minutos</span>
+                <span className="text-lg font-black text-fg">
+                  {data.conditioning[0].distance_meters}<span className="ml-1 text-xs text-dim">m</span>
                 </span>
               </div>
-              <p className="mt-1 text-xs text-zinc-600">
+              <p className="mt-1 text-xs text-dim">
                 {formatDate(data.conditioning[0].performed_at)} · esforço {data.conditioning[0].perceived_exertion}/10
                 {data.conditioning.length > 1 && ` · ${data.conditioning.length} testes registrados`}
               </p>
@@ -207,21 +207,21 @@ export function ResultsPage() {
 
         {data && data.measurements.length > 0 && (
           <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-zinc-500">Histórico</h3>
+            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">Histórico</h3>
             <div className="space-y-2">
               {data.measurements.map((measurement) => (
                 <Card key={measurement.id} className="py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-white">{formatDate(measurement.measured_at)}</p>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400">
+                      <p className="text-sm font-semibold text-fg">{formatDate(measurement.measured_at)}</p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
                         {FIELDS.filter(({ key }) => measurement[key] != null).map(({ key, label, unit }) => (
-                          <span key={key}>{label}: <strong className="text-zinc-200">{measurement[key]}{unit}</strong></span>
+                          <span key={key}>{label}: <strong className="text-fg">{measurement[key]}{unit}</strong></span>
                         ))}
                       </div>
-                      {measurement.notes && <p className="mt-1 text-xs italic text-zinc-600">{measurement.notes}</p>}
+                      {measurement.notes && <p className="mt-1 text-xs italic text-dim">{measurement.notes}</p>}
                     </div>
-                    <button type="button" onClick={() => remove(measurement.id)} className="shrink-0 text-xs text-red-400">
+                    <button type="button" onClick={() => remove(measurement.id)} className="shrink-0 text-xs text-danger">
                       Apagar
                     </button>
                   </div>
@@ -233,48 +233,48 @@ export function ResultsPage() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={() => setShowForm(false)}>
-          <form onSubmit={submit} className="max-h-[88vh] w-full overflow-y-auto rounded-t-3xl bg-zinc-900 p-5"
+        <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => setShowForm(false)}>
+          <form onSubmit={submit} className="max-h-[88vh] w-full overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5"
             onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Registrar resultado</h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+            <h3 className="text-lg font-bold text-fg">Registrar resultado</h3>
+            <p className="mt-1 text-xs leading-relaxed text-dim">
               Preencha só o que você mediu. Registrar de novo na mesma data corrige o registro anterior.
             </p>
 
-            {error && <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+            {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
-            <label className="mt-4 block text-xs uppercase tracking-wide text-zinc-500">
+            <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
               Data
               <input type="date" value={date} max={new Date().toISOString().slice(0, 10)}
                 onChange={(event) => setDate(event.target.value)}
-                className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-white focus:border-primary-500 focus:outline-none" />
+                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3 text-fg" />
             </label>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               {FIELDS.map(({ key, label, unit, step }) => (
-                <label key={key} className="block text-xs text-zinc-400">
-                  {label} <span className="text-zinc-600">({unit})</span>
+                <label key={key} className="block text-xs text-muted">
+                  {label} <span className="text-dim">({unit})</span>
                   <input type="number" inputMode="decimal" step={step} min={0} placeholder="—"
                     value={values[key] ?? ''}
                     onFocus={(event) => event.target.select()}
                     onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-center font-bold text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none" />
+                    className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-2.5 text-center font-bold text-fg placeholder:text-dim" />
                 </label>
               ))}
             </div>
 
-            <label className="mt-4 block text-xs uppercase tracking-wide text-zinc-500">
+            <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
               Observações
               <textarea value={notes} rows={2} onChange={(event) => setNotes(event.target.value)}
                 placeholder="Ex: medido em jejum, pela manhã"
-                className="mt-1 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-sm text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none" />
+                className="mt-1 w-full resize-none rounded-md border border-transparent bg-surface-2 px-4 py-3 text-sm text-fg placeholder:text-dim" />
             </label>
 
             <div className="mt-5 space-y-2">
               <Button type="submit" fullWidth size="lg" isLoading={isSaving} disabled={filledCount === 0}>
                 Salvar{filledCount > 0 ? ` (${filledCount})` : ''}
               </Button>
-              <button type="button" onClick={() => setShowForm(false)} className="w-full py-3 text-sm text-zinc-500">
+              <button type="button" onClick={() => setShowForm(false)} className="w-full py-3 text-sm text-muted">
                 Cancelar
               </button>
             </div>

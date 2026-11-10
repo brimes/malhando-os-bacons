@@ -186,25 +186,25 @@ export function NutritionPage() {
           </Button>
         }
       />
-      <div className="px-4 py-4 pb-24 space-y-4">
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => navigate('/nutrition/photo/plate')} className="rounded-2xl border border-zinc-800 bg-zinc-900 px-3 py-3 text-center">
-            <span className="block text-xl">🍽️</span>
-            <span className="text-xs font-medium text-zinc-300">Foto do prato</span>
+ <div className="px-4 py-4 pb-24 space-y-4">
+ <div className="grid grid-cols-2 gap-2">
+ <button onClick={() => navigate('/nutrition/photo/plate')} className="rounded-lg shadow-card bg-surface px-3 py-3 text-center">
+ <span className="block text-xl">🍽️</span>
+ <span className="text-xs font-medium text-fg">Foto do prato</span>
           </button>
-          <button onClick={() => navigate('/nutrition/photo/label')} className="rounded-2xl border border-zinc-800 bg-zinc-900 px-3 py-3 text-center">
-            <span className="block text-xl">🏷️</span>
-            <span className="text-xs font-medium text-zinc-300">Foto do rótulo</span>
+ <button onClick={() => navigate('/nutrition/photo/label')} className="rounded-lg shadow-card bg-surface px-3 py-3 text-center">
+ <span className="block text-xl">🏷️</span>
+ <span className="text-xs font-medium text-fg">Foto do rótulo</span>
           </button>
         </div>
 
         {routine?.enough && todayLogs.length === 0 && (
-          <Card className="border-primary-900 bg-primary-950/20">
-            <p className="text-sm font-semibold text-white">Foi um dia normal?</p>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+ <Card className="border-brand bg-brand-soft">
+ <p className="text-sm font-semibold text-fg">Foi um dia normal?</p>
+ <p className="mt-1 text-xs leading-relaxed text-muted">
               Baseado nos últimos {routine.based_on_days} dias, dá para registrar hoje com um toque.
             </p>
-            <div className="mt-3 flex gap-2">
+ <div className="mt-3 flex gap-2">
               <Button size="sm" onClick={openTodayPreview}>Foi um dia normal</Button>
               <Button size="sm" variant="secondary" onClick={() => void startExcessFlow()}>Extrapolei hoje</Button>
             </div>
@@ -212,12 +212,12 @@ export function NutritionPage() {
         )}
 
         {compensationOffer && (
-          <Card className="border-amber-900 bg-amber-950/30">
-            <p className="text-sm font-semibold text-amber-300">Quer montar a compensação?</p>
-            <p className="mt-1 text-xs leading-relaxed text-amber-200/70">
+ <Card className=" bg-sun-soft">
+ <p className="text-sm font-semibold text-sun">Quer montar a compensação?</p>
+ <p className="mt-1 text-xs leading-relaxed text-sun">
               O excesso já está registrado. Posso montar um ajuste no treino para compensar — só se você quiser.
             </p>
-            <div className="mt-3 flex gap-2">
+ <div className="mt-3 flex gap-2">
               <Button
                 size="sm"
                 onClick={() => {
@@ -235,26 +235,26 @@ export function NutritionPage() {
 
         {routine && (routine.enough ? visibleMissingDays.length > 0 : missingDays.length > 0) && (
           <Card>
-            <p className="text-sm font-semibold text-white">Dias esquecidos</p>
+ <p className="text-sm font-semibold text-fg">Dias esquecidos</p>
             {routine.enough ? (
               <>
-                <p className="mt-1 text-xs text-zinc-500">Foi parecido com o normal? Confirme em um toque.</p>
-                <div className="mt-3 space-y-2">
+ <p className="mt-1 text-xs text-dim">Foi parecido com o normal? Confirme em um toque.</p>
+ <div className="mt-3 space-y-2">
                   {visibleMissingDays.map((date) => (
-                    <div key={date} className="flex items-center justify-between gap-2 rounded-xl bg-zinc-950 p-3">
-                      <p className="text-sm text-zinc-300">{formatDayLabel(date)}</p>
-                      <div className="flex shrink-0 gap-2">
+ <div key={date} className="flex items-center justify-between gap-2 rounded-md bg-bg p-3">
+ <p className="text-sm text-fg">{formatDayLabel(date)}</p>
+ <div className="flex shrink-0 gap-2">
                         <button
                           type="button"
                           onClick={() => openMissingDayPreview(date)}
-                          className="rounded-full bg-primary-700 px-3 py-1.5 text-[11px] font-medium text-white"
+ className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
                         >
                           Confirmar
                         </button>
                         <button
                           type="button"
                           onClick={() => dismissMissingDay(date)}
-                          className="rounded-full border border-zinc-700 px-3 py-1.5 text-[11px] font-medium text-zinc-400"
+ className="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-muted"
                         >
                           Não foi normal
                         </button>
@@ -264,7 +264,7 @@ export function NutritionPage() {
                 </div>
               </>
             ) : (
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+ <p className="mt-1 text-xs leading-relaxed text-dim">
                 Registre uns dias normais para o MOB aprender sua rotina — sem ela não dá para propor o que você
                 costuma comer nesses dias.
               </p>
@@ -272,27 +272,27 @@ export function NutritionPage() {
           </Card>
         )}
 
-        <button onClick={() => navigate('/nutrition/cheat-day')} className="flex w-full items-center justify-between rounded-2xl border border-amber-900 bg-amber-950/30 px-4 py-3 text-left">
+ <button onClick={() => navigate('/nutrition/cheat-day')} className="flex w-full items-center justify-between rounded-lg bg-sun-soft px-4 py-3 text-left">
           <div>
-            <p className="text-sm font-semibold text-amber-300">🍕 Dia do lixo</p>
-            <p className="text-xs text-amber-200/70">Vai exagerar hoje? Fale comigo antes.</p>
+ <p className="text-sm font-semibold text-sun">🍕 Dia do lixo</p>
+ <p className="text-xs text-sun">Vai exagerar hoje? Fale comigo antes.</p>
           </div>
-          <span className="text-xl text-amber-400">›</span>
+ <span className="text-xl text-sun">›</span>
         </button>
 
-        <button onClick={() => navigate('/nutrition/history')} className="flex w-full items-center justify-between rounded-2xl border border-primary-900 bg-primary-950/50 px-4 py-3 text-left">
-          <div><p className="text-sm font-semibold text-primary-300">Calendário de calorias</p><p className="text-xs text-zinc-500">Acompanhe o consumo de cada dia</p></div>
-          <span className="text-xl text-primary-400">›</span>
+ <button onClick={() => navigate('/nutrition/history')} className="flex w-full items-center justify-between rounded-lg bg-brand-soft px-4 py-3 text-left">
+ <div><p className="text-sm font-semibold text-brand-fg">Calendário de calorias</p><p className="text-xs text-dim">Acompanhe o consumo de cada dia</p></div>
+ <span className="text-xl text-brand-fg">›</span>
         </button>
 
         {activePlan ? (
           <Card>
-            <div className="flex items-center justify-between mb-4">
+ <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-xs text-zinc-500 uppercase tracking-wide">Plano ativo</p>
-                <p className="font-semibold text-white">{activePlan.name}</p>
+ <p className="text-xs text-dim uppercase tracking-wide">Plano ativo</p>
+ <p className="font-semibold text-fg">{activePlan.name}</p>
               </div>
-              <button onClick={() => navigate('/nutrition/plan')} className="text-primary-400 text-xs">
+ <button onClick={() => navigate('/nutrition/plan')} className="text-brand-fg text-xs">
                 Gerenciar
               </button>
             </div>
@@ -308,15 +308,15 @@ export function NutritionPage() {
             />
           </Card>
         ) : (
-          <Card className="text-center py-4">
-            <p className="text-zinc-400 text-sm mb-3">Nenhum plano alimentar ativo</p>
+ <Card className="text-center py-4">
+ <p className="text-muted text-sm mb-3">Nenhum plano alimentar ativo</p>
             <Button size="sm" onClick={() => navigate('/nutrition/plan')}>
               Criar plano
             </Button>
           </Card>
         )}
 
-        <div className="space-y-4">
+ <div className="space-y-4">
           {MEAL_ORDER.map((meal) => {
             const logs = byMeal[meal] ?? [];
             const mealCal = logs.reduce((s, l) => s + l.calories, 0);
@@ -324,10 +324,10 @@ export function NutritionPage() {
 
             return (
               <div key={meal}>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="flex items-center gap-1.5 font-semibold text-white text-sm">
+ <div className="flex items-center justify-between mb-2">
+ <h3 className="flex items-center gap-1.5 font-semibold text-fg text-sm">
                     {MEAL_TYPE_LABELS[meal]}
-                    {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-zinc-500">{plannedMeal.suggested_at}</span>}
+ {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-dim">{plannedMeal.suggested_at}</span>}
                     {/* Only when there is something to show — a meal with no
                         planned items would open an empty modal. */}
                     {plannedMeal && plannedMeal.items.length > 0 && (
@@ -335,35 +335,35 @@ export function NutritionPage() {
                         type="button"
                         onClick={() => setMenuMeal(meal)}
                         aria-label={`Sugestão do plano para ${MEAL_TYPE_LABELS[meal].toLowerCase()}`}
-                        className="text-zinc-500 hover:text-primary-400"
+ className="text-dim hover:text-brand-fg"
                       >
                         💡
                       </button>
                     )}
                   </h3>
-                  {mealCal > 0 && <span className="text-xs text-zinc-500">{Math.round(mealCal)} kcal</span>}
+ {mealCal > 0 && <span className="text-xs text-dim">{Math.round(mealCal)} kcal</span>}
                 </div>
 
                 {logs.length === 0 ? (
-                  <Card className="py-3">
-                    <p className="text-sm text-zinc-600 text-center">Nenhum registro</p>
+ <Card className="py-3">
+ <p className="text-sm text-dim text-center">Nenhum registro</p>
                   </Card>
                 ) : (
-                  <div className="space-y-2">
+ <div className="space-y-2">
                     {logs.map((log) => (
-                      <Card key={log.id} className="py-3">
-                        <div className="flex items-center justify-between">
-                          <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
-                            <p className="text-sm font-medium text-white truncate">
+ <Card key={log.id} className="py-3">
+ <div className="flex items-center justify-between">
+ <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
+ <p className="text-sm font-medium text-fg truncate">
                               {log.food_name}
                               <OriginBadge origin={log.origin} />
                             </p>
-                            <p className="text-xs text-zinc-500">{log.quantity_g}g</p>
+ <p className="text-xs text-dim">{log.quantity_g}g</p>
                           </button>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-primary-400">{Math.round(log.calories)} kcal</p>
-                              <p className="text-xs text-zinc-500">
+ <div className="flex items-center gap-3">
+ <div className="text-right">
+ <p className="text-sm font-semibold text-brand-fg">{Math.round(log.calories)} kcal</p>
+ <p className="text-xs text-dim">
                                 P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
                               </p>
                             </div>
@@ -371,7 +371,7 @@ export function NutritionPage() {
                               type="button"
                               onClick={() => deleteFoodLog(log.id)}
                               aria-label="Apagar"
-                              className="p-1 text-lg text-zinc-600"
+ className="p-1 text-lg text-dim"
                             >
                               ×
                             </button>
@@ -396,23 +396,23 @@ export function NutritionPage() {
         const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
         return (
           <div
-            className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+ className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm"
             onClick={() => setMenuMeal(null)}
           >
             <div
-              className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+ className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold text-white">Sugestão do plano — {MEAL_TYPE_LABELS[meal]}</h3>
-              {plannedMeal?.suggested_at && <p className="mt-1 text-xs text-zinc-500">{plannedMeal.suggested_at}</p>}
-              <div className="mt-3 space-y-2">
+ <h3 className="text-lg font-bold text-fg">Sugestão do plano — {MEAL_TYPE_LABELS[meal]}</h3>
+ {plannedMeal?.suggested_at && <p className="mt-1 text-xs text-dim">{plannedMeal.suggested_at}</p>}
+ <div className="mt-3 space-y-2">
                 {(plannedMeal?.items ?? []).map((item, index) => (
-                  <div key={index} className="flex items-center justify-between gap-2 rounded-xl bg-zinc-950 p-3">
-                    <p className="text-xs text-zinc-400">{item.food_name} · {item.quantity_g}g</p>
+ <div key={index} className="flex items-center justify-between gap-2 rounded-md bg-bg p-3">
+ <p className="text-xs text-muted">{item.food_name} · {item.quantity_g}g</p>
                     <button
                       type="button"
                       onClick={() => logPlannedItem(meal, item)}
-                      className="shrink-0 rounded-full bg-zinc-800 px-3 py-1 text-[11px] font-medium text-zinc-300"
+ className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg"
                     >
                       Já comi
                     </button>
@@ -435,18 +435,18 @@ export function NutritionPage() {
 
       {excessMode && (
         <div
-          className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm"
+ className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm"
           onClick={() => setExcessMode(false)}
         >
           <div
-            className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-3xl bg-zinc-900 p-5 pb-safe"
+ className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-white">O que passou do normal?</h3>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+ <h3 className="text-lg font-bold text-fg">O que passou do normal?</h3>
+ <p className="mt-1 text-xs leading-relaxed text-dim">
               Conte só o excesso — o resto do dia já foi registrado com base na sua rotina.
             </p>
-            <div className="mt-3">
+ <div className="mt-3">
               <FoodLogAssistant onRegistrar={registrarExcesso} />
             </div>
           </div>

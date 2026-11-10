@@ -15,10 +15,10 @@ export function PlanWeekCard({ progress }: { progress: PlanWeekProgress }) {
   const todayIndex = (new Date().getDay() + 6) % 7;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-3">
+    <div className="rounded-lg bg-surface shadow-card px-4 py-3">
       <div className="flex items-baseline justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Sua semana</p>
-        <p className="text-sm font-black text-white">
+        <p className="text-xs font-semibold uppercase tracking-wide text-dim">Sua semana</p>
+        <p className="text-sm font-black text-fg">
           {progress.done} de {progress.target || '—'}
         </p>
       </div>
@@ -29,12 +29,12 @@ export function PlanWeekCard({ progress }: { progress: PlanWeekProgress }) {
             key={index}
             title={`${WEEKDAY_NAMES[index]}${done ? ' — treino feito' : ''}`}
             aria-label={`${WEEKDAY_NAMES[index]}${done ? ': treino feito' : ': sem treino'}`}
-            className={`flex h-9 flex-1 items-center justify-center rounded-lg border text-[11px] font-bold ${
+            className={`flex h-9 flex-1 items-center justify-center rounded-lg text-xs font-bold ${
               done
-                ? 'border-primary-500 bg-primary-600 text-white'
+                ? 'bg-brand text-white'
                 : index === todayIndex
-                  ? 'border-primary-800 bg-zinc-950 text-zinc-500'
-                  : 'border-zinc-800 bg-zinc-950 text-zinc-600'
+                  ? 'bg-surface-2 text-muted'
+                  : 'bg-surface-2 text-dim'
             }`}
           >
             {done ? (
@@ -49,7 +49,7 @@ export function PlanWeekCard({ progress }: { progress: PlanWeekProgress }) {
       </div>
 
       {progress.pendingCount > 0 && (
-        <p className="mt-2 text-[11px] text-sky-300">
+        <p className="mt-2 text-xs text-teal">
           {progress.pendingCount} {plural(progress.pendingCount, 'treino contado aqui ainda não foi enviado', 'treinos contados aqui ainda não foram enviados')} ao servidor.
         </p>
       )}

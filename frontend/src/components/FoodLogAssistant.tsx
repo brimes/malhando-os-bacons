@@ -86,9 +86,9 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
   const totalCalorias = Math.round((entries ?? []).reduce((soma, e) => soma + e.calories, 0));
 
   return (
-    <div className="space-y-3">
+ <div className="space-y-3">
       {messages.length === 0 && (
-        <p className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm leading-relaxed text-zinc-400">
+ <p className="rounded-lg shadow-card bg-bg p-4 text-sm leading-relaxed text-muted">
           Conte o que você comeu, do seu jeito. Eu pergunto o que faltar e monto os registros com as calorias e
           os macros — você confere antes de salvar.
         </p>
@@ -97,8 +97,8 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
       {messages.map((m, i) => (
         <div
           key={i}
-          className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-            m.role === 'user' ? 'ml-auto bg-primary-700 text-white' : 'border border-zinc-800 bg-zinc-950 text-zinc-200'
+ className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-relaxed ${
+            m.role === 'user' ? 'ml-auto bg-brand text-white' : 'shadow-card bg-bg text-fg'
           }`}
         >
           {m.content}
@@ -106,40 +106,40 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
       ))}
 
       {isSending && (
-        <div className="w-fit rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-zinc-500">
-          <span className="animate-pulse">pensando...</span>
+ <div className="w-fit rounded-lg shadow-card bg-bg px-4 py-3 text-sm text-dim">
+ <span className="animate-pulse">pensando...</span>
         </div>
       )}
 
-      {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
       {entries && entries.length > 0 && (
-        <div className="rounded-2xl border border-primary-900 bg-primary-950/20 p-4">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-sm font-bold text-white">Vai registrar</h3>
-            <span className="text-sm font-bold text-primary-400">{totalCalorias} kcal</span>
+ <div className="rounded-lg bg-brand-soft p-4">
+ <div className="flex items-baseline justify-between">
+ <h3 className="text-sm font-bold text-fg">Vai registrar</h3>
+ <span className="text-sm font-bold text-brand-fg">{totalCalorias} kcal</span>
           </div>
-          <div className="mt-3 space-y-2">
+ <div className="mt-3 space-y-2">
             {entries.map((e, i) => (
-              <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 flex-1 text-sm font-medium text-white">{e.food_name}</p>
-                  <p className="shrink-0 text-sm font-semibold text-primary-400">{Math.round(e.calories)} kcal</p>
+ <div key={i} className="rounded-md shadow-card bg-bg p-3">
+ <div className="flex items-start justify-between gap-2">
+ <p className="min-w-0 flex-1 text-sm font-medium text-fg">{e.food_name}</p>
+ <p className="shrink-0 text-sm font-semibold text-brand-fg">{Math.round(e.calories)} kcal</p>
                 </div>
-                <p className="mt-1 text-xs text-zinc-500">
+ <p className="mt-1 text-xs text-dim">
                   {Math.round(e.quantity_g)}g · P:{Math.round(e.protein_g)}g C:{Math.round(e.carbs_g)}g G:{Math.round(e.fat_g)}g
                 </p>
-                <p className="mt-1 text-xs text-zinc-600">
+ <p className="mt-1 text-xs text-dim">
                   {MEAL_TYPE_LABELS[e.meal_type]} · {formatarData(e.date)}
                 </p>
               </div>
             ))}
           </div>
-          <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+ <p className="mt-3 text-xs leading-relaxed text-dim">
             Estimativa a partir do que você descreveu. Depois de registrar, dá para ajustar qualquer item no
             histórico.
           </p>
-          <Button fullWidth size="lg" className="mt-3" isLoading={isSaving} onClick={registrar}>
+ <Button fullWidth size="lg" className="mt-3" isLoading={isSaving} onClick={registrar}>
             Registrar {entries.length === 1 ? 'alimento' : `${entries.length} alimentos`}
           </Button>
         </div>
@@ -148,14 +148,14 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
       <div ref={fimRef} />
 
       {messages.length === 0 && (
-        <div className="flex flex-wrap gap-2">
+ <div className="flex flex-wrap gap-2">
           {SUGESTOES.map((s) => (
             <button
               key={s}
               type="button"
               disabled={isSending}
               onClick={() => void enviar(s)}
-              className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-2 text-[11px] text-zinc-300 disabled:opacity-50"
+ className="rounded-full border border-line bg-bg px-3 py-2 text-xs text-fg disabled:opacity-50"
             >
               {s}
             </button>
@@ -168,7 +168,7 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
           event.preventDefault();
           void enviar(draft);
         }}
-        className="flex items-end gap-2"
+ className="flex items-end gap-2"
       >
         <textarea
           value={draft}
@@ -177,12 +177,12 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
           rows={1}
           maxLength={1000}
           placeholder="O que você comeu?"
-          className="max-h-28 min-h-[48px] flex-1 resize-none rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none disabled:opacity-50"
+ className="max-h-28 min-h-[48px] flex-1 resize-none rounded-lg shadow-card bg-bg px-4 py-3 text-sm text-fg placeholder-dim focus:outline-none disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={isSending || isSaving || draft.trim().length === 0}
-          className="h-[48px] shrink-0 rounded-2xl bg-primary-600 px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+ className="h-[48px] shrink-0 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Enviar
         </button>

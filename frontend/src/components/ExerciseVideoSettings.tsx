@@ -71,15 +71,15 @@ export function ExerciseVideoSettings() {
 
   return (
     <div>
-      <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Vídeos dos exercícios</h3>
+      <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Vídeos dos exercícios</h3>
       <Card className="space-y-4">
         <div>
-          <p className="text-sm text-zinc-300">
+          <p className="text-sm text-muted">
             {uso === null
               ? 'Calculando…'
               : `${uso.arquivos} vídeo${uso.arquivos === 1 ? '' : 's'} no aparelho · ${formatarBytes(uso.bytes)}`}
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          <p className="mt-1 text-xs leading-relaxed text-dim">
             Ficam guardados no aparelho para tocar sem internet, inclusive em modo avião.
             {faltam ? ` Faltam ${faltam}.` : ''}
           </p>
@@ -95,22 +95,22 @@ export function ExerciseVideoSettings() {
           className="flex w-full items-center justify-between gap-4 text-left"
         >
           <span>
-            <span className="block text-sm font-medium text-white">Baixar usando dados móveis</span>
-            <span className="mt-0.5 block text-xs leading-relaxed text-zinc-500">
+            <span className="block text-sm font-medium text-fg">Baixar usando dados móveis</span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-dim">
               Desligado, os vídeos só baixam no Wi-Fi. São cerca de 95 MB no total.
             </span>
           </span>
-          <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${dadosMoveis ? 'bg-primary-600' : 'bg-zinc-700'}`}>
-            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${dadosMoveis ? 'left-6' : 'left-1'}`} />
+          <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${dadosMoveis ? 'bg-brand' : 'bg-surface-2'}`}>
+            <span className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform ${dadosMoveis ? 'translate-x-6' : 'translate-x-1'}`} />
           </span>
         </button>
 
         {progresso && progresso.total > 0 && (
-          <p className="text-xs text-primary-400">
+          <p className="text-xs text-brand-fg">
             Baixando… {progresso.baixados} de {progresso.total}
           </p>
         )}
-        {erro && <p className="text-xs text-red-400">{erro}</p>}
+        {erro && <p className="text-xs text-danger">{erro}</p>}
 
         <div className="flex gap-2">
           {faltam !== 0 && (

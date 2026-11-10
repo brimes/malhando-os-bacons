@@ -121,7 +121,7 @@ export function NutritionPlanPage() {
         title="Planos Alimentares"
         showBack
         rightAction={
-          <div className="flex gap-2">
+ <div className="flex gap-2">
             {activePlan && (
               <Button size="sm" variant="secondary" onClick={() => setShowAdjust(true)}>
                 Ajustar
@@ -133,31 +133,31 @@ export function NutritionPlanPage() {
           </div>
         }
       />
-      <div className="px-4 py-4 pb-24 space-y-4">
+ <div className="px-4 py-4 pb-24 space-y-4">
         {showForm && (
-          <Card className="space-y-4">
-            <div className="grid grid-cols-2 rounded-2xl bg-zinc-950 p-1">
-              <button type="button" onClick={() => setMethod('automatic')} className={`rounded-xl py-2.5 text-sm font-semibold ${method === 'automatic' ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}>Automático</button>
-              <button type="button" onClick={() => setMethod('manual')} className={`rounded-xl py-2.5 text-sm font-semibold ${method === 'manual' ? 'bg-primary-600 text-white' : 'text-zinc-500'}`}>Manual</button>
+ <Card className="space-y-4">
+ <div className="grid grid-cols-2 rounded-lg bg-bg p-1">
+ <button type="button" onClick={() => setMethod('automatic')} className={`rounded-md py-2.5 text-sm font-semibold ${method === 'automatic' ? 'bg-brand text-white' : 'text-dim'}`}>Automático</button>
+ <button type="button" onClick={() => setMethod('manual')} className={`rounded-md py-2.5 text-sm font-semibold ${method === 'manual' ? 'bg-brand text-white' : 'text-dim'}`}>Manual</button>
             </div>
 
-            {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+ {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+ <form onSubmit={handleSubmit} className="space-y-3">
               {method === 'automatic' ? (
                 <>
-                  <p className="text-xs leading-relaxed text-zinc-500">
+ <p className="text-xs leading-relaxed text-dim">
                     O assistente calcula as metas e monta um cardápio a partir do seu peso, altura, idade, objetivo
                     e do seu plano de treino atual.
                   </p>
-                  <label className="block text-sm text-zinc-300">Preferências <span className="text-zinc-600">(opcional)</span>
+ <label className="block text-sm text-fg">Preferências <span className="text-dim">(opcional)</span>
                     <textarea
                       value={preferences}
                       onChange={(e) => setPreferences(e.target.value)}
                       rows={3}
                       maxLength={1000}
                       placeholder="Ex: não como laticínios, gosto de frango, evito peixe..."
-                      className="mt-1.5 w-full resize-none rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2.5 text-white focus:border-primary-500 focus:outline-none text-sm"
+ className="mt-1.5 w-full resize-none rounded-md border border-line bg-surface-2 px-3 py-2.5 text-fg focus:outline-none text-sm"
                     />
                   </label>
                   <Button type="submit" fullWidth isLoading={isGenerating}>
@@ -167,30 +167,30 @@ export function NutritionPlanPage() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-xs text-zinc-400 uppercase tracking-wide mb-1.5">Nome</label>
+ <label className="block text-xs text-muted uppercase tracking-wide mb-1.5">Nome</label>
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Ex: Ganho de massa"
                       required
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-primary-500 text-sm"
+ className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg placeholder-dim focus:outline-none text-sm"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+ <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: 'Calorias (kcal)', value: calories, setter: setCalories, color: 'text-primary-400' },
-                      { label: 'Proteína (g)', value: protein, setter: setProtein, color: 'text-blue-400' },
-                      { label: 'Carboidratos (g)', value: carbs, setter: setCarbs, color: 'text-amber-400' },
-                      { label: 'Gordura (g)', value: fat, setter: setFat, color: 'text-red-400' },
+                      { label: 'Calorias (kcal)', value: calories, setter: setCalories, color: 'text-brand-fg' },
+                      { label: 'Proteína (g)', value: protein, setter: setProtein, color: 'text-teal' },
+                      { label: 'Carboidratos (g)', value: carbs, setter: setCarbs, color: 'text-sun' },
+                      { label: 'Gordura (g)', value: fat, setter: setFat, color: 'text-danger' },
                     ].map((field) => (
                       <div key={field.label}>
-                        <label className={`block text-xs ${field.color} mb-1.5`}>{field.label}</label>
+ <label className={`block text-xs ${field.color} mb-1.5`}>{field.label}</label>
                         <input
                           type="number"
                           value={field.value}
                           min={0}
                           onChange={(e) => field.setter(e.target.value)}
-                          className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-white text-center focus:outline-none focus:border-primary-500 text-sm"
+ className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg text-center focus:outline-none text-sm"
                         />
                       </div>
                     ))}
@@ -205,44 +205,44 @@ export function NutritionPlanPage() {
         )}
 
         {plans.length === 0 && !showForm ? (
-          <Card className="text-center py-8">
-            <p className="text-zinc-400 text-sm">Nenhum plano criado ainda</p>
+ <Card className="text-center py-8">
+ <p className="text-muted text-sm">Nenhum plano criado ainda</p>
           </Card>
         ) : (
-          <div className="space-y-3">
+ <div className="space-y-3">
             {plans.map((plan) => (
-              <Card key={plan.id} className={plan.active ? 'border-primary-600' : ''}>
-                <div className="flex items-start justify-between">
+ <Card key={plan.id} className={plan.active ? 'border-brand' : ''}>
+ <div className="flex items-start justify-between">
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-white">{plan.name}</p>
-                      {plan.active && <span className="text-xs bg-primary-900 text-primary-300 px-2 py-0.5 rounded-full">Ativo</span>}
-                      {plan.creation_method === 'automatic' && <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">IA</span>}
+ <div className="flex items-center gap-2 mb-1">
+ <p className="font-semibold text-fg">{plan.name}</p>
+ {plan.active && <span className="text-xs bg-brand-soft text-brand-fg px-2 py-0.5 rounded-full">Ativo</span>}
+ {plan.creation_method === 'automatic' && <span className="text-xs bg-surface-2 text-muted px-2 py-0.5 rounded-full">IA</span>}
                     </div>
-                    <p className="text-sm text-zinc-400">{plan.calories_target} kcal/dia</p>
+ <p className="text-sm text-muted">{plan.calories_target} kcal/dia</p>
                   </div>
                   {!plan.active && (
                     <Button size="sm" variant="secondary" onClick={() => activate(plan.id)}>Ativar</Button>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-zinc-800">
-                  <div className="text-center"><p className="text-sm font-semibold text-blue-400">{plan.protein_target}g</p><p className="text-xs text-zinc-600">proteína</p></div>
-                  <div className="text-center"><p className="text-sm font-semibold text-amber-400">{plan.carbs_target}g</p><p className="text-xs text-zinc-600">carbs</p></div>
-                  <div className="text-center"><p className="text-sm font-semibold text-red-400">{plan.fat_target}g</p><p className="text-xs text-zinc-600">gordura</p></div>
+ <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-line">
+ <div className="text-center"><p className="text-sm font-semibold text-teal">{plan.protein_target}g</p><p className="text-xs text-dim">proteína</p></div>
+ <div className="text-center"><p className="text-sm font-semibold text-sun">{plan.carbs_target}g</p><p className="text-xs text-dim">carbs</p></div>
+ <div className="text-center"><p className="text-sm font-semibold text-danger">{plan.fat_target}g</p><p className="text-xs text-dim">gordura</p></div>
                 </div>
 
                 {plan.active && plan.rationale && (
-                  <p className="mt-3 pt-3 border-t border-zinc-800 text-xs leading-relaxed text-zinc-500">{plan.rationale}</p>
+ <p className="mt-3 pt-3 border-t border-line text-xs leading-relaxed text-dim">{plan.rationale}</p>
                 )}
 
                 {plan.active && plan.meals && plan.meals.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-zinc-800 space-y-2">
+ <div className="mt-3 pt-3 border-t border-line space-y-2">
                     {plan.meals.map((meal) => (
                       <div key={meal.id}>
-                        <p className="text-xs font-semibold text-zinc-300">
-                          {MEAL_TYPE_LABELS[meal.meal_type]} {meal.suggested_at && <span className="font-normal text-zinc-600">· {meal.suggested_at}</span>}
+ <p className="text-xs font-semibold text-fg">
+ {MEAL_TYPE_LABELS[meal.meal_type]} {meal.suggested_at && <span className="font-normal text-dim">· {meal.suggested_at}</span>}
                         </p>
-                        <p className="text-xs text-zinc-500">{meal.items.map((item) => `${item.food_name} (${item.quantity_g}g)`).join(', ')}</p>
+ <p className="text-xs text-dim">{meal.items.map((item) => `${item.food_name} (${item.quantity_g}g)`).join(', ')}</p>
                       </div>
                     ))}
                   </div>
@@ -254,27 +254,27 @@ export function NutritionPlanPage() {
       </div>
 
       {isGenerating && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 px-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm text-center">
-            <div className="relative mx-auto h-28 w-28">
-              <div className="absolute inset-0 animate-ping rounded-full bg-primary-700/20" />
-              <img src="/mob-icon.png" alt="" className="relative h-28 w-28 animate-pulse rounded-3xl object-cover shadow-2xl" />
+ <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg/80 px-6 backdrop-blur-sm">
+ <div className="w-full max-w-sm text-center">
+ <div className="relative mx-auto h-28 w-28">
+ <div className="absolute inset-0 animate-ping rounded-full bg-brand-soft" />
+ <img src="/mob-icon.png" alt="" className="relative h-28 w-28 animate-pulse rounded-lg object-cover shadow-2xl" />
             </div>
-            <div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full w-2/3 animate-pulse rounded-full bg-primary-500" />
+ <div className="mx-auto mt-7 h-1.5 w-48 overflow-hidden rounded-full bg-surface-2">
+ <div className="h-full w-2/3 animate-pulse rounded-full bg-brand" />
             </div>
-            <h2 className="mt-5 text-xl font-black text-white">Criando seu plano</h2>
-            <p className="mt-2 text-sm text-primary-300">{loadingMessages[loadingStep]}</p>
-            <p className="mt-4 text-xs text-zinc-600">Isso pode levar alguns minutos.</p>
+ <h2 className="mt-5 text-xl font-black text-fg">Criando seu plano</h2>
+ <p className="mt-2 text-sm text-brand-fg">{loadingMessages[loadingStep]}</p>
+ <p className="mt-4 text-xs text-dim">Isso pode levar alguns minutos.</p>
           </div>
         </div>
       )}
 
       {showAdjust && activePlan && (
-        <div className="fixed inset-0 z-[100] flex items-end bg-black/80 backdrop-blur-sm" onClick={() => !isAdjusting && setShowAdjust(false)}>
-          <div className="flex max-h-[85vh] w-full flex-col rounded-t-3xl bg-zinc-900 p-5 pb-safe" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-white">Ajustar plano com IA</h3>
-            {adjustError && <div className="mt-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{adjustError}</div>}
+ <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => !isAdjusting && setShowAdjust(false)}>
+ <div className="flex max-h-[85vh] w-full flex-col rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe" onClick={(e) => e.stopPropagation()}>
+ <h3 className="text-lg font-bold text-fg">Ajustar plano com IA</h3>
+ {adjustError && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{adjustError}</div>}
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
@@ -282,16 +282,16 @@ export function NutritionPlanPage() {
               maxLength={2000}
               disabled={isAdjusting}
               placeholder="Descreva o que quer mudar..."
-              className="mt-3 w-full resize-none rounded-2xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm text-white placeholder-zinc-600 focus:border-primary-500 focus:outline-none"
+ className="mt-3 w-full resize-none rounded-lg shadow-card bg-bg px-4 py-3 text-sm text-fg placeholder-dim focus:outline-none"
             />
-            <div className="mt-2 flex flex-wrap gap-2">
+ <div className="mt-2 flex flex-wrap gap-2">
               {ADJUST_EXAMPLES.map((example) => (
-                <button key={example} type="button" disabled={isAdjusting} onClick={() => setInstructions(example)} className="rounded-full border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-[11px] text-zinc-400">
+ <button key={example} type="button" disabled={isAdjusting} onClick={() => setInstructions(example)} className="rounded-full border border-line bg-bg px-3 py-1.5 text-xs text-muted">
                   {example}
                 </button>
               ))}
             </div>
-            <Button fullWidth size="lg" className="mt-4" isLoading={isAdjusting} onClick={submitAdjust} disabled={!instructions.trim()}>
+ <Button fullWidth size="lg" className="mt-4" isLoading={isAdjusting} onClick={submitAdjust} disabled={!instructions.trim()}>
               {isAdjusting ? 'Ajustando o plano...' : 'Aplicar ajuste'}
             </Button>
           </div>

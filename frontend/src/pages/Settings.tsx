@@ -16,11 +16,11 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
   return (
     <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-4 text-left">
       <span>
-        <span className="block text-sm font-medium text-white">{label}</span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-zinc-500">{hint}</span>
+        <span className="block text-sm font-medium text-fg">{label}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-dim">{hint}</span>
       </span>
-      <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? 'bg-primary-600' : 'bg-zinc-700'}`}>
-        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${checked ? 'left-6' : 'left-1'}`} />
+      <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${checked ? 'bg-brand' : 'bg-surface-2'}`}>
+        <span className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </span>
     </button>
   );
@@ -66,18 +66,18 @@ export function SettingsPage() {
     }
   };
 
-  if (isLoading) return <div className="py-20 text-center text-zinc-500">Carregando configurações...</div>;
+  if (isLoading) return <div className="py-20 text-center text-muted">Carregando configurações...</div>;
 
   return (
     <>
       <Header title="Configurações do treino" showBack />
       <div className="space-y-5 px-4 py-5 pb-24">
-        {error && <div className="rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>}
+        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
         <div>
-          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Contagem para iniciar</h3>
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Contagem para iniciar</h3>
           <Card className="space-y-3">
-            <p className="text-xs leading-relaxed text-zinc-500">
+            <p className="text-xs leading-relaxed text-dim">
               Tempo de preparação antes de cada exercício começar, para você se posicionar no aparelho.
             </p>
             <div className="grid grid-cols-5 gap-2">
@@ -86,8 +86,8 @@ export function SettingsPage() {
                   key={value}
                   type="button"
                   onClick={() => update({ countdown_seconds: value })}
-                  className={`rounded-xl py-3 text-sm font-semibold transition-colors ${
-                    settings.countdown_seconds === value ? 'bg-primary-600 text-white' : 'bg-zinc-800 text-zinc-400'
+                  className={`rounded-md py-3 text-sm font-semibold transition-colors ${
+                    settings.countdown_seconds === value ? 'bg-brand text-white' : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {value === 0 ? 'Sem' : `${value}s`}
@@ -98,14 +98,14 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Dados e sincronização</h3>
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Dados e sincronização</h3>
           <SyncStatusPanel />
         </div>
 
         <ExerciseVideoSettings />
 
         <div>
-          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Durante o treino</h3>
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Durante o treino</h3>
           <Card className="space-y-5">
             <Toggle
               checked={settings.vibration_enabled}
@@ -113,7 +113,7 @@ export function SettingsPage() {
               label="Vibrar ao terminar o descanso"
               hint="Avisa que a próxima série pode começar mesmo com o celular guardado."
             />
-            <div className="border-t border-zinc-800" />
+            <div className="border-t border-line" />
             <Toggle
               checked={settings.auto_advance}
               onChange={(value) => update({ auto_advance: value })}
@@ -128,7 +128,7 @@ export function SettingsPage() {
         </Button>
 
         <div id="ia" className="scroll-mt-16 pt-2">
-          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-zinc-500">Inteligência artificial</h3>
+          <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Inteligência artificial</h3>
           <LlmSettingsSection />
         </div>
       </div>
