@@ -53,17 +53,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (!this.state.error) return this.props.children;
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-8 pb-safe pt-safe text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-8 pb-safe pt-safe text-center">
         <p className="text-4xl">⚠️</p>
-        <h1 className="text-lg font-bold text-white">Algo deu errado nesta tela</h1>
-        <p className="max-w-sm text-sm leading-relaxed text-zinc-400">
+        <h1 className="text-lg font-bold text-fg">Algo deu errado nesta tela</h1>
+        <p className="max-w-sm text-sm leading-relaxed text-muted">
           Não foi possível mostrar essa parte do app. Nada que já foi registrado neste
           aparelho — treino em andamento ou séries pendentes de envio — foi perdido.
         </p>
         <button
           type="button"
           onClick={this.goHome}
-          className="mt-2 rounded-2xl bg-primary-600 px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-primary-500"
+          className="press mt-2 min-h-[48px] rounded-md bg-brand px-6 text-base font-bold text-white"
         >
           Voltar ao início
         </button>

@@ -137,13 +137,13 @@ export function TermsGate({ active, children }: TermsGateProps) {
 
   if (loadError) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 px-8 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-bg px-8 text-center">
         <p className="text-4xl">📄</p>
-        <p className="text-sm leading-relaxed text-zinc-400">{loadError}</p>
+        <p className="text-sm leading-relaxed text-muted">{loadError}</p>
         <button
           type="button"
           onClick={() => setReloadToken((value) => value + 1)}
-          className="rounded-2xl bg-primary-600 px-6 py-3 text-sm font-bold text-white"
+          className="press min-h-[48px] rounded-md bg-brand px-6 text-base font-bold text-fg"
         >
           Tentar de novo
         </button>
@@ -152,18 +152,18 @@ export function TermsGate({ active, children }: TermsGateProps) {
   }
 
   if (isChecking || !status) {
-    return <div className="flex min-h-screen items-center justify-center bg-zinc-950 text-zinc-500">Carregando...</div>;
+    return <div className="flex min-h-screen items-center justify-center bg-bg text-dim">Carregando...</div>;
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950" role="dialog" aria-modal="true" aria-labelledby="terms-title">
-      <div className="border-b border-zinc-800 px-5 pb-4 pt-safe">
+    <div className="flex min-h-screen flex-col bg-bg" role="dialog" aria-modal="true" aria-labelledby="terms-title">
+      <div className="border-b border-line px-5 pb-4 pt-safe">
         <div className="pt-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-400">Antes de começar</p>
-          <h1 id="terms-title" className="mt-2 text-2xl font-black leading-tight text-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-fg">Antes de começar</p>
+          <h1 id="terms-title" className="mt-2 num text-3xl leading-tight text-fg">
             Leia com atenção
           </h1>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+          <p className="mt-2 text-sm leading-relaxed text-muted">
             Para usar o MOB você precisa entender como os treinos são criados e quais são os seus riscos.
           </p>
         </div>
@@ -176,51 +176,51 @@ export function TermsGate({ active, children }: TermsGateProps) {
       >
         <div className="space-y-4">
           {TERM_SECTIONS.map((section) => (
-            <section key={section.title} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+            <section key={section.title} className="rounded-lg bg-surface shadow-card p-4">
               <div className="flex items-start gap-3">
                 <span className="text-xl leading-none">{section.icon}</span>
                 <div>
-                  <h2 className="text-sm font-bold text-white">{section.title}</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400">{section.text}</p>
+                  <h2 className="text-sm font-bold text-fg">{section.title}</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{section.text}</p>
                 </div>
               </div>
             </section>
           ))}
         </div>
 
-        <p className="mt-5 text-center text-xs leading-relaxed text-zinc-600">
+        <p className="mt-5 text-center text-xs leading-relaxed text-dim">
           Em resumo: a IA ajuda, mas quem cuida de você é você e o seu profissional de confiança.
           {status.current_version && ` Versão do termo: ${status.current_version}.`}
         </p>
 
         {!hasRead && (
-          <p className="mt-4 animate-pulse text-center text-xs font-semibold text-primary-400">
+          <p className="mt-4 animate-pulse text-center text-xs font-semibold text-brand-fg">
             ↓ Role até o fim para liberar o aceite
           </p>
         )}
       </div>
 
-      <div className="border-t border-zinc-800 bg-zinc-950 px-5 pb-safe pt-4">
+      <div className="border-t border-line bg-bg px-5 pb-safe pt-4">
         <div className="pb-4">
           {error && (
-            <div className="mb-3 rounded-xl border border-red-900 bg-red-950/30 p-3 text-sm text-red-300">{error}</div>
+            <div className="mb-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>
           )}
 
           <button
             type="button"
             disabled={!hasRead}
             onClick={() => setAcknowledged((current) => !current)}
-            className="flex w-full items-start gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left disabled:opacity-50"
+            className="flex w-full items-start gap-3 press rounded-lg bg-surface shadow-card p-4 text-left disabled:opacity-50"
           >
             <span
               className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-sm font-bold transition-colors ${
-                acknowledged ? 'border-primary-500 bg-primary-600 text-white' : 'border-zinc-600 bg-zinc-950 text-transparent'
+                acknowledged ? 'border-brand bg-brand text-white' : 'border-dim bg-bg text-transparent'
               }`}
               aria-hidden="true"
             >
               ✓
             </span>
-            <span className="text-sm leading-relaxed text-zinc-200">
+            <span className="text-sm leading-relaxed text-fg">
               Estou ciente de que os treinos são gerados por IA, que devo validar com um profissional de educação física
               e que treino por minha conta e risco.
             </span>
@@ -230,7 +230,7 @@ export function TermsGate({ active, children }: TermsGateProps) {
             type="button"
             disabled={!hasRead || !acknowledged || isAccepting}
             onClick={accept}
-            className="mt-3 w-full rounded-2xl bg-primary-600 py-4 text-base font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-3 press w-full min-h-[58px] rounded-md bg-brand text-[17px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-[.45]"
           >
             {isAccepting ? 'Salvando...' : 'Li, entendi e aceito'}
           </button>

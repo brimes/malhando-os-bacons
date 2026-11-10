@@ -5,8 +5,7 @@ import { getErrorMessage } from '../api/client';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 
-const inputClass =
-  'w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary-500';
+const inputClass = 'w-full min-w-0';
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -49,35 +48,35 @@ export function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6 pt-safe pb-safe">
-      <div className="w-full max-w-sm space-y-5">
-        <div className="text-center">
-          <h1 className="text-2xl font-black text-white mb-1">Esqueci minha senha</h1>
-          <p className="text-sm text-zinc-400">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-5 py-8 pt-safe pb-safe">
+      <div className="w-full max-w-sm min-w-0 space-y-6">
+        <div className="enter text-center" style={{ '--i': 0 } as React.CSSProperties}>
+          <h1 className="num text-3xl text-fg mb-2">Esqueci minha senha</h1>
+          <p className="text-[15px] text-muted">
             {step === 'email' ? 'Informe seu e-mail para receber um código.' : 'Digite o código recebido e escolha a nova senha.'}
           </p>
         </div>
 
         {error && (
-          <div className="bg-red-900/30 border border-red-800 rounded-xl p-3 text-red-300 text-sm text-center">{error}</div>
+          <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-words">{error}</div>
         )}
         {info && !error && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-zinc-300 text-sm text-center">{info}</div>
+          <div className="enter bg-surface-2 rounded-md p-3 text-muted text-sm text-center break-words">{info}</div>
         )}
 
         <Card>
           {step === 'email' ? (
-            <form onSubmit={sendCode} className="space-y-3">
+            <form onSubmit={sendCode} className="space-y-4">
               <div>
-                <label htmlFor="fp-email" className="block text-xs text-zinc-400 mb-1.5">E-mail</label>
+                <label htmlFor="fp-email" className="block text-sm font-semibold text-muted mb-1.5">E-mail</label>
                 <input id="fp-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required className={inputClass} placeholder="voce@exemplo.com" />
               </div>
-              <Button type="submit" fullWidth isLoading={busy}>Enviar código</Button>
+              <Button type="submit" size="lg" fullWidth isLoading={busy}>Enviar código</Button>
             </form>
           ) : (
-            <form onSubmit={submitReset} className="space-y-3">
+            <form onSubmit={submitReset} className="space-y-4">
               <div>
-                <label htmlFor="fp-code" className="block text-xs text-zinc-400 mb-1.5">Código de 6 dígitos</label>
+                <label htmlFor="fp-code" className="block text-sm font-semibold text-muted mb-1.5">Código de 6 dígitos</label>
                 <input
                   id="fp-code"
                   value={code}
@@ -92,16 +91,16 @@ export function ForgotPasswordPage() {
                 />
               </div>
               <div>
-                <label htmlFor="fp-password" className="block text-xs text-zinc-400 mb-1.5">Nova senha</label>
+                <label htmlFor="fp-password" className="block text-sm font-semibold text-muted mb-1.5">Nova senha</label>
                 <input id="fp-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" required minLength={8} maxLength={72} className={inputClass} placeholder="Mínimo de 8 caracteres" />
               </div>
-              <Button type="submit" fullWidth isLoading={busy}>Redefinir senha</Button>
+              <Button type="submit" size="lg" fullWidth isLoading={busy}>Redefinir senha</Button>
               <Button type="button" variant="ghost" fullWidth disabled={busy} onClick={() => void sendCode()}>Reenviar código</Button>
             </form>
           )}
         </Card>
 
-        <Link to="/login" className="block text-center text-sm text-primary-400 hover:text-primary-300">Voltar ao login</Link>
+        <Link to="/login" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-brand-fg">Voltar ao login</Link>
       </div>
     </div>
   );

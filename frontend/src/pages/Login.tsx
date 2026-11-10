@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SignInWithApple } from '@capacitor-community/apple-sign-in';
 import { APPLE_BUNDLE_ID, googleClientIdForPlatform } from '../lib/authConfig';
+import { Button } from '../components/Button';
 import { useAuthStore } from '../stores/useAuthStore';
 
 /** Cancelar o seletor nativo não é erro: a pessoa só desistiu. */
@@ -93,76 +94,56 @@ export function LoginPage() {
     // são quem carrega o inset nas demais. No Android isso passava despercebido:
     // o padding vem do nativo e cobre o app inteiro. No iOS só ganha quem pede,
     // e sem isto o logo fica embaixo da Dynamic Island.
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6 pt-safe pb-safe">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-5 py-8 pt-safe pb-safe">
+      <div className="w-full max-w-sm min-w-0">
         {/* Logo / Branding */}
-        <div className="text-center mb-12">
-          <img src="/mob-icon.png" alt="Bacon treinando" className="mx-auto mb-6 h-32 w-32 rounded-3xl object-cover drop-shadow-2xl" />
-          <h1 className="text-4xl font-black text-white mb-2">MOB</h1>
-          <p className="text-zinc-400 text-lg">Malhando os Bacons</p>
-        </div>
-
-        {/* Features list */}
-        <div className="space-y-3 mb-10">
-          {[
-            { icon: '💪', text: 'Registre seus treinos e progresso' },
-            { icon: '🥗', text: 'Acompanhe sua nutrição diária' },
-            { icon: '⌚', text: 'Integração com smartwatch' },
-            { icon: '📊', text: 'Dashboard completo de performance' },
-          ].map((f) => (
-            <div key={f.text} className="flex items-center gap-3 text-zinc-300">
-              <span className="text-2xl">{f.icon}</span>
-              <span className="text-sm">{f.text}</span>
-            </div>
-          ))}
+        <div className="enter text-center mb-10" style={{ '--i': 0 } as React.CSSProperties}>
+          <img src="/mob-icon.png" alt="Bacon treinando" className="mx-auto mb-5 h-28 w-28 rounded-xl object-cover shadow-card" />
+          <h1 className="num text-5xl text-fg mb-1">MOB</h1>
+          <p className="text-muted text-[17px]">Malhando os Bacons</p>
         </div>
 
         <div className="space-y-5">
           {routeState.notice && !error && (
-            <div className="bg-green-900/30 border border-green-800 rounded-xl p-3 text-green-300 text-sm text-center">
+            <div className="enter bg-ok-soft rounded-md p-3 text-ok text-sm text-center break-words" style={{ '--i': 1 } as React.CSSProperties}>
               {routeState.notice}
             </div>
           )}
           {error && (
-            <div className="bg-red-900/30 border border-red-800 rounded-xl p-3 text-red-300 text-sm text-center">
+            <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-words" style={{ '--i': 1 } as React.CSSProperties}>
               {error}
             </div>
           )}
 
           {(showApple || googleClientId) && (
-            <div className="space-y-3">
+            <div className="enter space-y-3" style={{ '--i': 2 } as React.CSSProperties}>
               {/* A Apple exige que o botão dela não seja menos proeminente que o do Google: fica acima, com o mesmo tamanho. */}
               {showApple && (
                 <button
                   type="button"
                   onClick={handleApple}
                   disabled={isLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-white bg-black py-3 font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="press flex min-h-[52px] w-full items-center justify-center gap-2 rounded-md border border-fg bg-fg font-semibold text-bg disabled:cursor-not-allowed disabled:opacity-[.45]"
                 >
                   <AppleLogo />
                   Entrar com Apple
                 </button>
               )}
               {googleClientId && (
-                <button
-                  type="button"
-                  onClick={handleGoogle}
-                  disabled={isLoading}
-                  className="w-full rounded-xl border border-zinc-300 bg-white py-3 font-semibold text-zinc-900 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                <Button variant="secondary" fullWidth className="min-h-[52px]" onClick={handleGoogle} disabled={isLoading}>
                   Continuar com Google
-                </button>
+                </Button>
               )}
-              <div className="flex items-center gap-3 text-xs text-zinc-600">
-                <span className="h-px flex-1 bg-zinc-800" />ou<span className="h-px flex-1 bg-zinc-800" />
+              <div className="flex items-center gap-3 text-xs text-dim">
+                <span className="h-px flex-1 bg-line" />ou<span className="h-px flex-1 bg-line" />
               </div>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="enter space-y-4" style={{ '--i': 3 } as React.CSSProperties}>
             {isRegistering && (
               <div>
-                <label htmlFor="name" className="block text-xs text-zinc-400 mb-1.5">Nome</label>
+                <label htmlFor="name" className="block text-sm font-semibold text-muted mb-1.5">Nome</label>
                 <input
                   id="name"
                   value={name}
@@ -170,13 +151,13 @@ export function LoginPage() {
                   autoComplete="name"
                   required
                   maxLength={100}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary-500"
+                  className="w-full min-w-0"
                   placeholder="Seu nome"
                 />
               </div>
             )}
             <div>
-              <label htmlFor="email" className="block text-xs text-zinc-400 mb-1.5">E-mail</label>
+              <label htmlFor="email" className="block text-sm font-semibold text-muted mb-1.5">E-mail</label>
               <input
                 id="email"
                 type="email"
@@ -184,12 +165,12 @@ export function LoginPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="email"
                 required
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary-500"
+                className="w-full min-w-0"
                 placeholder="voce@exemplo.com"
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-xs text-zinc-400 mb-1.5">Senha</label>
+              <label htmlFor="password" className="block text-sm font-semibold text-muted mb-1.5">Senha</label>
               <input
                 id="password"
                 type="password"
@@ -199,31 +180,27 @@ export function LoginPage() {
                 required
                 minLength={8}
                 maxLength={72}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-600 focus:outline-none focus:border-primary-500"
+                className="w-full min-w-0"
                 placeholder="Mínimo de 8 caracteres"
               />
             </div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full rounded-xl bg-primary-600 py-3 font-semibold text-white transition-colors hover:bg-primary-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button type="submit" size="lg" fullWidth isLoading={isLoading}>
               {isLoading ? 'Aguarde...' : isRegistering ? 'Criar conta' : 'Entrar'}
-            </button>
+            </Button>
           </form>
 
-          {!isRegistering && (
-            <Link to="/esqueci-senha" className="block w-full text-center text-sm text-zinc-400 hover:text-zinc-200">
-              Esqueci minha senha
-            </Link>
-          )}
+          <div className="enter space-y-1" style={{ '--i': 4 } as React.CSSProperties}>
+            {!isRegistering && (
+              <Link to="/esqueci-senha" className="flex min-h-[48px] w-full items-center justify-center text-sm font-semibold text-brand-fg">
+                Esqueci minha senha
+              </Link>
+            )}
+            <button type="button" onClick={toggleMode} className="min-h-[48px] w-full text-sm font-semibold text-brand-fg">
+              {isRegistering ? 'Já tenho uma conta' : 'Ainda não tenho uma conta'}
+            </button>
+          </div>
 
-          <button type="button" onClick={toggleMode} className="w-full text-sm text-primary-400 hover:text-primary-300">
-            {isRegistering ? 'Já tenho uma conta' : 'Ainda não tenho uma conta'}
-          </button>
-
-
-          <p className="text-center text-xs text-zinc-600">
+          <p className="enter text-center text-xs text-dim" style={{ '--i': 5 } as React.CSSProperties}>
             Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade.
           </p>
         </div>
