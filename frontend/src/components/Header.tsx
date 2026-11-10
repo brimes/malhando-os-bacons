@@ -6,26 +6,28 @@ interface HeaderProps {
   rightAction?: React.ReactNode;
 }
 
+// Sem borda nem desfoque (o desfoque é só de modal). Título em display condensado.
 export function Header({ title, showBack, rightAction }: HeaderProps) {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-sm border-b border-zinc-800 pt-safe">
-      <div className="flex items-center justify-between h-14 px-4">
-        <div className="flex items-center gap-3">
+    <header className="sticky top-0 z-40 bg-bg pt-safe">
+      <div className="flex items-center justify-between min-h-[64px] px-5">
+        <div className="flex min-w-0 items-center gap-3">
           {showBack && (
             <button
               onClick={() => navigate(-1)}
-              className="p-1 -ml-1 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Voltar"
+              className="press -ml-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-muted"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 6l-6 6 6 6" />
               </svg>
             </button>
           )}
-          <h1 className="text-lg font-bold text-white">{title}</h1>
+          <h1 className="num min-w-0 text-[34px] leading-[1.02] text-fg">{title}</h1>
         </div>
-        {rightAction && <div>{rightAction}</div>}
+        {rightAction && <div className="shrink-0">{rightAction}</div>}
       </div>
     </header>
   );
