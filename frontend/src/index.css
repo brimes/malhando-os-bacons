@@ -15,6 +15,12 @@
   }
 
   body {
+    /* Texto do usuário (e-mail, nome de exercício, observação) sem ponto de
+       quebra não pode alargar a página: `anywhere`, ao contrário de
+       `break-word`, também reduz o min-content, então filhos de flex deixam de
+       empurrar o contêiner. Medido: sem isso o layout viewport passava de 320
+       para 478-753 px e o iOS "zoomava para fora" a página inteira. */
+    overflow-wrap: anywhere;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     accent-color: #d95c2b;
@@ -23,6 +29,19 @@
   ::selection {
     background: #9f321f;
     color: #fff7ed;
+  }
+}
+
+/* iOS dá zoom ao focar campo com fonte abaixo de 16px e não desfaz depois — a
+   página fica "meio com zoom" e ganha scroll lateral. Os campos usam text-sm
+   (14px) / text-xs; `!important` é preciso porque a utility de Tailwind tem
+   especificidade maior que este seletor de elemento. Só em tela de toque, para
+   não inflar a interface no desktop. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 
