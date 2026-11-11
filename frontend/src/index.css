@@ -136,6 +136,19 @@
   input:disabled, select:disabled, textarea:disabled { opacity: .45; }
 }
 
+/* iOS dá zoom ao focar campo com fonte abaixo de 16px e não desfaz depois — a
+   página fica "meio com zoom" e ganha scroll lateral. Os campos usam text-sm
+   (14px) / text-xs; `!important` é preciso porque a utility de Tailwind tem
+   especificidade maior que este seletor de elemento. Só em tela de toque, para
+   não inflar a interface no desktop. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 @layer utilities {
   .pt-safe {
     padding-top: env(safe-area-inset-top);

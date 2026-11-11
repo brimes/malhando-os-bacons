@@ -192,13 +192,13 @@ func TestResetHappyPathIsSingleUse(t *testing.T) {
 	_ = svc.RequestCode(context.Background(), "ana@example.com")
 	code := mailer.sent[0].code
 
-	if err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); err != nil {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); err != nil {
 		t.Fatalf("reset válido falhou: %v", err)
 	}
 	if bcrypt.CompareHashAndPassword([]byte(store.password[7]), []byte("novasenha123")) != nil {
 		t.Fatal("senha nova não foi gravada como bcrypt")
 	}
-	if err := svc.Reset(context.Background(), "ana@example.com", code, "outrasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", code, "outrasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 		t.Fatalf("segundo uso deveria falhar, veio %v", err)
 	}
 }
@@ -211,14 +211,14 @@ func TestResetRejectsWrongAndExpiredAndUnknown(t *testing.T) {
 	if code == wrong {
 		wrong = "111111"
 	}
-	if err := svc.Reset(context.Background(), "ana@example.com", wrong, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", wrong, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 		t.Fatalf("código errado: %v", err)
 	}
-	if err := svc.Reset(context.Background(), "ninguem@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+	if _, err := svc.Reset(context.Background(), "ninguem@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 		t.Fatalf("e-mail inexistente deve dar o mesmo erro: %v", err)
 	}
 	*clock = clock.Add(ResetCodeTTL + time.Second)
-	if err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 		t.Fatalf("código expirado deve falhar: %v", err)
 	}
 }
@@ -232,10 +232,10 @@ func TestResetAttemptLimitBurnsTheCode(t *testing.T) {
 		wrong = "111111"
 	}
 	for i := 0; i < ResetMaxAttempts; i++ {
-		_ = svc.Reset(context.Background(), "ana@example.com", wrong, "novasenha123")
+		_, _ = svc.Reset(context.Background(), "ana@example.com", wrong, "novasenha123")
 	}
 	// Agora nem o código certo vale.
-	if err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", code, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 		t.Fatalf("código esgotado deve falhar mesmo certo: %v", err)
 	}
 	if _, ok := store.password[7]; ok {
@@ -249,11 +249,11 @@ func TestNewRequestInvalidatesPreviousCode(t *testing.T) {
 	_ = svc.RequestCode(context.Background(), "ana@example.com")
 	first, second := mailer.sent[0].code, mailer.sent[1].code
 	if first != second {
-		if err := svc.Reset(context.Background(), "ana@example.com", first, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
+		if _, err := svc.Reset(context.Background(), "ana@example.com", first, "novasenha123"); !errors.Is(err, ErrInvalidResetCode) {
 			t.Fatalf("o código antigo deveria estar invalidado: %v", err)
 		}
 	}
-	if err := svc.Reset(context.Background(), "ana@example.com", second, "novasenha123"); err != nil {
+	if _, err := svc.Reset(context.Background(), "ana@example.com", second, "novasenha123"); err != nil {
 		t.Fatalf("o código novo deveria valer: %v", err)
 	}
 }

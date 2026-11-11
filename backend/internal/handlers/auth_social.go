@@ -144,7 +144,10 @@ func (h *AuthHandler) AppleLogin(w http.ResponseWriter, r *http.Request) {
 //  1. o id do provedor já vinculado — é a identidade estável, o e-mail pode mudar;
 //  2. uma conta com o mesmo e-mail, vinculada agora, SÓ se o provedor garante
 //     que o e-mail é verificado. Sem isso, quem cria uma conta no provedor com
-//     o e-mail da vítima assumiria a conta dela;
+//     o e-mail da vítima assumiria a conta dela. Ao vincular, a senha é apagada
+//     e as sessões caem: o /register não verifica e-mail, então a senha pode ser
+//     de quem pré-registrou o endereço da vítima. A dona recupera o acesso por
+//     "esqueci minha senha", que permite definir senha em conta sem senha;
 //  3. conta nova.
 //
 // Devolve (nil, status, mensagem) quando não pode logar.
@@ -183,12 +186,15 @@ func (h *AuthHandler) socialLogin(ctx context.Context, p socialProvider, id *ser
 		}
 		err = scanUser(h.db.Pool.QueryRow(ctx,
 			`UPDATE users SET `+p.idColumn+` = $1,
-			        avatar_url = COALESCE(avatar_url, NULLIF($3, ''))
+			        avatar_url = COALESCE(avatar_url, NULLIF($3, '')),
+			        token_version = CASE WHEN password_hash IS NULL THEN token_version ELSE token_version + 1 END,
+			        password_hash = NULL
 			 WHERE id = $2 RETURNING `+userColumns, id.Subject, user.ID, picture), &user)
 		if err != nil {
 			slog.Error("social login link failed", "provider", p.name, "error", err)
 			return nil, http.StatusInternalServerError, "failed to sign in"
 		}
+		h.invalidateVersion(user.ID)
 		return &user, 0, ""
 	case !errors.Is(err, pgx.ErrNoRows):
 		slog.Error("social login email lookup failed", "provider", p.name, "error", err)
