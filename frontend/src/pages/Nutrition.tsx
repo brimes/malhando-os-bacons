@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
-import { MacroProgress } from '../components/Chart';
-import { OriginBadge } from '../components/OriginBadge';
+import { KcalHero } from '../components/nutricao/KcalHero';
+import { MealCard } from '../components/nutricao/MealCard';
+import { EmptyState, SectionTitle } from '../components/nutricao/States';
+import { CalendarIcon, ChevronIcon, FlameIcon, LeafIcon, PlateIcon, PlusIcon, TagIcon } from '../components/nutricao/icons';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
 import { FoodLogAssistant } from '../components/FoodLogAssistant';
 import { RoutinePreviewModal } from '../components/RoutinePreviewModal';
@@ -51,7 +53,7 @@ export function NutritionPage() {
   // aparelho — sem tabela nova, ver offlineStore.ts.
   const dismissedDays = useOfflineStore((state) => state.dismissedRoutineDays ?? []);
   const visibleMissingDays = useMemo(
-    () => missingDays.filter((date) => !dismissedDays.includes(date)),
+    () => (Array.isArray(missingDays) ? missingDays : []).filter((date) => !dismissedDays.includes(date)),
     [missingDays, dismissedDays]
   );
 
@@ -71,9 +73,9 @@ export function NutritionPage() {
   // the screen never waits for one to have something to draw.
   const today = todayLocalDate();
   const allLogs = useLocalAll(foodLogsCache);
-  const todayLogs = useMemo(() => allLogs.filter((log) => dateKey(log.date) === today), [allLogs, today]);
+  const todayLogs = useMemo(() => (allLogs ?? []).filter((log) => dateKey(log.date) === today), [allLogs, today]);
   const plans = useLocalAll(nutritionPlansCache);
-  const activePlan = useMemo(() => plans.find((plan) => plan.active) ?? null, [plans]);
+  const activePlan = useMemo(() => (plans ?? []).find((plan) => plan.active) ?? null, [plans]);
 
   const totals = todayLogs.reduce(
     (acc, log) => ({
@@ -115,8 +117,8 @@ export function NutritionPage() {
   // offline e entra na fila igual a qualquer registro. `origin: 'routine'`
   // marca que o número é a estimativa da rotina, não uma medição do dia.
   const logRoutineDay = async (date: string, meals: NutritionRoutineMeal[]) => {
-    for (const meal of meals) {
-      for (const item of meal.items) {
+    for (const meal of meals ?? []) {
+      for (const item of meal.items ?? []) {
         await createFoodLog({
           food_item_id: item.food_item_id,
           food_name: item.food_name,
@@ -153,7 +155,7 @@ export function NutritionPage() {
   // excesso e escolher.
   const startExcessFlow = async () => {
     if (todayLogs.length === 0 && routine?.enough) {
-      await logRoutineDay(today, routine.meals);
+      await logRoutineDay(today, routine.meals ?? []);
     }
     setExcessMode(true);
   };
@@ -176,127 +178,26 @@ export function NutritionPage() {
     setCompensationOffer(descricao.trim() || 'Exagerei hoje.');
   };
 
+  const quickTile = 'press flex min-h-[72px] items-center gap-3 rounded-lg bg-surface px-4 text-left shadow-card';
+  const missingList = routine && (routine.enough ? visibleMissingDays : missingDays);
+  const showMissing = !!routine && Array.isArray(missingList) && missingList.length > 0;
+  const sheetTitle = 'num text-[28px] leading-[1.05] text-fg';
+
   return (
     <>
       <Header
         title="Nutrição"
         rightAction={
-          <Button size="sm" onClick={() => navigate('/nutrition/log')}>
-            + Log
+          <Button size="md" onClick={() => navigate('/nutrition/log')}>
+            <PlusIcon className="h-5 w-5" /> Registrar
           </Button>
         }
       />
- <div className="px-4 py-4 pb-24 space-y-4">
- <div className="grid grid-cols-2 gap-2">
- <button onClick={() => navigate('/nutrition/photo/plate')} className="rounded-lg shadow-card bg-surface px-3 py-3 text-center">
- <span className="block text-xl">🍽️</span>
- <span className="text-xs font-medium text-fg">Foto do prato</span>
-          </button>
- <button onClick={() => navigate('/nutrition/photo/label')} className="rounded-lg shadow-card bg-surface px-3 py-3 text-center">
- <span className="block text-xl">🏷️</span>
- <span className="text-xs font-medium text-fg">Foto do rótulo</span>
-          </button>
-        </div>
-
-        {routine?.enough && todayLogs.length === 0 && (
- <Card className="border-brand bg-brand-soft">
- <p className="text-sm font-semibold text-fg">Foi um dia normal?</p>
- <p className="mt-1 text-xs leading-relaxed text-muted">
-              Baseado nos últimos {routine.based_on_days} dias, dá para registrar hoje com um toque.
-            </p>
- <div className="mt-3 flex gap-2">
-              <Button size="sm" onClick={openTodayPreview}>Foi um dia normal</Button>
-              <Button size="sm" variant="secondary" onClick={() => void startExcessFlow()}>Extrapolei hoje</Button>
-            </div>
-          </Card>
-        )}
-
-        {compensationOffer && (
- <Card className=" bg-sun-soft">
- <p className="text-sm font-semibold text-sun">Quer montar a compensação?</p>
- <p className="mt-1 text-xs leading-relaxed text-sun">
-              O excesso já está registrado. Posso montar um ajuste no treino para compensar — só se você quiser.
-            </p>
- <div className="mt-3 flex gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  const mensagem = compensationOffer;
-                  setCompensationOffer(null);
-                  navigate('/nutrition/cheat-day', { state: { initialMessage: mensagem } });
-                }}
-              >
-                Montar compensação
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => setCompensationOffer(null)}>Agora não</Button>
-            </div>
-          </Card>
-        )}
-
-        {routine && (routine.enough ? visibleMissingDays.length > 0 : missingDays.length > 0) && (
-          <Card>
- <p className="text-sm font-semibold text-fg">Dias esquecidos</p>
-            {routine.enough ? (
-              <>
- <p className="mt-1 text-xs text-dim">Foi parecido com o normal? Confirme em um toque.</p>
- <div className="mt-3 space-y-2">
-                  {visibleMissingDays.map((date) => (
- <div key={date} className="flex items-center justify-between gap-2 rounded-md bg-bg p-3">
- <p className="text-sm text-fg">{formatDayLabel(date)}</p>
- <div className="flex shrink-0 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openMissingDayPreview(date)}
- className="rounded-full bg-brand px-3 py-1.5 text-xs font-medium text-white"
-                        >
-                          Confirmar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => dismissMissingDay(date)}
- className="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-muted"
-                        >
-                          Não foi normal
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
- <p className="mt-1 text-xs leading-relaxed text-dim">
-                Registre uns dias normais para o MOB aprender sua rotina — sem ela não dá para propor o que você
-                costuma comer nesses dias.
-              </p>
-            )}
-          </Card>
-        )}
-
- <button onClick={() => navigate('/nutrition/cheat-day')} className="flex w-full items-center justify-between rounded-lg bg-sun-soft px-4 py-3 text-left">
-          <div>
- <p className="text-sm font-semibold text-sun">🍕 Dia do lixo</p>
- <p className="text-xs text-sun">Vai exagerar hoje? Fale comigo antes.</p>
-          </div>
- <span className="text-xl text-sun">›</span>
-        </button>
-
- <button onClick={() => navigate('/nutrition/history')} className="flex w-full items-center justify-between rounded-lg bg-brand-soft px-4 py-3 text-left">
- <div><p className="text-sm font-semibold text-brand-fg">Calendário de calorias</p><p className="text-xs text-dim">Acompanhe o consumo de cada dia</p></div>
- <span className="text-xl text-brand-fg">›</span>
-        </button>
-
-        {activePlan ? (
-          <Card>
- <div className="flex items-center justify-between mb-4">
-              <div>
- <p className="text-xs text-dim uppercase tracking-wide">Plano ativo</p>
- <p className="font-semibold text-fg">{activePlan.name}</p>
-              </div>
- <button onClick={() => navigate('/nutrition/plan')} className="text-brand-fg text-xs">
-                Gerenciar
-              </button>
-            </div>
-            <MacroProgress
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
+        {/* Protagonista: anel de kcal e macros. */}
+        <div className="enter" style={{ '--i': 0 } as React.CSSProperties}>
+          {activePlan ? (
+            <KcalHero
               calories={totals.calories}
               caloriesTarget={activePlan.calories_target}
               protein={totals.protein}
@@ -305,85 +206,152 @@ export function NutritionPage() {
               carbsTarget={activePlan.carbs_target}
               fat={totals.fat}
               fatTarget={activePlan.fat_target}
+              eyebrow={activePlan.name}
+              actionLabel="Plano"
+              onAction={() => navigate('/nutrition/plan')}
             />
-          </Card>
-        ) : (
- <Card className="text-center py-4">
- <p className="text-muted text-sm mb-3">Nenhum plano alimentar ativo</p>
-            <Button size="sm" onClick={() => navigate('/nutrition/plan')}>
-              Criar plano
-            </Button>
+          ) : (
+            <>
+              <KcalHero calories={totals.calories} protein={totals.protein} carbs={totals.carbs} fat={totals.fat} />
+              <Card className="mt-[14px]">
+                <EmptyState
+                  icon={<LeafIcon />}
+                  title="Você ainda não tem um plano"
+                  text="Com um plano, o anel mostra quanto falta para a meta do dia."
+                  actionLabel="Criar plano"
+                  onAction={() => navigate('/nutrition/plan')}
+                />
+              </Card>
+            </>
+          )}
+        </div>
+
+        <div className="enter grid grid-cols-2 gap-3" style={{ '--i': 1 } as React.CSSProperties}>
+          <button type="button" onClick={() => navigate('/nutrition/photo/plate')} className={quickTile}>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><PlateIcon /></span>
+            <span className="text-[15px] font-semibold leading-[1.25] text-fg">Foto do prato</span>
+          </button>
+          <button type="button" onClick={() => navigate('/nutrition/photo/label')} className={quickTile}>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><TagIcon /></span>
+            <span className="text-[15px] font-semibold leading-[1.25] text-fg">Foto do rótulo</span>
+          </button>
+        </div>
+
+        {routine?.enough && todayLogs.length === 0 && (
+          <Card tint="teal" className="enter" >
+            <p className="text-[17px] font-bold text-fg">Foi um dia normal?</p>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">
+              Pelos últimos {routine.based_on_days} dias, dá para registrar hoje com um toque.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Button tone="teal" variant="tonal" onClick={openTodayPreview}>Foi normal</Button>
+              <Button variant="secondary" onClick={() => void startExcessFlow()}>Extrapolei</Button>
+            </div>
           </Card>
         )}
 
- <div className="space-y-4">
-          {MEAL_ORDER.map((meal) => {
-            const logs = byMeal[meal] ?? [];
-            const mealCal = logs.reduce((s, l) => s + l.calories, 0);
-            const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
+        {compensationOffer && (
+          <Card tint="sun" className="enter">
+            <p className="text-[17px] font-bold text-fg">Quer montar a compensação?</p>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">
+              O excesso já está registrado. Posso montar um ajuste no treino para compensar, só se você quiser.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Button
+                tone="sun"
+                variant="tonal"
+                onClick={() => {
+                  const mensagem = compensationOffer;
+                  setCompensationOffer(null);
+                  navigate('/nutrition/cheat-day', { state: { initialMessage: mensagem } });
+                }}
+              >
+                Montar
+              </Button>
+              <Button variant="secondary" onClick={() => setCompensationOffer(null)}>Agora não</Button>
+            </div>
+          </Card>
+        )}
 
-            return (
-              <div key={meal}>
- <div className="flex items-center justify-between mb-2">
- <h3 className="flex items-center gap-1.5 font-semibold text-fg text-sm">
-                    {MEAL_TYPE_LABELS[meal]}
- {plannedMeal?.suggested_at && <span className="ml-2 text-xs font-normal text-dim">{plannedMeal.suggested_at}</span>}
-                    {/* Only when there is something to show — a meal with no
-                        planned items would open an empty modal. */}
-                    {plannedMeal && plannedMeal.items.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setMenuMeal(meal)}
-                        aria-label={`Sugestão do plano para ${MEAL_TYPE_LABELS[meal].toLowerCase()}`}
- className="text-dim hover:text-brand-fg"
-                      >
-                        💡
-                      </button>
-                    )}
-                  </h3>
- {mealCal > 0 && <span className="text-xs text-dim">{Math.round(mealCal)} kcal</span>}
-                </div>
+        {showMissing && (
+          <Card className="enter">
+            <h2 className="text-[17px] font-bold text-fg">Dias esquecidos</h2>
+            {routine!.enough ? (
+              <>
+                <p className="mt-1 text-[15px] text-muted">Foi parecido com o normal? Confirme em um toque.</p>
+                <ul className="mt-3 space-y-2">
+                  {visibleMissingDays.map((date) => (
+                    <li key={date} className="flex min-h-[56px] items-center justify-between gap-2 rounded-md bg-surface-2 pl-4 pr-2">
+                      <span className="num text-[22px] text-fg">{formatDayLabel(date)}</span>
+                      <div className="flex shrink-0 gap-1">
+                        <Button size="sm" tone="teal" variant="tonal" onClick={() => openMissingDayPreview(date)}>Confirmar</Button>
+                        <Button size="sm" variant="ghost" onClick={() => dismissMissingDay(date)}>Não foi</Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="mt-1 text-[15px] leading-[1.45] text-muted">
+                Registre uns dias normais para o MOB aprender sua rotina. Sem ela, não dá para propor o que você costuma comer.
+              </p>
+            )}
+          </Card>
+        )}
 
-                {logs.length === 0 ? (
- <Card className="py-3">
- <p className="text-sm text-dim text-center">Nenhum registro</p>
-                  </Card>
-                ) : (
- <div className="space-y-2">
-                    {logs.map((log) => (
- <Card key={log.id} className="py-3">
- <div className="flex items-center justify-between">
- <button className="min-w-0 flex-1 text-left" onClick={() => setEditingLog(log)}>
- <p className="text-sm font-medium text-fg truncate">
-                              {log.food_name}
-                              <OriginBadge origin={log.origin} />
-                            </p>
- <p className="text-xs text-dim">{log.quantity_g}g</p>
-                          </button>
- <div className="flex items-center gap-3">
- <div className="text-right">
- <p className="text-sm font-semibold text-brand-fg">{Math.round(log.calories)} kcal</p>
- <p className="text-xs text-dim">
-                                P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => deleteFoodLog(log.id)}
-                              aria-label="Apagar"
- className="p-1 text-lg text-dim"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+        <SectionTitle right={<span className="num text-[22px] text-muted">{todayLogs.length} {todayLogs.length === 1 ? 'item' : 'itens'}</span>}>
+          Refeições de hoje
+        </SectionTitle>
+
+        {todayLogs.length === 0 && (
+          <Card className="enter">
+            <EmptyState
+              icon={<PlateIcon />}
+              title="Nada registrado hoje"
+              text="Comece pela primeira refeição ou tire uma foto do prato."
+              actionLabel="Registrar alimento"
+              onAction={() => navigate('/nutrition/log')}
+            />
+          </Card>
+        )}
+
+        {MEAL_ORDER.map((meal, i) => {
+          const logs = byMeal[meal] ?? [];
+          const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
+          // Sem refeição planejada e sem registro, não ocupa espaço quando o dia está vazio.
+          if (todayLogs.length === 0) return null;
+          return (
+            <MealCard
+              key={meal}
+              index={i + 2}
+              title={MEAL_TYPE_LABELS[meal]}
+              time={plannedMeal?.suggested_at}
+              logs={logs}
+              onOpenMenu={plannedMeal && (plannedMeal.items ?? []).length > 0 ? () => setMenuMeal(meal) : undefined}
+              onAdd={() => navigate('/nutrition/log')}
+              onEdit={setEditingLog}
+              onDelete={deleteFoodLog}
+            />
+          );
+        })}
+
+        <div className="space-y-3 pt-2">
+          <button type="button" onClick={() => navigate('/nutrition/cheat-day')} className="press tint-sun flex min-h-[72px] w-full items-center gap-4 rounded-lg bg-surface px-[18px] text-left shadow-card">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-sun-soft text-sun"><FlameIcon /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-bold text-fg">Dia do lixo</p>
+              <p className="text-[15px] text-muted">Vai exagerar? Fale comigo antes.</p>
+            </div>
+            <ChevronIcon />
+          </button>
+          <button type="button" onClick={() => navigate('/nutrition/history')} className="press flex min-h-[72px] w-full items-center gap-4 rounded-lg bg-surface px-[18px] text-left shadow-card">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><CalendarIcon /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-base font-bold text-fg">Calendário de calorias</p>
+              <p className="text-[15px] text-muted">O consumo de cada dia</p>
+            </div>
+            <ChevronIcon />
+          </button>
         </div>
       </div>
 
@@ -395,30 +363,26 @@ export function NutritionPage() {
         const meal = menuMeal;
         const plannedMeal = activePlan?.meals?.find((m) => m.meal_type === meal);
         return (
-          <div
- className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm"
-            onClick={() => setMenuMeal(null)}
-          >
+          <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => setMenuMeal(null)}>
             <div
- className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
+              className="flex max-h-[85vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface p-5 pb-safe shadow-sheet sheet-in"
               onClick={(e) => e.stopPropagation()}
             >
- <h3 className="text-lg font-bold text-fg">Sugestão do plano — {MEAL_TYPE_LABELS[meal]}</h3>
- {plannedMeal?.suggested_at && <p className="mt-1 text-xs text-dim">{plannedMeal.suggested_at}</p>}
- <div className="mt-3 space-y-2">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-teal">Sugestão do plano</p>
+              <h3 className={sheetTitle}>{MEAL_TYPE_LABELS[meal]}</h3>
+              {plannedMeal?.suggested_at && <p className="mt-1 text-[15px] text-muted">{plannedMeal.suggested_at}</p>}
+              <ul className="mt-4 space-y-2">
                 {(plannedMeal?.items ?? []).map((item, index) => (
- <div key={index} className="flex items-center justify-between gap-2 rounded-md bg-bg p-3">
- <p className="text-xs text-muted">{item.food_name} · {item.quantity_g}g</p>
-                    <button
-                      type="button"
-                      onClick={() => logPlannedItem(meal, item)}
- className="shrink-0 rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-fg"
-                    >
-                      Já comi
-                    </button>
-                  </div>
+                  <li key={index} className="flex min-h-[64px] items-center justify-between gap-3 rounded-md bg-surface-2 pl-4 pr-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-semibold text-fg">{item.food_name}</p>
+                      <p className="text-[13px] text-muted">{item.quantity_g} g, {Math.round(item.calories)} kcal</p>
+                    </div>
+                    <Button size="md" tone="teal" variant="tonal" onClick={() => logPlannedItem(meal, item)}>Já comi</Button>
+                  </li>
                 ))}
-              </div>
+              </ul>
+              <Button className="mt-3" variant="ghost" onClick={() => setMenuMeal(null)}>Fechar</Button>
             </div>
           </div>
         );
@@ -427,26 +391,23 @@ export function NutritionPage() {
       {preview && routine && (
         <RoutinePreviewModal
           dateLabel={preview.label}
-          meals={routine.meals}
+          meals={routine.meals ?? []}
           onClose={() => setPreview(null)}
           onConfirm={confirmPreview}
         />
       )}
 
       {excessMode && (
-        <div
- className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm"
-          onClick={() => setExcessMode(false)}
-        >
+        <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => setExcessMode(false)}>
           <div
- className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
+            className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface p-5 pb-safe shadow-sheet sheet-in"
             onClick={(event) => event.stopPropagation()}
           >
- <h3 className="text-lg font-bold text-fg">O que passou do normal?</h3>
- <p className="mt-1 text-xs leading-relaxed text-dim">
-              Conte só o excesso — o resto do dia já foi registrado com base na sua rotina.
+            <h3 className={sheetTitle}>O que passou do normal?</h3>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">
+              Conte só o excesso. O resto do dia já foi registrado com base na sua rotina.
             </p>
- <div className="mt-3">
+            <div className="mt-3">
               <FoodLogAssistant onRegistrar={registrarExcesso} />
             </div>
           </div>

@@ -11,7 +11,7 @@ const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
  *
  * Não é mover: o registro original fica onde está, e este cria um novo. A
  * regra de que um registro nunca muda de dia (ver EditFoodLogModal, que por
- * isso não tem campo de data) continua valendo — copiar é justamente o
+ * isso não tem campo de data) continua valendo copiar é justamente o
  * caminho que faltava para quem come a mesma coisa de novo e não quer
  * redigitar quantidade e macros.
  *
@@ -47,14 +47,14 @@ export function CopyFoodLogModal({ log, onClose, onCopy }: CopyFoodLogModalProps
  <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => !isSaving && onClose()}>
  <div className="max-h-[88vh] w-full overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5" onClick={(event) => event.stopPropagation()}>
  <h3 className="text-lg font-bold text-fg">Copiar para outro dia</h3>
- <p className="mt-1 text-sm leading-relaxed text-muted">
-          {log.food_name} · {log.quantity_g}g · {Math.round(log.calories)} kcal
+ <p className="mt-1 text-[15px] leading-relaxed text-muted">
+          {log.food_name}, {log.quantity_g}g, {Math.round(log.calories)} kcal
         </p>
- <p className="mt-1 text-xs text-dim">O registro original continua no dia dele.</p>
+ <p className="mt-1 text-[13px] text-dim">O registro original continua no dia dele.</p>
 
- {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+ {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-[15px] text-danger">{error}</div>}
 
- <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
+ <label className="mt-4 block text-[13px] uppercase tracking-wide text-dim">
           Data
           <input
             type="date"
@@ -62,12 +62,12 @@ export function CopyFoodLogModal({ log, onClose, onCopy }: CopyFoodLogModalProps
             max={todayLocalDate()}
             disabled={isSaving}
             onChange={(event) => setDate(event.target.value)}
- className="mt-1 w-full rounded-md border border-line bg-surface-2 px-4 py-3 text-fg focus:outline-none disabled:opacity-50"
+ className="mt-1 w-full rounded-md border-2 border-transparent bg-surface-2 px-4 py-3 text-fg focus:border-brand-fg focus:outline-none disabled:opacity-50"
           />
         </label>
 
  <div className="mt-4">
- <p className="text-xs uppercase tracking-wide text-dim">Refeição</p>
+ <p className="text-[13px] uppercase tracking-wide text-dim">Refeição</p>
  <div className="mt-2 grid grid-cols-2 gap-2">
             {MEAL_ORDER.map((meal) => (
               <button
@@ -75,7 +75,7 @@ export function CopyFoodLogModal({ log, onClose, onCopy }: CopyFoodLogModalProps
                 type="button"
                 disabled={isSaving}
                 onClick={() => setMealType(meal)}
- className={`rounded-md border px-3 py-3 text-sm font-medium disabled:opacity-50 ${
+ className={`rounded-md border px-3 py-3 text-[15px] font-medium disabled:opacity-50 ${
                   mealType === meal
                     ? 'border-brand bg-brand-soft text-fg'
                     : 'border-line bg-bg text-muted'
@@ -89,7 +89,7 @@ export function CopyFoodLogModal({ log, onClose, onCopy }: CopyFoodLogModalProps
 
  <div className="mt-5 space-y-2">
           <Button fullWidth size="lg" isLoading={isSaving} onClick={submit}>Copiar</Button>
- <button type="button" disabled={isSaving} onClick={onClose} className="w-full py-3 text-sm text-dim disabled:opacity-50">
+ <button type="button" disabled={isSaving} onClick={onClose} className="w-full py-3 text-[15px] text-dim disabled:opacity-50">
             Cancelar
           </button>
         </div>

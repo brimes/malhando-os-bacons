@@ -9,10 +9,14 @@ import { useNutritionStore } from '../stores/useNutritionStore';
 import { createFoodLog } from '../lib/local/repo/foodLogs';
 import { todayLocalDate } from '../lib/date';
 import { getErrorMessage } from '../api/client';
+import { Chip } from '../components/Chip';
+import { CountUp } from '../components/CountUp';
+import { SkeletonBlock } from '../components/nutricao/States';
+import { TrashIcon } from '../components/nutricao/icons';
 import { MEAL_TYPE_LABELS } from '../types';
 import type { LabelAnalysis, MealType, PlateAnalysisItem } from '../types';
 
-const CONFIDENCE_LABEL: Record<string, string> = { high: 'Alta confiança', medium: 'Confiança média', low: 'Baixa confiança — confira com atenção' };
+const CONFIDENCE_LABEL: Record<string, string> = { high: 'Alta confiança', medium: 'Confiança média', low: 'Baixa confiança, confira com atenção' };
 
 export function FoodPhotoPage() {
   const { kind } = useParams<{ kind: 'plate' | 'label' }>();
@@ -151,87 +155,95 @@ export function FoodPhotoPage() {
 
   const hasAnalysis = isPlate ? Boolean(plateItems) : Boolean(label);
 
+  const num = 'mt-1 h-12 w-full min-w-0 rounded-sm border-2 border-transparent bg-surface-2 px-1 text-center font-sans text-base font-semibold focus:border-brand-fg focus:outline-none';
+  const text = 'mt-2 h-[52px] w-full rounded-md border-2 border-transparent bg-surface-2 px-4 text-base font-normal text-fg focus:border-brand-fg focus:outline-none';
+  const mealPicker = (
+    <div className="grid grid-cols-4 gap-1 rounded-md bg-surface-2 p-1" role="tablist" aria-label="Refeição">
+      {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, mealLabel]) => (
+        <button key={type} type="button" role="tab" aria-selected={mealType === type} onClick={() => setMealType(type)}
+          className={`press min-h-[48px] rounded-sm px-1 text-[13px] font-semibold ${mealType === type ? 'bg-teal text-on-teal' : 'text-muted'}`}>
+          {mealLabel}
+        </button>
+      ))}
+    </div>
+  );
+  const totalKcal = (plateItems ?? []).reduce((a, it) => a + (Number(it.calories) || 0), 0);
+  const tips = isPlate
+    ? ['Fotografe de frente, com boa luz', 'A IA estima alimentos e porções', 'Confira os números antes de registrar']
+    : ['Chegue perto da tabela nutricional', 'Deixe o texto legível e sem reflexo', 'Confira os valores antes de salvar'];
+
   return (
     <>
       <Header title={title} showBack />
- <div className="space-y-4 px-4 py-4 pb-24">
-        {!hasAnalysis && (
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
+        {!hasAnalysis && !isUploading && (
           <>
- <Card className="border-brand bg-brand-soft">
- <p className="text-sm text-brand-fg">
-                {isPlate
-                  ? 'Fotografe o prato de frente, com boa luz. A IA estima os alimentos e as porções — confira antes de registrar.'
-                  : 'Fotografe a tabela de informação nutricional do rótulo, bem próxima e legível.'}
-              </p>
-            </Card>
-            <FoodPhotoCapture
-              label={isPlate ? 'Fotografar prato' : 'Fotografar rótulo'}
-              onCapture={handleCapture}
-              disabled={isUploading}
-            />
-            {isUploading && (
- <p className="text-center text-sm text-dim">
- <span className="animate-pulse">Analisando a foto...</span>
-              </p>
-            )}
+            <div className="enter">
+              <FoodPhotoCapture
+                label={isPlate ? 'Fotografar prato' : 'Fotografar rótulo'}
+                hint={isPlate ? 'Enquadre o prato inteiro' : 'Enquadre a tabela nutricional'}
+                onCapture={handleCapture}
+                disabled={isUploading}
+              />
+            </div>
+            <ol className="enter space-y-2 pt-2" style={{ '--i': 1 } as React.CSSProperties}>
+              {tips.map((t, i) => (
+                <li key={t} className="flex min-h-[48px] items-center gap-3 text-[15px] text-muted">
+                  <span className="num flex h-8 w-8 shrink-0 items-center justify-center rounded-chip bg-teal-soft text-[18px] text-teal">{i + 1}</span>
+                  {t}
+                </li>
+              ))}
+            </ol>
           </>
         )}
 
- {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+        {isUploading && (
+          <Card tint="teal" className="space-y-4" >
+            <p className="num text-[28px] leading-[1.05] text-teal animate-pulse">Analisando a foto</p>
+            <SkeletonBlock className="h-14 w-full" />
+            <SkeletonBlock className="h-14 w-full" />
+            <SkeletonBlock className="h-14 w-2/3" />
+          </Card>
+        )}
+
+        {error && <div role="alert" className="rounded-md bg-danger/15 p-3 text-[15px] text-danger">{error}</div>}
 
         {isPlate && plateItems && (
           <>
-            {confidence && (
- <Card className={confidence === 'low' ? ' bg-sun-soft' : ''}>
- <p className="text-sm font-semibold text-fg">{CONFIDENCE_LABEL[confidence] ?? confidence}</p>
- {caveat && <p className="mt-1 text-xs leading-relaxed text-muted">{caveat}</p>}
-              </Card>
+            <Card tint={confidence === 'low' ? 'sun' : 'teal'} className="enter">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Total estimado</p>
+              <p className="num text-[44px] leading-none text-teal"><CountUp value={Math.round(totalKcal)} /><span className="font-sans text-[15px] font-medium text-muted"> kcal</span></p>
+              {confidence && <div className="mt-3"><Chip tone={confidence === 'low' ? 'sun' : 'teal'}>{CONFIDENCE_LABEL[confidence] ?? confidence}</Chip></div>}
+              {caveat && <p className="mt-3 text-[15px] leading-[1.45] text-muted">{caveat}</p>}
+            </Card>
+
+            {mealPicker}
+
+            {plateItems.length === 0 && (
+              <p className="py-6 text-center text-[15px] text-muted">Todos os itens foram removidos. Tire outra foto para recomeçar.</p>
             )}
 
-            <div>
- <label className="block text-xs uppercase tracking-wide text-muted mb-2">Refeição</label>
- <div className="grid grid-cols-2 gap-2">
-                {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, mealLabel]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setMealType(type)}
- className={`py-2.5 rounded-md text-sm font-medium transition-colors ${mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}
-                  >
-                    {mealLabel}
-                  </button>
-                ))}
-              </div>
-            </div>
-
- <div className="space-y-3">
+            <div className="space-y-[14px]">
               {plateItems.map((item, index) => (
- <Card key={index} className="space-y-2">
- <div className="flex items-center gap-2">
+                <Card key={index} className="enter space-y-3">
+                  <div className="flex items-center gap-2">
                     <input
                       value={item.food_name}
+                      aria-label="Nome do alimento"
                       onChange={(e) => updatePlateItem(index, 'food_name', e.target.value)}
- className="min-w-0 flex-1 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg"
+                      className="h-12 min-w-0 flex-1 rounded-sm border-2 border-transparent bg-surface-2 px-3 text-base font-semibold text-fg focus:border-brand-fg focus:outline-none"
                     />
- <button type="button" onClick={() => removePlateItem(index)} className="text-xs text-danger">Remover</button>
+                    <button type="button" onClick={() => removePlateItem(index)} aria-label={`Remover ${item.food_name}`} className="press flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-danger"><TrashIcon /></button>
                   </div>
- <div className="grid grid-cols-5 gap-2 text-center">
- <label className="text-xs text-dim">g
- <input type="number" value={item.estimated_grams} onChange={(e) => updatePlateItem(index, 'estimated_grams', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-fg" />
-                    </label>
- <label className="text-xs text-dim">kcal
- <input type="number" value={item.calories} onChange={(e) => updatePlateItem(index, 'calories', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-brand-fg" />
-                    </label>
- <label className="text-xs text-dim">P
- <input type="number" value={item.protein_g} onChange={(e) => updatePlateItem(index, 'protein_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-teal" />
-                    </label>
- <label className="text-xs text-dim">C
- <input type="number" value={item.carbs_g} onChange={(e) => updatePlateItem(index, 'carbs_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-sun" />
-                    </label>
- <label className="text-xs text-dim">G
- <input type="number" value={item.fat_g} onChange={(e) => updatePlateItem(index, 'fat_g', e.target.value)} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-danger" />
-                    </label>
-                  </div>
+                  {([[['g', 'estimated_grams', 'text-muted'], ['kcal', 'calories', 'text-teal']], [['P', 'protein_g', 'text-violet'], ['C', 'carbs_g', 'text-sun'], ['G', 'fat_g', 'text-brand-fg']]] as const).map((row, ri) => (
+                    <div key={ri} className={`grid gap-2 text-center ${ri === 0 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                      {row.map(([l, f, c]) => (
+                        <label key={f} className={`block text-[13px] font-semibold ${c}`}>{l}
+                          <input type="number" inputMode="decimal" value={item[f]} onChange={(e) => updatePlateItem(index, f, e.target.value)} className={`${num} ${c}`} />
+                        </label>
+                      ))}
+                    </div>
+                  ))}
                 </Card>
               ))}
             </div>
@@ -244,59 +256,41 @@ export function FoodPhotoPage() {
 
         {!isPlate && label && (
           <>
- <Card className="space-y-3">
- <label className="block text-sm text-fg">Nome
- <input value={label.name} onChange={(e) => setLabel({ ...label, name: e.target.value })} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-fg" />
+            <Card tint="teal" className="enter space-y-4">
+              <label className="block text-[15px] font-semibold text-fg">Nome
+                <input value={label.name} onChange={(e) => setLabel({ ...label, name: e.target.value })} className={text} />
               </label>
- <label className="block text-sm text-fg">Marca
- <input value={label.brand} onChange={(e) => setLabel({ ...label, brand: e.target.value })} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-fg" />
+              <label className="block text-[15px] font-semibold text-fg">Marca
+                <input value={label.brand} onChange={(e) => setLabel({ ...label, brand: e.target.value })} className={text} />
               </label>
- <p className="text-xs uppercase tracking-wide text-dim">Por 100g</p>
- <div className="grid grid-cols-4 gap-2 text-center">
- <label className="text-xs text-dim">kcal
- <input type="number" value={label.calories_per_100g} onChange={(e) => setLabel({ ...label, calories_per_100g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-brand-fg" />
-                </label>
- <label className="text-xs text-dim">P
- <input type="number" value={label.protein_g} onChange={(e) => setLabel({ ...label, protein_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-teal" />
-                </label>
- <label className="text-xs text-dim">C
- <input type="number" value={label.carbs_g} onChange={(e) => setLabel({ ...label, carbs_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-sun" />
-                </label>
- <label className="text-xs text-dim">G
- <input type="number" value={label.fat_g} onChange={(e) => setLabel({ ...label, fat_g: Number(e.target.value) })} className="mt-1 w-full rounded-lg bg-surface px-1 py-1.5 text-sm text-danger" />
-                </label>
+              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Por 100 g</p>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {([
+                  ['kcal', 'calories_per_100g', 'text-teal'], ['P', 'protein_g', 'text-violet'], ['C', 'carbs_g', 'text-sun'], ['G', 'fat_g', 'text-brand-fg'],
+                ] as const).map(([l, f, c]) => (
+                  <label key={f} className={`block text-[13px] font-semibold ${c}`}>{l}
+                    <input type="number" inputMode="decimal" value={label[f]} onChange={(e) => setLabel({ ...label, [f]: Number(e.target.value) })} className={`${num} ${c}`} />
+                  </label>
+                ))}
               </div>
             </Card>
 
- <Card className="space-y-3">
- <label className="flex items-center gap-2 text-sm text-fg">
-                <input type="checkbox" checked={logAfterSaving} onChange={(e) => setLogAfterSaving(e.target.checked)} />
+            <Card className="space-y-4">
+              <label className="flex min-h-[48px] items-center gap-3 text-base text-fg">
+                <input type="checkbox" checked={logAfterSaving} onChange={(e) => setLogAfterSaving(e.target.checked)} className="h-6 w-6 accent-[rgb(var(--teal))]" />
                 Registrar no diário agora também
               </label>
               {logAfterSaving && (
                 <>
- <div className="grid grid-cols-2 gap-2">
-                    {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, mealLabel]) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setMealType(type)}
- className={`py-2.5 rounded-md text-sm font-medium transition-colors ${mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}
-                      >
-                        {mealLabel}
-                      </button>
-                    ))}
-                  </div>
- <label className="block text-xs text-muted">Quantidade (g)
- <input type="number" value={servingQuantity} onChange={(e) => setServingQuantity(e.target.value)} className="mt-1.5 w-full rounded-md border border-line bg-surface-2 px-3 py-2.5 text-center text-fg" />
+                  {mealPicker}
+                  <label className="block text-[15px] font-semibold text-fg">Quantidade (g)
+                    <input type="number" inputMode="decimal" value={servingQuantity} onChange={(e) => setServingQuantity(e.target.value)} className={`${text} text-center font-semibold`} />
                   </label>
                 </>
               )}
             </Card>
 
-            <Button fullWidth size="lg" isLoading={isSaving} onClick={submitLabel}>
-              Salvar alimento
-            </Button>
+            <Button fullWidth size="lg" isLoading={isSaving} onClick={submitLabel}>Salvar alimento</Button>
           </>
         )}
       </div>

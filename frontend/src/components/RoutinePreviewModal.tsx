@@ -4,7 +4,7 @@ import { getErrorMessage } from '../api/client';
 import { MEAL_TYPE_LABELS, type NutritionRoutineItem, type NutritionRoutineMeal } from '../types';
 
 /**
- * Pré-visualização do "dia normal" antes de virar registro — usada tanto por
+ * Pré-visualização do "dia normal" antes de virar registro usada tanto por
  * "Foi um dia normal" (hoje) quanto por cada linha de "dias esquecidos"
  * (`Nutrition.tsx`), sempre sobre a mesma rotina destilada, só com o rótulo
  * do dia mudando. Remover um item aqui nunca toca `meals`: o que é gravado
@@ -67,15 +67,15 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
         className="flex max-h-[88vh] w-full flex-col overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5 pb-safe"
         onClick={(event) => event.stopPropagation()}
       >
-        <h3 className="text-lg font-bold text-fg">Dia normal — {dateLabel}</h3>
-        <p className="mt-1 text-xs leading-relaxed text-dim">
+        <h3 className="text-lg font-bold text-fg">Dia normal {dateLabel}</h3>
+        <p className="mt-1 text-[13px] leading-relaxed text-dim">
           Estimativa a partir do que você costuma comer. Remova o que não bate antes de confirmar.
         </p>
 
         <div className="mt-4 space-y-4">
           {meals.map((meal) => (
             <div key={meal.meal_type}>
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-dim">
+              <h4 className="text-[13px] font-semibold uppercase tracking-wide text-dim">
                 {MEAL_TYPE_LABELS[meal.meal_type]}
               </h4>
               <div className="mt-2 space-y-2">
@@ -90,11 +90,11 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className={`text-sm font-medium text-fg ${isRemoved ? 'line-through' : ''}`}>
+                        <p className={`text-[15px] font-medium text-fg ${isRemoved ? 'line-through' : ''}`}>
                           {item.food_name}
                         </p>
-                        <p className="text-xs text-dim">
-                          {item.quantity_g}g · {Math.round(item.calories)} kcal · em {item.days_seen} de{' '}
+                        <p className="text-[13px] text-dim">
+                          {item.quantity_g}g, {Math.round(item.calories)} kcal, em {item.days_seen} de{' '}
                           {item.days_considered} dias
                         </p>
                       </div>
@@ -102,7 +102,7 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
                         type="button"
                         disabled={isSaving}
                         onClick={() => toggleRemoved(key)}
-                        className="shrink-0 rounded-full bg-surface-2 px-3 py-1.5 text-xs font-medium text-muted disabled:opacity-50"
+                        className="shrink-0 rounded-full bg-surface-2 min-h-[44px] px-4 text-[15px] font-semibold text-muted disabled:opacity-50"
                       >
                         {isRemoved ? 'Voltar' : 'Remover'}
                       </button>
@@ -115,11 +115,11 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
         </div>
 
         <div className="mt-4 flex items-baseline justify-between border-t border-line pt-3">
-          <span className="text-sm text-muted">Total</span>
-          <span className="text-sm font-bold text-brand-fg">{Math.round(totalCalories)} kcal</span>
+          <span className="text-[15px] text-muted">Total</span>
+          <span className="text-[15px] font-bold text-brand-fg">{Math.round(totalCalories)} kcal</span>
         </div>
 
-        {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+        {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-[15px] text-danger">{error}</div>}
 
         <div className="mt-5 space-y-2">
           <Button fullWidth size="lg" isLoading={isSaving} disabled={remainingMeals.length === 0} onClick={confirm}>
@@ -129,7 +129,7 @@ export function RoutinePreviewModal({ dateLabel, meals, onClose, onConfirm }: Ro
             type="button"
             disabled={isSaving}
             onClick={onClose}
-            className="w-full py-3 text-sm text-muted disabled:opacity-50"
+            className="w-full py-3 text-[15px] text-muted disabled:opacity-50"
           >
             Cancelar
           </button>

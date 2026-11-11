@@ -5,6 +5,9 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { cheatDayApi } from '../api/cheatDay';
 import { getErrorMessage } from '../api/client';
+import { Chip } from '../components/Chip';
+import { ErrorState, SkeletonBlock } from '../components/nutricao/States';
+import { FlameIcon } from '../components/nutricao/icons';
 import type { CheatDayMessage, CheatDaySession } from '../types';
 
 export function CheatDayPage() {
@@ -31,7 +34,7 @@ export function CheatDayPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [session?.messages.length, isSending]);
+  }, [session?.messages?.length, isSending]);
 
   // Só dispara uma vez, e só numa conversa vazia: sessão de dia do lixo é
   // única por pessoa (ver CheatDaySession), então chegar aqui com mensagens
@@ -39,7 +42,7 @@ export function CheatDayPage() {
   // uma nova a partir do relato do excesso.
   useEffect(() => {
     if (isLoading || sentInitialMessage.current || !initialMessage) return;
-    if ((session?.messages.length ?? 0) > 0) return;
+    if ((session?.messages?.length ?? 0) > 0) return;
     sentInitialMessage.current = true;
     void send(initialMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,28 +89,49 @@ export function CheatDayPage() {
   };
 
   const messages: CheatDayMessage[] = session?.messages ?? [];
+  const examples = ['Vou a um rodízio de pizza hoje à noite', 'Churrasco com cerveja no almoço', 'Festa de aniversário com bolo e doces'];
   const isAccepted = session?.status === 'accepted';
 
   return (
     <>
       <Header title="Dia do lixo" showBack />
- <div className="flex min-h-[calc(100vh-64px)] flex-col px-4 py-4 pb-24">
- <Card className="border-brand bg-brand-soft">
- <p className="text-sm leading-relaxed text-brand-fg">
-            Conta pra mim o que você está planejando comer hoje. A gente pensa junto no tamanho do exagero e,
-            se você quiser, eu monto um ajuste temporário no treino para compensar — sem culpa e sem cortar
-            comida depois.
-          </p>
+      <div className="flex min-h-[calc(100vh-64px)] flex-col px-5 pb-24 pt-2">
+        <Card tint="sun" className="enter flex items-start gap-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-sun-soft text-sun"><FlameIcon /></span>
+          <div className="min-w-0">
+            <p className="text-[17px] font-bold leading-[1.3] text-fg">Conte o que vem por aí</p>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">
+              A gente pensa junto no tamanho do exagero. Se quiser, monto um ajuste temporário no treino. Sem culpa e sem cortar comida depois.
+            </p>
+          </div>
         </Card>
 
- <div className="mt-4 flex-1 space-y-3 overflow-y-auto">
- {isLoading && <p className="text-sm text-dim">Carregando...</p>}
+        <div className="mt-4 flex-1 space-y-3 overflow-y-auto">
+          {isLoading && (
+            <div className="space-y-3" aria-busy="true">
+              <SkeletonBlock className="h-14 w-[70%]" />
+              <SkeletonBlock className="ml-auto h-12 w-[55%]" />
+            </div>
+          )}
+
+          {!isLoading && messages.length === 0 && !isSending && !error && !isAccepted && (
+            <div>
+              <p className="mb-2 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Por exemplo</p>
+              <div className="flex flex-col items-start gap-2">
+                {examples.map((ex) => (
+                  <button key={ex} type="button" onClick={() => setDraft(ex)} className="press min-h-[48px] rounded-chip bg-surface px-4 text-left text-[15px] text-fg shadow-card">
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {messages.map((message, index) => (
             <div
               key={`${message.id}-${index}`}
- className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-relaxed ${
-                message.role === 'user' ? 'ml-auto bg-brand text-white' : 'shadow-card bg-bg text-fg'
+              className={`max-w-[88%] whitespace-pre-wrap break-words rounded-lg px-4 py-3 text-base leading-[1.5] ${
+                message.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface text-fg shadow-card'
               }`}
             >
               {message.content}
@@ -115,40 +139,38 @@ export function CheatDayPage() {
           ))}
 
           {isSending && (
- <div className="w-fit rounded-lg shadow-card bg-bg px-4 py-3 text-sm text-dim">
- <span className="animate-pulse">digitando...</span>
+            <div className="w-fit rounded-lg bg-surface px-4 py-3 text-[15px] text-muted shadow-card" aria-live="polite">
+              <span className="animate-pulse">Pensando</span>
             </div>
           )}
 
           {isAccepted && (
- <Card className="border-brand bg-brand-soft">
- <p className="text-sm font-semibold text-fg">Compensação montada</p>
- <p className="mt-2 text-xs leading-relaxed text-fg">{session?.summary}</p>
+            <Card tint="ok">
+              <Chip tone="ok">Compensação montada</Chip>
+              <p className="mt-3 text-base leading-[1.5] text-fg">{session?.summary}</p>
               {session?.estimated_calories != null && (
- <p className="mt-2 text-xs text-dim">Excedente estimado: ~{session.estimated_calories} kcal</p>
+                <p className="mt-3 text-[15px] text-muted">Excedente estimado: <span className="num text-[22px] text-sun">{session.estimated_calories}</span> kcal</p>
               )}
               {session?.compensation_plan_id && (
- <Button size="sm" className="mt-3" onClick={() => navigate(`/training-plans/${session.compensation_plan_id}`)}>
+                <Button size="lg" fullWidth className="mt-4" onClick={() => navigate(`/training-plans/${session.compensation_plan_id}`)}>
                   Ver treino de compensação
                 </Button>
               )}
             </Card>
           )}
 
- {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+          {error && (messages.length === 0 && !session
+            ? <ErrorState message={error} onRetry={() => { setError(null); setIsLoading(true); cheatDayApi.get().then(setSession).catch((e) => setError(getErrorMessage(e))).finally(() => setIsLoading(false)); }} />
+            : <div role="alert" className="rounded-md bg-danger/15 p-3 text-[15px] text-danger">{error}</div>)}
           <div ref={bottomRef} />
         </div>
 
         {!isAccepted && (
           <>
             {messages.length > 0 && (
- <div className="mt-3 flex gap-2">
-                <Button variant="secondary" size="sm" onClick={discard} disabled={isSending || isAccepting}>
-                  Descartar
-                </Button>
-                <Button size="sm" isLoading={isAccepting} onClick={accept} disabled={isSending}>
-                  Pedir compensação
-                </Button>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <Button variant="secondary" onClick={discard} disabled={isSending || isAccepting}>Descartar</Button>
+                <Button tone="sun" variant="tonal" isLoading={isAccepting} onClick={accept} disabled={isSending}>Compensar</Button>
               </div>
             )}
 
@@ -157,7 +179,7 @@ export function CheatDayPage() {
                 event.preventDefault();
                 void send(draft);
               }}
- className="mt-3 flex items-end gap-2"
+              className="mt-3 flex items-end gap-2"
             >
               <textarea
                 value={draft}
@@ -165,16 +187,10 @@ export function CheatDayPage() {
                 disabled={isSending}
                 rows={1}
                 maxLength={1000}
-                placeholder="Ex: vou num rodízio de pizza hoje à noite..."
- className="max-h-28 min-h-[52px] flex-1 resize-none rounded-lg shadow-card bg-bg px-4 py-3.5 text-sm text-fg placeholder-dim focus:outline-none disabled:opacity-50"
+                placeholder="Ex.: rodízio de pizza"
+                className="max-h-28 min-h-[52px] flex-1 resize-none rounded-md border-2 border-transparent bg-surface-2 px-4 py-3.5 text-base text-fg placeholder:text-dim focus:border-brand-fg focus:outline-none disabled:opacity-[.45]"
               />
-              <button
-                type="submit"
-                disabled={isSending || draft.trim().length === 0}
- className="h-[52px] shrink-0 rounded-lg bg-brand px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Enviar
-              </button>
+              <Button type="submit" size="lg" disabled={isSending || draft.trim().length === 0} className="!min-h-[52px] shrink-0">Enviar</Button>
             </form>
           </>
         )}

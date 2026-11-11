@@ -8,7 +8,7 @@ const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 type MacroField = 'calories' | 'protein' | 'carbs' | 'fat';
 
 // Two decimals, matching round2 on the backend (both round half up for
-// non-negative values) — kept identical so a live-rescaled value sent back
+// non-negative values) kept identical so a live-rescaled value sent back
 // lands within UpdateLog's own float tolerance instead of reading as a hand
 // edit and detaching the record from the catalog.
 function roundMacro(value: number): number {
@@ -16,20 +16,20 @@ function roundMacro(value: number): number {
 }
 
 const fieldClass =
-  'w-full rounded-md border border-line bg-surface-2 px-4 py-3 text-fg  focus:outline-none disabled:opacity-50';
+  'w-full rounded-md border-2 border-transparent bg-surface-2 px-4 py-3 text-fg  focus:border-brand-fg focus:outline-none disabled:opacity-50';
 const smallFieldClass =
-  'w-full rounded-lg border border-line bg-surface-2 px-2 py-2 text-center text-sm text-fg  focus:outline-none disabled:opacity-50';
+  'w-full rounded-lg border-2 border-transparent bg-surface-2 px-2 min-h-[52px] text-center text-base text-fg  focus:border-brand-fg focus:outline-none disabled:opacity-50';
 
 /**
- * Full editor for one food log entry — name, meal, quantity and every
- * macro — shared by the diary (Nutrition.tsx) and the calendar's day panel
+ * Full editor for one food log entry name, meal, quantity and every
+ * macro shared by the diary (Nutrition.tsx) and the calendar's day panel
  * (NutritionHistory.tsx) so the two never drift into two separate editors
  * again (the day panel used to hand-replicate this before). No date field:
  * the app's rule stays that a record never moves between days.
  *
  * A record still waiting to sync (negative id) is editable exactly like a
- * synced one: `onSave` — `updateFoodLog` in `lib/local/repo/foodLogs.ts` for
- * both callers today — enqueues the edit behind the pending create, and the
+ * synced one: `onSave` `updateFoodLog` in `lib/local/repo/foodLogs.ts` for
+ * both callers today enqueues the edit behind the pending create, and the
  * generalized id-remap (`lib/local/remap.ts`) rewrites it to the real id the
  * moment the create syncs, same mechanism a workout's series already used.
  *
@@ -45,7 +45,7 @@ interface EditFoodLogModalProps {
    * Opcional para não obrigar quem não tem o que fazer com isso. Onde vem
    * preenchido, é o único caminho para apagar um registro que não é de hoje:
    * o `×` da tela do dia só alcança o dia de hoje, e o histórico não tinha
-   * nada equivalente — buraco que só apareceu quando passou a ser fácil
+   * nada equivalente buraco que só apareceu quando passou a ser fácil
    * registrar em dia passado (copiar, e o modo IA resolvendo "ontem à noite").
    */
   onDelete?: (id: number) => Promise<void>;
@@ -66,7 +66,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
 
   // Which macro fields the person has typed into by hand. Quantity edits
   // rescale every macro field live so what's on screen is what gets saved
-  // (otherwise doubling the quantity silently kept the old calories) — but a
+  // (otherwise doubling the quantity silently kept the old calories) but a
   // field she already corrected by hand must keep her value, not get
   // overwritten by the next quantity keystroke.
   const [touchedMacros, setTouchedMacros] = useState<Record<MacroField, boolean>>({
@@ -88,7 +88,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
   };
 
   // The rescale always starts from the record's original quantity and macros
-  // — never from whatever is already on screen — so repeated keystrokes
+  // never from whatever is already on screen so repeated keystrokes
   // don't compound rounding error on top of each other.
   const handleQuantityChange = (value: string) => {
     setQuantity(value);
@@ -148,11 +148,11 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
         onClick={(e) => e.stopPropagation()}
       >
  <h3 className="text-lg font-bold text-fg">Editar registro</h3>
- {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+ {error && <p className="mt-2 text-[13px] text-danger">{error}</p>}
 
  <form onSubmit={handleSubmit} className="mt-3 space-y-4">
           <div>
- <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Nome</label>
+ <label className="mb-1.5 block text-[13px] uppercase tracking-wide text-muted">Nome</label>
             <input
               type="text"
               value={name}
@@ -162,14 +162,14 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
           </div>
 
           <div>
- <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Refeição</label>
+ <label className="mb-1.5 block text-[13px] uppercase tracking-wide text-muted">Refeição</label>
  <div className="grid grid-cols-2 gap-2">
               {MEAL_ORDER.map((option) => (
                 <button
                   key={option}
                   type="button"
                   onClick={() => setMealType(option)}
- className={`rounded-md py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+ className={`rounded-md min-h-[48px] text-[15px] font-semibold transition-colors disabled:opacity-50 ${
                     mealType === option ? 'bg-brand text-white' : 'bg-surface-2 text-muted'
                   }`}
                 >
@@ -181,7 +181,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
 
  <div className="grid grid-cols-2 gap-3">
             <div>
- <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Quantidade (g)</label>
+ <label className="mb-1.5 block text-[13px] uppercase tracking-wide text-muted">Quantidade (g)</label>
               <input
                 type="number"
                 min={0}
@@ -192,7 +192,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
               />
             </div>
             <div>
- <label className="mb-1.5 block text-xs uppercase tracking-wide text-muted">Calorias (kcal)</label>
+ <label className="mb-1.5 block text-[13px] uppercase tracking-wide text-muted">Calorias (kcal)</label>
               <input
                 type="number"
                 min={0}
@@ -206,7 +206,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
 
  <div className="grid grid-cols-3 gap-2">
             <div>
- <label className="mb-1 block text-xs text-dim">Proteína (g)</label>
+ <label className="mb-1 block text-[13px] text-dim">Proteína (g)</label>
               <input
                 type="number"
                 min={0}
@@ -217,7 +217,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
               />
             </div>
             <div>
- <label className="mb-1 block text-xs text-dim">Carbs (g)</label>
+ <label className="mb-1 block text-[13px] text-dim">Carbs (g)</label>
               <input
                 type="number"
                 min={0}
@@ -228,7 +228,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
               />
             </div>
             <div>
- <label className="mb-1 block text-xs text-dim">Gordura (g)</label>
+ <label className="mb-1 block text-[13px] text-dim">Gordura (g)</label>
               <input
                 type="number"
                 min={0}
@@ -244,7 +244,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
             <Button type="submit" fullWidth isLoading={isSaving} disabled={!valid}>
               Salvar
             </Button>
- <button type="button" onClick={onClose} className="shrink-0 px-3 text-xs text-dim">
+ <button type="button" onClick={onClose} className="shrink-0 min-h-[48px] px-4 text-[15px] text-muted">
               Cancelar
             </button>
           </div>
@@ -268,7 +268,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                         setConfirmarExclusao(false);
                       }
                     }}
- className="flex-1 rounded-md bg-danger px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+ className="flex-1 rounded-md bg-danger px-4 py-3 text-[15px] font-semibold text-white disabled:opacity-50"
                   >
                     {isDeleting ? 'Apagando...' : 'Apagar de verdade'}
                   </button>
@@ -276,7 +276,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                     type="button"
                     disabled={isDeleting}
                     onClick={() => setConfirmarExclusao(false)}
- className="shrink-0 px-3 text-xs text-dim"
+ className="shrink-0 min-h-[48px] px-4 text-[15px] text-muted"
                   >
                     Não
                   </button>
@@ -285,7 +285,7 @@ export function EditFoodLogModal({ log, onClose, onSave, onDelete }: EditFoodLog
                 <button
                   type="button"
                   onClick={() => setConfirmarExclusao(true)}
- className="w-full py-2 text-sm font-medium text-danger"
+ className="w-full min-h-[48px] text-[15px] font-semibold text-danger"
                 >
                   Apagar registro
                 </button>
