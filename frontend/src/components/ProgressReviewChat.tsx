@@ -76,12 +76,13 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
   };
 
   return (
-    <div className="rounded-lg bg-surface shadow-card p-4">
-      <h2 className="text-xs uppercase tracking-wide text-dim">Perguntar sobre esta análise</h2>
+    <section className="pt-2">
+      <h2 className="mb-3 px-1 text-[17px] font-bold leading-[1.3] text-fg">Perguntar sobre esta análise</h2>
+      <div className="rounded-lg bg-surface p-[18px] shadow-card">
 
       {!isLoading && messages.length === 0 && (
-        <p className="mt-2 text-xs leading-relaxed text-dim">
-          Discorda de algum número, quer entender a conta ou saber o que fazer primeiro? Pergunte aqui — a
+        <p className="text-[15px] leading-[1.45] text-muted">
+          Discorda de algum número, quer entender a conta ou saber o que fazer primeiro? Pergunte aqui. A
           resposta usa exatamente os dados desta avaliação.
         </p>
       )}
@@ -91,7 +92,7 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-relaxed ${
+              className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${
                 message.role === 'user'
                   ? 'ml-auto bg-brand text-white'
                   : 'bg-surface-2 text-fg'
@@ -104,12 +105,12 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
       )}
 
       {isSending && (
-        <div className="mt-3 w-fit rounded-lg bg-surface shadow-card px-4 py-3 text-sm text-muted">
-          <span className="animate-pulse">pensando...</span>
+        <div className="mt-3 w-fit rounded-lg bg-surface-2 px-4 py-3 text-[15px] text-muted">
+          <span className="animate-pulse">Pensando...</span>
         </div>
       )}
 
-      {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      {error && <div className="mt-3 rounded-md bg-danger-soft p-3.5 text-[15px] text-danger" role="alert">{error}</div>}
 
       <div ref={bottomRef} />
 
@@ -121,7 +122,7 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
               type="button"
               disabled={isSending}
               onClick={() => void send(suggestion)}
-              className="rounded-full bg-surface-2 px-3 py-2 text-xs font-medium text-muted disabled:opacity-50"
+              className="press min-h-[44px] rounded-chip bg-surface-2 px-4 text-[15px] font-semibold text-muted disabled:opacity-50"
             >
               {suggestion}
             </button>
@@ -143,16 +144,17 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
           rows={1}
           maxLength={1500}
           placeholder="Escreva sua pergunta..."
-          className="max-h-28 min-h-[48px] flex-1 resize-none rounded-lg border border-transparent bg-surface-2 px-4 py-3 text-sm text-fg placeholder:text-dim disabled:opacity-50"
+          className="max-h-28 min-h-[52px] min-w-0 flex-1 resize-none text-fg disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={isSending || draft.trim().length === 0}
-          className="h-[48px] shrink-0 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="press h-[52px] shrink-0 rounded-md bg-brand px-5 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-[.45]"
         >
           Enviar
         </button>
       </form>
-    </div>
+      </div>
+    </section>
   );
 }

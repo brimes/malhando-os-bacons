@@ -1,11 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { useAuthStore } from '../stores/useAuthStore';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { getErrorMessage } from '../api/client';
+import { Notice, Segmented, SectionTitle, fieldLabel, stagger } from '../components/perfil/ui';
 import type { BiologicalSex, TrainingExperience } from '../types';
 
 // Os dados que o onboarding coletou ficavam só lá dentro: para revê-los ou
@@ -27,7 +27,6 @@ const EXPERIENCIAS: { value: TrainingExperience; label: string }[] = [
 ];
 
 export function ProfileDataPage() {
-  const navigate = useNavigate();
   const { user } = useAuthStore();
   const { state, saveProfile } = useOnboardingStore();
   const profile = state?.profile;
@@ -84,70 +83,77 @@ export function ProfileDataPage() {
   return (
     <>
       <Header title="Meus dados" showBack />
-      <form onSubmit={submit} className="space-y-4 px-4 py-5 pb-28">
-        <Card>
-          <p className="font-bold text-fg">{user?.name}</p>
-          <p className="text-sm text-muted">{user?.email}</p>
-        </Card>
-
-        <Card className="space-y-4">
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Data de nascimento</span>
-            <input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setBirthDate(e.target.value)}
-              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-dim">Altura (cm)</span>
-              <input type="number" inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(e.target.value)}
-                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-dim">Peso (kg)</span>
-              <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)}
-                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg" />
-            </label>
-          </div>
-
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Sexo biológico</span>
-            <div className="mt-2 flex gap-2">
-              {SEXOS.map((option) => (
-                <button key={option.value} type="button" onClick={() => setSex(option.value)}
-                  className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${sex === option.value ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}>
-                  {option.label}
-                </button>
-              ))}
+      <form onSubmit={submit} className="space-y-[14px] px-5 pb-28 pt-2">
+        <div className="enter">
+          <Card tint="brand" className="flex items-center gap-4">
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="" className="h-14 w-14 shrink-0 rounded-md object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-brand">
+                <span className="num text-[28px] leading-none text-white">{user?.name?.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[17px] font-bold leading-[1.3] text-fg">{user?.name}</p>
+              <p className="text-[15px] text-muted">{user?.email}</p>
             </div>
-          </div>
+          </Card>
+        </div>
 
-          <div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Experiência</span>
-            <div className="mt-2 flex gap-2">
-              {EXPERIENCIAS.map((option) => (
-                <button key={option.value} type="button" onClick={() => setExperience(option.value)}
-                  className={`flex-1 rounded-md px-2 py-2 text-xs font-semibold ${experience === option.value ? 'bg-brand text-white' : 'bg-surface-2 text-muted'}`}>
-                  {option.label}
-                </button>
-              ))}
+        <section className="enter" style={stagger(1)}>
+          <SectionTitle>Corpo</SectionTitle>
+          <Card className="space-y-4">
+            <label className="block">
+              <span className={fieldLabel}>Data de nascimento</span>
+              <input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="mt-1.5 w-full min-w-0" />
+            </label>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className={fieldLabel}>Altura (cm)</span>
+                <input type="number" inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(e.target.value)}
+                  className="mt-1.5 w-full min-w-0" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>Peso (kg)</span>
+                <input type="number" inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)}
+                  className="mt-1.5 w-full min-w-0" />
+              </label>
             </div>
-          </div>
 
-          <label className="block">
-            <span className="text-xs font-semibold uppercase tracking-wide text-dim">Lesões ou limitações</span>
-            <textarea value={injuries} onChange={(e) => setInjuries(e.target.value)} rows={3}
-              placeholder="Deixe em branco se não houver"
-              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-3 text-fg placeholder:text-dim" />
-          </label>
-        </Card>
+            <div>
+              <span className={fieldLabel}>Sexo biológico</span>
+              <div className="mt-1.5">
+                <Segmented label="Sexo biológico" options={SEXOS} value={sex} onChange={setSex} />
+              </div>
+            </div>
+          </Card>
+        </section>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
-        {saved && <p className="text-sm text-ok">Dados salvos.</p>}
+        <section className="enter" style={stagger(2)}>
+          <SectionTitle>Treino</SectionTitle>
+          <Card className="space-y-4">
+            <div>
+              <span className={fieldLabel}>Experiência</span>
+              <div className="mt-1.5">
+                <Segmented label="Experiência" options={EXPERIENCIAS} value={experience} onChange={setExperience} />
+              </div>
+            </div>
+            <label className="block">
+              <span className={fieldLabel}>Lesões ou limitações</span>
+              <textarea value={injuries} onChange={(e) => setInjuries(e.target.value)} rows={3}
+                placeholder="Deixe em branco se não houver"
+                className="mt-1.5 w-full" />
+            </label>
+          </Card>
+        </section>
+
+        {error && <Notice tone="danger">{error}</Notice>}
+        {saved && <Notice tone="ok">Dados salvos.</Notice>}
 
         <Button type="submit" fullWidth size="lg" disabled={!podeSalvar} isLoading={isSaving}>Salvar</Button>
-        <Button type="button" variant="ghost" fullWidth onClick={() => navigate('/profile')}>Voltar</Button>
       </form>
     </>
   );

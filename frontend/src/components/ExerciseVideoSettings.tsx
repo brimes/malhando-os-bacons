@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
+import { SectionTitle, Toggle } from './perfil/ui';
 import {
   baixarAcervo,
   espacoOcupado,
@@ -70,61 +71,54 @@ export function ExerciseVideoSettings() {
   const faltam = total !== null && uso !== null ? Math.max(0, total - uso.arquivos) : null;
 
   return (
-    <div>
-      <h3 className="mb-3 px-1 text-xs uppercase tracking-wide text-dim">Vídeos dos exercícios</h3>
+    <section>
+      <SectionTitle>Vídeos dos exercícios</SectionTitle>
       <Card className="space-y-4">
         <div>
-          <p className="text-sm text-muted">
-            {uso === null
-              ? 'Calculando…'
-              : `${uso.arquivos} vídeo${uso.arquivos === 1 ? '' : 's'} no aparelho · ${formatarBytes(uso.bytes)}`}
+          <p className="num text-[32px] leading-[1.05] text-fg">
+            {uso === null ? '...' : uso.arquivos}
+            <span className="ml-2 font-sans text-[15px] font-semibold text-muted">
+              {uso === null ? 'calculando' : `vídeo${uso.arquivos === 1 ? '' : 's'} no aparelho, ${formatarBytes(uso.bytes)}`}
+            </span>
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-dim">
+          <p className="mt-2 text-[15px] leading-[1.45] text-muted">
             Ficam guardados no aparelho para tocar sem internet, inclusive em modo avião.
             {faltam ? ` Faltam ${faltam}.` : ''}
           </p>
         </div>
+      </Card>
 
-        <button
-          type="button"
-          onClick={() => {
-            const novo = !dadosMoveis;
+      <div className="mt-3 overflow-hidden rounded-lg bg-surface shadow-card">
+        <Toggle
+          checked={dadosMoveis}
+          onChange={(novo) => {
             setDadosMoveis(novo);
             definirPermiteDadosMoveis(novo);
           }}
-          className="flex w-full items-center justify-between gap-4 text-left"
-        >
-          <span>
-            <span className="block text-sm font-medium text-fg">Baixar usando dados móveis</span>
-            <span className="mt-0.5 block text-xs leading-relaxed text-dim">
-              Desligado, os vídeos só baixam no Wi-Fi. São cerca de 95 MB no total.
-            </span>
-          </span>
-          <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${dadosMoveis ? 'bg-brand' : 'bg-surface-2'}`}>
-            <span className={`absolute left-0 top-1 h-5 w-5 rounded-full bg-white transition-transform ${dadosMoveis ? 'translate-x-6' : 'translate-x-1'}`} />
-          </span>
-        </button>
+          label="Baixar usando dados móveis"
+          hint="Desligado, os vídeos só baixam no Wi-Fi. São cerca de 95 MB no total."
+        />
+      </div>
 
-        {progresso && progresso.total > 0 && (
-          <p className="text-xs text-brand-fg">
-            Baixando… {progresso.baixados} de {progresso.total}
-          </p>
+      {progresso && progresso.total > 0 && (
+        <p className="mt-3 px-1 text-[15px] font-semibold text-brand-fg">
+          Baixando {progresso.baixados} de {progresso.total}
+        </p>
+      )}
+      {erro && <p className="mt-3 px-1 text-[15px] text-danger" role="alert">{erro}</p>}
+
+      <div className="mt-3 flex gap-2">
+        {faltam !== 0 && (
+          <Button variant="secondary" fullWidth onClick={baixar} isLoading={ocupado}>
+            Baixar agora
+          </Button>
         )}
-        {erro && <p className="text-xs text-danger">{erro}</p>}
-
-        <div className="flex gap-2">
-          {faltam !== 0 && (
-            <Button variant="secondary" fullWidth onClick={baixar} isLoading={ocupado}>
-              Baixar agora
-            </Button>
-          )}
-          {uso !== null && uso.arquivos > 0 && (
-            <Button variant="ghost" fullWidth onClick={limpar} disabled={ocupado}>
-              Apagar vídeos
-            </Button>
-          )}
-        </div>
-      </Card>
-    </div>
+        {uso !== null && uso.arquivos > 0 && (
+          <Button variant="ghost" fullWidth onClick={limpar} disabled={ocupado}>
+            Apagar vídeos
+          </Button>
+        )}
+      </div>
+    </section>
   );
 }

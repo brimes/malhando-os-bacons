@@ -1,6 +1,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
+import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
+import { Ring } from '../components/Ring';
+import { Notice, SectionTitle, fieldLabel, stagger } from '../components/perfil/ui';
 import { apiClient, getErrorMessage } from '../api/client';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import type { FitnessAssessment, SaveFitnessAssessmentInput } from '../types';
@@ -56,48 +60,106 @@ export function FitnessAssessmentPage() {
 
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = String(seconds % 60).padStart(2, '0');
+  const done = seconds === 0;
+  const progress = (360 - seconds) / 360;
 
   return (
     <>
-      <Header title="Teste de condicionamento" showBack />
- <div className="space-y-5 px-4 py-5 pb-24">
- <Card className="border-brand bg-brand-soft">
- <p className="text-xs font-semibold uppercase tracking-wider text-brand-fg">Caminhada de 6 minutos</p>
- <h2 className="mt-2 text-xl font-black text-fg">Meça sua linha de base</h2>
- <p className="mt-2 text-sm leading-relaxed text-muted">Em um local plano e seguro, caminhe a maior distância confortável durante seis minutos. Ao terminar, registre a distância e como percebeu o esforço.</p>
- <div className="mt-4 rounded-md bg-sun-soft p-3 text-xs leading-relaxed text-sun">Faça o teste apenas quando estiver bem. Interrompa se sentir dor no peito, tontura ou falta de ar fora do esperado. Este teste não substitui avaliação médica.</div>
-        </Card>
+      <Header title="Teste de 6 min" showBack />
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
+        <div className="enter">
+          <Card tint="violet" className="!p-5">
+            <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-violet">Caminhada de 6 minutos</p>
+            <h2 className="num mt-1 text-[32px] leading-[1.05] text-fg">Meça sua linha de base</h2>
+            <p className="mt-3 text-[15px] leading-[1.45] text-muted">
+              Em um local plano e seguro, caminhe a maior distância confortável durante seis minutos. Ao terminar,
+              registre a distância e como percebeu o esforço.
+            </p>
+            <div className="mt-4"><Notice tone="sun">
+              Faça o teste apenas quando estiver bem. Interrompa se sentir dor no peito, tontura ou falta de ar fora do
+              esperado. Este teste não substitui avaliação médica.
+            </Notice></div>
+          </Card>
+        </div>
 
- <Card className="text-center">
- <p className={`text-5xl font-black tabular-nums ${seconds === 0 ? 'text-ok' : 'text-fg'}`}>{minutes}:{remainingSeconds}</p>
- <p className="mt-2 text-xs text-dim">{seconds === 0 ? 'Teste concluído. Registre os resultados abaixo.' : isRunning ? 'Cronômetro em andamento' : 'Pronto quando você estiver'}</p>
- <div className="mt-4 flex gap-2">
- <button type="button" onClick={() => setIsRunning((value) => !value)} disabled={seconds === 0} className="flex-1 rounded-md bg-brand py-3 text-sm font-semibold text-white disabled:opacity-40">{isRunning ? 'Pausar' : seconds < 360 ? 'Continuar' : 'Iniciar teste'}</button>
- <button type="button" onClick={() => { setSeconds(360); setIsRunning(false); }} className="rounded-md border border-line px-4 text-sm text-muted">Reiniciar</button>
-          </div>
-        </Card>
+        <div className="enter" style={stagger(1)}>
+          <Card className="flex flex-col items-center !py-6">
+            <Ring progress={progress} size={200} stroke={12} colorClass={done ? 'text-ok' : 'text-violet'} animate={false}>
+              <div className="text-center">
+                <p className={`num text-[56px] leading-none ${done ? 'text-ok' : 'text-fg'}`}>{minutes}:{remainingSeconds}</p>
+                <p className="mt-1 text-[13px] font-semibold text-muted">
+                  {done ? 'Concluído' : isRunning ? 'Em andamento' : 'Pronto'}
+                </p>
+              </div>
+            </Ring>
+            {done && <p className="mt-3 text-[15px] text-muted">Registre os resultados abaixo.</p>}
+            <div className="mt-5 flex w-full gap-2">
+              <Button size="lg" fullWidth disabled={done} onClick={() => setIsRunning((value) => !value)}>
+                {isRunning ? 'Pausar' : seconds < 360 ? 'Continuar' : 'Iniciar teste'}
+              </Button>
+              <Button size="lg" variant="secondary" className="shrink-0 whitespace-nowrap" onClick={() => { setSeconds(360); setIsRunning(false); }}>Reiniciar</Button>
+            </div>
+          </Card>
+        </div>
 
- <form onSubmit={submit} className="space-y-4">
- <h3 className="font-bold text-fg">Registrar resultado</h3>
- {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
- <label className="block text-sm text-fg">Distância percorrida (metros)<input required type="number" min="50" max="2000" value={distance} onChange={(event) => setDistance(event.target.value)} placeholder="Ex: 620" className="mt-2 w-full rounded-md shadow-card bg-surface px-4 py-3 text-fg focus:outline-none" /></label>
- <label className="block text-sm text-fg">Esforço percebido: <strong className="text-brand-fg">{exertion}/10</strong><input type="range" min="1" max="10" value={exertion} onChange={(event) => setExertion(event.target.value)} className="mt-3 w-full" /></label>
- <div className="grid grid-cols-2 gap-3">
- <label className="text-sm text-fg">FC média <span className="text-dim">(opcional)</span><input type="number" min="30" max="240" value={averageHeartRate} onChange={(event) => setAverageHeartRate(event.target.value)} placeholder="bpm" className="mt-2 w-full rounded-md shadow-card bg-surface px-3 py-3 text-fg focus:outline-none" /></label>
- <label className="text-sm text-fg">FC ao final <span className="text-dim">(opcional)</span><input type="number" min="30" max="240" value={postHeartRate} onChange={(event) => setPostHeartRate(event.target.value)} placeholder="bpm" className="mt-2 w-full rounded-md shadow-card bg-surface px-3 py-3 text-fg focus:outline-none" /></label>
-          </div>
- <button disabled={isSaving} className="w-full rounded-md bg-brand py-3.5 font-semibold text-white disabled:opacity-50">{isSaving ? 'Salvando...' : 'Salvar avaliação'}</button>
+        <form onSubmit={submit} className="enter space-y-4 pt-2" style={stagger(2)}>
+          <SectionTitle>Registrar resultado</SectionTitle>
+          {error && <Notice tone="danger">{error}</Notice>}
+          <Card className="space-y-4">
+            <label className="block">
+              <span className={fieldLabel}>Distância percorrida (metros)</span>
+              <input required type="number" inputMode="numeric" min="50" max="2000" value={distance} onChange={(event) => setDistance(event.target.value)} placeholder="Ex.: 620" className="mt-1.5 w-full min-w-0" />
+            </label>
+            <div>
+              <div className="flex items-baseline justify-between">
+                <span className={fieldLabel}>Esforço percebido</span>
+                <span className="num text-[24px] text-violet">{exertion}<span className="font-sans text-[13px] font-semibold text-muted"> de 10</span></span>
+              </div>
+              <input type="range" min="1" max="10" value={exertion} onChange={(event) => setExertion(event.target.value)} className="mt-3 h-8 w-full accent-violet" aria-label="Esforço percebido de 1 a 10" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className={fieldLabel}>FC média <span className="font-medium text-dim">(opcional)</span></span>
+                <input type="number" inputMode="numeric" min="30" max="240" value={averageHeartRate} onChange={(event) => setAverageHeartRate(event.target.value)} placeholder="bpm" className="mt-1.5 w-full min-w-0" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>FC final <span className="font-medium text-dim">(opcional)</span></span>
+                <input type="number" inputMode="numeric" min="30" max="240" value={postHeartRate} onChange={(event) => setPostHeartRate(event.target.value)} placeholder="bpm" className="mt-1.5 w-full min-w-0" />
+              </label>
+            </div>
+          </Card>
+          <Button type="submit" size="lg" fullWidth isLoading={isSaving}>Salvar avaliação</Button>
         </form>
 
-        <section>
- <h3 className="mb-3 font-bold text-fg">Histórico</h3>
- {assessments.length === 0 ? <Card className="text-center text-sm text-dim">Seu primeiro teste será usado como linha de base.</Card> : (
- <div className="space-y-2">{assessments.map((assessment, index) => (
- <Card key={assessment.performed_at} className={index === 0 ? 'border-brand' : ''}>
- <div className="flex items-center justify-between"><div><p className="text-2xl font-black text-brand-fg">{assessment.distance_meters} m</p><p className="text-xs text-dim">{new Date(assessment.performed_at).toLocaleDateString('pt-BR')} · esforço {assessment.perceived_exertion}/10</p></div>{index === 0 && <span className="rounded-full bg-brand-soft px-2 py-1 text-xs font-semibold text-brand-fg">Mais recente</span>}</div>
- {(assessment.average_heart_rate || assessment.post_heart_rate) && <p className="mt-2 text-xs text-dim">FC média: {assessment.average_heart_rate ?? '—'} · FC final: {assessment.post_heart_rate ?? '—'} bpm</p>}
-              </Card>
-            ))}</div>
+        <section className="enter pt-2" style={stagger(3)}>
+          <SectionTitle>Histórico</SectionTitle>
+          {assessments.length === 0 ? (
+            <Card className="text-center">
+              <p className="text-[15px] leading-[1.45] text-muted">Seu primeiro teste será usado como linha de base.</p>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {assessments.map((assessment, index) => (
+                <Card key={assessment.performed_at} tint={index === 0 ? 'violet' : undefined}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className={`num text-[32px] leading-[1.05] ${index === 0 ? 'text-violet' : 'text-fg'}`}>
+                        {assessment.distance_meters}<span className="ml-1 font-sans text-[15px] font-semibold text-muted">m</span>
+                      </p>
+                      <p className="mt-1 text-[13px] text-muted">
+                        {new Date(assessment.performed_at).toLocaleDateString('pt-BR')}, esforço {assessment.perceived_exertion} de 10
+                      </p>
+                    </div>
+                    {index === 0 && <Chip tone="violet" className="shrink-0">Mais recente</Chip>}
+                  </div>
+                  {(assessment.average_heart_rate || assessment.post_heart_rate) && (
+                    <p className="mt-2 text-[13px] text-muted">
+                      FC média {assessment.average_heart_rate ?? 'sem dado'}, FC final {assessment.post_heart_rate ?? 'sem dado'} bpm
+                    </p>
+                  )}
+                </Card>
+              ))}
+            </div>
           )}
         </section>
       </div>
