@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
+import { NextWorkoutHero } from '../components/treinos/NextWorkoutHero';
+import { EmptyState, Skel, SkelRows, SectionTitle, stagger } from '../components/treinos/states';
+import { Archive, Calendar, ChevronRight, Clock, Dumbbell, History, Pencil, Plus, Spark, Wifi } from '../components/treinos/icons';
 import { PlanWeekCard } from '../components/PlanWeekCard';
 import { computePlanWeekProgress } from '../lib/planProgress';
 import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
@@ -11,10 +15,10 @@ import { pullTrainingPlans, trainingPlansCache } from '../lib/local/repo/trainin
 import { pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
 
 function lastDoneLabel(lastDoneAt: number | null) {
-  if (lastDoneAt === null) return 'ainda não feito';
+  if (lastDoneAt === null) return 'Ainda não feito';
   const done = new Date(lastDoneAt);
-  if (done.toDateString() === new Date().toDateString()) return 'feito hoje';
-  return `última vez ${done.toLocaleDateString('pt-BR')}`;
+  if (done.toDateString() === new Date().toDateString()) return 'Você já treinou hoje';
+  return `Última vez em ${done.toLocaleDateString('pt-BR')}`;
 }
 
 export function WorkoutsPage() {
@@ -59,73 +63,125 @@ export function WorkoutsPage() {
     });
   }, [trackedPlan, detail, history, queue]);
 
+  const next = progress?.days.find((entry) => entry.isNext);
+  const nextDay = next?.day;
+  const nextSets = nextDay?.exercises?.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0) ?? 0;
+  const goPlan = (planId: number) => navigate(`/training-plans/${planId}`);
+
+  const linkRow = (icon: React.ReactNode, tint: string, title: string, text: string, to: string, index: number) => (
+    <button
+      type="button"
+      onClick={() => navigate(to)}
+      className="enter press flex min-h-[72px] w-full items-center gap-4 rounded-lg bg-surface p-[18px] text-left shadow-card"
+      style={stagger(index)}
+    >
+      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-md ${tint}`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16px] font-bold text-fg">{title}</span>
+        <span className="mt-0.5 block text-[15px] leading-[1.35] text-muted">{text}</span>
+      </span>
+      <ChevronRight className="h-5 w-5 shrink-0 text-dim" />
+    </button>
+  );
+
   return (
     <>
-      <Header title="Planos de treino" rightAction={<Button size="sm" onClick={() => navigate('/training-plans/new')}>+ Plano</Button>} />
-      <div className="space-y-4 px-4 py-4 pb-24">
-        {progress && trackedPlan && <PlanWeekCard progress={progress} />}
-
-        {isLoading ? <div className="py-16 text-center text-muted">Carregando planos...</div> : visiblePlans.length === 0 ? (
-          <div className="space-y-4 py-14 text-center"><img src="/mob-icon.png" alt="" className="mx-auto h-24 w-24 rounded-3xl object-cover opacity-80" /><h2 className="text-xl font-bold text-fg">Seu treino começa com um plano</h2><p className="mx-auto max-w-xs text-sm text-muted">Deixe o assistente criar tudo com base no seu objetivo ou monte cada treino manualmente.</p><Button onClick={() => navigate('/training-plans/new')}>Criar primeiro plano</Button></div>
+      <Header
+        title="Treinos"
+        rightAction={
+          <Button size="md" onClick={() => navigate('/training-plans/new')} aria-label="Criar plano de treino">
+            <Plus className="h-5 w-5" /> Plano
+          </Button>
+        }
+      />
+      <div className="space-y-[14px] px-5 pb-28 pt-2">
+        {isLoading ? (
+          <div role="status" aria-label="Carregando" className="space-y-[14px]">
+            <Skel className="h-[292px] rounded-xl" />
+            <Skel className="h-[152px] rounded-lg" />
+            <SkelRows count={2} />
+          </div>
+        ) : visiblePlans.length === 0 ? (
+          <EmptyState
+            icon={<Dumbbell />}
+            title="Seu treino começa com um plano"
+            text="Deixe o assistente montar tudo pelo seu objetivo ou escreva cada treino do seu jeito."
+            action={{ label: 'Criar primeiro plano', onClick: () => navigate('/training-plans/new') }}
+          />
         ) : (
-          <div className="space-y-3">{visiblePlans.map((plan) => {
-            // O treino da vez só existe para o plano acompanhado, e vive dentro
-            // do cartão dele em vez de num cartão próprio: é o mesmo assunto.
-            const next = plan.id === trackedPlan?.id ? progress?.days.find((entry) => entry.isNext) : undefined;
-            return (
-            <Card key={plan.id} onClick={() => navigate(`/training-plans/${plan.id}`)}>
-              <div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 flex-wrap"><h2 className="font-bold text-fg">{plan.name}</h2>{plan.creation_method === 'automatic' && <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-semibold text-brand-fg">IA</span>}{plan.kind === 'dynamic' && <span className="rounded-full bg-teal-soft px-2 py-0.5 text-xs font-semibold text-teal">Dinâmico</span>}</div><p className="mt-1 line-clamp-2 text-xs text-dim">{plan.description}</p></div><span className="text-dim">›</span></div>
+          <>
+            {nextDay?.id && trackedPlan && (
+              <NextWorkoutHero
+                eyebrow="Treino da vez"
+                title={nextDay.name}
+                focus={nextDay.focus}
+                stats={[
+                  { label: 'exercícios', value: nextDay.exercises?.length ?? 0 },
+                  { label: 'séries', value: nextSets },
+                  { label: 'minutos', value: trackedPlan.session_duration_minutes },
+                ]}
+                buttonLabel="Começar treino"
+                onStart={() => navigate(`/training-plans/${(detail ?? trackedPlan).id}/days/${nextDay.id}`)}
+                footnote={next ? lastDoneLabel(next.lastDoneAt) : undefined}
+              />
+            )}
 
-              {progress?.daysUnknown && plan.id === trackedPlan?.id && (
-                <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
-                  Abra este plano uma vez com internet para que o treino da vez fique disponível offline.
+            {!nextDay?.id && trackedPlan?.kind === 'dynamic' && (
+              <NextWorkoutHero
+                eyebrow="Sob demanda"
+                title="Treino de hoje"
+                focus="Gerado na hora, pensado para agora. Cada toque cria um treino novo."
+                buttonLabel="Gerar o treino de hoje"
+                onStart={() => goPlan(trackedPlan.id)}
+              />
+            )}
+
+            {progress?.daysUnknown && trackedPlan && (
+              <div className="enter flex items-start gap-3 rounded-lg bg-sun-soft p-[18px]" style={stagger(1)}>
+                <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-sun" />
+                <p className="text-[15px] leading-[1.45] text-fg">
+                  Abra o plano {trackedPlan.name} uma vez com internet para o treino da vez ficar disponível offline.
                 </p>
-              )}
+              </div>
+            )}
 
-              {plan.kind === 'dynamic' && (
-                <button
-                  type="button"
-                  onClick={(event) => { event.stopPropagation(); navigate(`/training-plans/${plan.id}`); }}
-                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-md bg-teal-soft px-3 py-3 text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-xs font-semibold uppercase tracking-widest text-teal">Sob demanda</span>
-                    <span className="mt-0.5 block truncate font-bold text-fg">Gerar o treino de hoje</span>
-                  </span>
-                  <span className="shrink-0 rounded-lg bg-teal px-3 py-1.5 text-xs font-bold text-fg">Abrir ›</span>
-                </button>
-              )}
+            {progress && trackedPlan && <div className="enter" style={stagger(2)}><PlanWeekCard progress={progress} /></div>}
 
-              {next?.day.id && (
-                <button
-                  type="button"
-                  // O cartão inteiro navega para o plano; sem isto, tocar em
-                  // Iniciar abriria o plano em vez de começar o treino.
-                  onClick={(event) => { event.stopPropagation(); navigate(`/training-plans/${(detail ?? plan).id}/days/${next.day.id}`); }}
-                  className="mt-3 flex w-full items-center justify-between gap-3 rounded-md bg-brand-soft px-3 py-3 text-left"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-xs font-semibold uppercase tracking-widest text-brand-fg">Treino da vez</span>
-                    <span className="mt-0.5 block truncate font-bold text-fg">{next.day.name}</span>
-                    <span className="mt-0.5 block truncate text-xs text-dim">
-                      {next.day.focus ? `${next.day.focus} · ` : ''}{lastDoneLabel(next.lastDoneAt)}
-                    </span>
-                  </span>
-                  <span className="shrink-0 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white">Iniciar ›</span>
-                </button>
-              )}
-
-              <div className="mt-4 flex items-center gap-4 border-t border-line pt-3 text-xs text-muted"><span><strong className="text-fg">{plan.days_per_week}x</strong> semana</span><span><strong className="text-fg">{plan.session_duration_minutes}</strong> min</span><span className="ml-auto">até {new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</span></div>
-            </Card>
-            );
-          })}</div>
+            <div className="enter space-y-[14px] pt-3" style={stagger(3)}>
+              <SectionTitle>Seus planos</SectionTitle>
+              {visiblePlans.map((plan) => {
+                const isTracked = plan.id === trackedPlan?.id;
+                return (
+                  <Card key={plan.id} tint={isTracked ? 'brand' : undefined} onClick={() => goPlan(plan.id)} className="flex min-h-[72px] items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{plan.name}</h3>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {plan.creation_method === 'automatic' && <Chip tone="brand" icon={<Spark />}>IA</Chip>}
+                        {plan.kind === 'dynamic' && <Chip tone="teal">Dinâmico</Chip>}
+                        <Chip icon={<Clock />}>{plan.session_duration_minutes} min</Chip>
+                        <Chip icon={<Calendar />}>até {new Date(`${plan.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR')}</Chip>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="num text-[34px] leading-none text-fg">{plan.days_per_week}x</p>
+                      <p className="mt-1 text-[13px] text-muted">por semana</p>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
         )}
 
-        <button onClick={() => navigate('/workouts/history')} className="flex w-full items-center justify-between rounded-lg bg-brand-soft px-4 py-3 text-left"><div><p className="text-sm font-semibold text-brand-fg">Histórico de treinos</p><p className="text-xs text-dim">Calendário e sessões já realizadas</p></div><span className="text-xl text-brand-fg">›</span></button>
-
-        <button onClick={() => navigate('/training-plans/archived')} className="flex w-full items-center justify-between rounded-lg bg-surface shadow-card px-4 py-3 text-left"><div><p className="text-sm font-semibold text-muted">Planos arquivados</p><p className="text-xs text-dim">Planos encerrados após a data-alvo</p></div><span className="text-xl text-dim">›</span></button>
-
-        <button onClick={() => navigate('/workouts/new')} className="w-full py-2 text-sm text-dim hover:text-muted">Registrar treino livre</button>
+        {!isLoading && (
+          <div className="space-y-[14px] pt-3">
+            {linkRow(<History className="h-6 w-6" />, 'bg-violet-soft text-violet', 'Histórico de treinos', 'Calendário e sessões já feitas', '/workouts/history', 4)}
+            {linkRow(<Archive className="h-6 w-6" />, 'bg-surface-2 text-muted', 'Planos arquivados', 'Planos encerrados depois da data-alvo', '/training-plans/archived', 5)}
+            <Button variant="secondary" size="md" fullWidth onClick={() => navigate('/workouts/new')}>
+              <Pencil className="h-5 w-5" /> Registrar treino livre
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );
