@@ -4,6 +4,8 @@ import { useWorkoutStore } from '../stores/useWorkoutStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { Field, SectionTitle, stagger } from '../components/treinos/states';
+import { Plus, Trash } from '../components/treinos/icons';
 import type { TrainingPlanDay, WorkoutSetInput } from '../types';
 
 export function NewWorkoutPage() {
@@ -49,122 +51,66 @@ export function NewWorkoutPage() {
     navigate(planState?.planId ? `/training-plans/${planState.planId}` : '/workouts');
   };
 
+  const numInput = 'text-center font-semibold';
   return (
     <>
-      <Header title="Novo Treino" showBack />
- <form onSubmit={handleSubmit} className="px-4 py-4 pb-24 space-y-4">
-        {/* Basic info */}
- <Card className="space-y-4">
-          <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-1.5">
-              Nome do treino *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Peito e Tríceps"
-              required
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg placeholder-dim focus:outline-none transition-colors"
-            />
-          </div>
-
-          <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-1.5">Duração (minutos)</label>
- <input type="number" min="1" max="600" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Ex: 60" className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none transition-colors" />
-          </div>
-
-          <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-1.5">Data</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none transition-colors"
-            />
-          </div>
-
-          <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-1.5">Observações</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Como foi o treino..."
-              rows={2}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg placeholder-dim focus:outline-none transition-colors resize-none"
-            />
-          </div>
-        </Card>
-
-        {/* Exercises */}
-        <div>
- <div className="flex items-center justify-between mb-3">
- <h3 className="font-semibold text-fg">Exercícios</h3>
- <button type="button" onClick={addSet} className="text-brand-fg text-sm font-medium">
-              + Adicionar
-            </button>
-          </div>
-
- <div className="space-y-3">
-            {sets.map((set, index) => (
- <Card key={index} className="space-y-3">
- <div className="flex items-center justify-between">
- <span className="text-xs text-dim font-medium">Exercício {index + 1}</span>
-                  {sets.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSet(index)}
- className="text-danger text-xs"
-                    >
-                      Remover
-                    </button>
-                  )}
-                </div>
-
-                <input
-                  type="text"
-                  value={set.exercise_name}
-                  onChange={(e) => updateSet(index, 'exercise_name', e.target.value)}
-                  placeholder="Nome do exercício"
- className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg placeholder-dim focus:outline-none transition-colors text-sm"
-                />
-
- <div className="grid grid-cols-3 gap-2">
-                  <div>
- <label className="block text-xs text-dim mb-1">Séries</label>
-                    <input
-                      type="number"
-                      value={set.sets}
-                      min={1}
-                      onChange={(e) => updateSet(index, 'sets', Number(e.target.value))}
- className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg text-center focus:outline-none transition-colors text-sm"
-                    />
-                  </div>
-                  <div>
- <label className="block text-xs text-dim mb-1">{set.tracking_type === 'time' ? 'Segundos' : 'Reps'}</label>
- <input type="number" value={set.tracking_type === 'time' ? (set.duration_seconds ?? 60) : set.reps} min={1} onChange={(e) => updateSet(index, set.tracking_type === 'time' ? 'duration_seconds' : 'reps', Number(e.target.value))} className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg text-center focus:outline-none transition-colors text-sm" />
-                  </div>
-                  <div>
- <label className="block text-xs text-dim mb-1">{set.tracking_type === 'time' ? 'Tipo' : 'Peso (kg)'}</label>
- {set.tracking_type === 'time' ? <div className="rounded-md border border-line bg-surface-2 px-2 py-2.5 text-center text-xs text-muted">Tempo</div> :
-                    <input
-                      type="number"
-                      value={set.weight_kg}
-                      min={0}
-                      step={0.5}
-                      onChange={(e) => updateSet(index, 'weight_kg', Number(e.target.value))}
- className="w-full bg-surface-2 border border-line rounded-md px-3 py-2.5 text-fg text-center focus:outline-none transition-colors text-sm"
-                    />}
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
+      <Header title="Novo treino" showBack />
+      <form onSubmit={handleSubmit} className="space-y-[14px] px-5 pb-28 pt-2">
+        <div className="enter">
+          <Card className="space-y-4">
+            <Field label="Nome do treino">
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Peito e tríceps" required className="w-full" />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Data">
+                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
+              </Field>
+              <Field label="Duração" hint="min">
+                <input type="number" inputMode="numeric" min="1" max="600" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="60" className={`w-full ${numInput}`} />
+              </Field>
+            </div>
+            <Field label="Observações" hint="opcional">
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Como foi o treino..." rows={2} className="w-full resize-none" />
+            </Field>
+          </Card>
         </div>
 
-        <Button type="submit" fullWidth size="lg" isLoading={isLoading} disabled={!name.trim()}>
-          Salvar Treino
-        </Button>
+        <div className="enter space-y-[14px] pt-3" style={stagger(1)}>
+          <SectionTitle>Exercícios</SectionTitle>
+          {sets.map((set, index) => (
+            <Card key={index} className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="num text-[28px] leading-none text-brand-fg">{String(index + 1).padStart(2, '0')}</span>
+                {sets.length > 1 && (
+                  <button type="button" onClick={() => removeSet(index)} aria-label={`Remover exercício ${index + 1}`} className="press flex min-h-[48px] items-center gap-2 rounded-md px-3 text-[15px] font-semibold text-danger">
+                    <Trash className="h-4 w-4" /> Remover
+                  </button>
+                )}
+              </div>
+              <input type="text" value={set.exercise_name} onChange={(e) => updateSet(index, 'exercise_name', e.target.value)} placeholder="Nome do exercício" aria-label="Nome do exercício" className="w-full" />
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Séries">
+                  <input type="number" inputMode="numeric" value={set.sets} min={1} onChange={(e) => updateSet(index, 'sets', Number(e.target.value))} className={`w-full px-2 ${numInput}`} />
+                </Field>
+                <Field label={set.tracking_type === 'time' ? 'Segundos' : 'Reps'}>
+                  <input type="number" inputMode="numeric" value={set.tracking_type === 'time' ? (set.duration_seconds ?? 60) : set.reps} min={1} onChange={(e) => updateSet(index, set.tracking_type === 'time' ? 'duration_seconds' : 'reps', Number(e.target.value))} className={`w-full px-2 ${numInput}`} />
+                </Field>
+                <Field label={set.tracking_type === 'time' ? 'Tipo' : 'Peso (kg)'}>
+                  {set.tracking_type === 'time'
+                    ? <div className="flex min-h-[52px] items-center justify-center rounded-md bg-surface-2 text-[15px] text-muted">Tempo</div>
+                    : <input type="number" inputMode="decimal" value={set.weight_kg} min={0} step={0.5} onChange={(e) => updateSet(index, 'weight_kg', Number(e.target.value))} className={`w-full px-2 ${numInput}`} />}
+                </Field>
+              </div>
+            </Card>
+          ))}
+          <Button type="button" variant="tonal" size="md" fullWidth onClick={addSet}>
+            <Plus className="h-5 w-5" /> Adicionar exercício
+          </Button>
+        </div>
+
+        <div className="pt-3">
+          <Button type="submit" fullWidth size="lg" isLoading={isLoading} disabled={!name.trim()}>Salvar treino</Button>
+        </div>
       </form>
     </>
   );

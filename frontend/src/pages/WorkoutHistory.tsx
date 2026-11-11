@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
-import { MonthlyCalendar } from '../components/MonthlyCalendar';
+import { Chip } from '../components/Chip';
+import { CountUp } from '../components/CountUp';
+import { TrainingCalendar } from '../components/treinos/TrainingCalendar';
+import { ErrorState, Skel, stagger } from '../components/treinos/states';
+import { Clock, Layers, Trash } from '../components/treinos/icons';
 import { workoutsApi } from '../api/workouts';
 import { invalidateCacheByPrefix } from '../lib/offline';
 import { listByDate, workoutsCache } from '../lib/local/repo/workouts';
@@ -33,7 +37,8 @@ export function WorkoutHistoryPage() {
     // Trocar de mês fecha o dia aberto: ele não existe mais no calendário à vista.
     setSelectedDate(null);
     setDayWorkouts(null);
-    loadMonth().finally(() => setIsLoading(false));
+    setError(null);
+    loadMonth().catch((requestError) => setError(getErrorMessage(requestError))).finally(() => setIsLoading(false));
   }, [loadMonth]);
 
   const openDay = async (date: string) => {
@@ -90,76 +95,63 @@ export function WorkoutHistoryPage() {
   };
 
   const total = data?.days.reduce((sum, day) => sum + day.count, 0) ?? 0;
-  const values = Object.fromEntries((data?.days ?? []).map((day) => [day.date, {
-    label: `${day.count} ${day.count === 1 ? 'treino' : 'treinos'}`,
-    intensity: Math.min(day.count / 2, 1),
-  }]));
+  const counts = Object.fromEntries((data?.days ?? []).map((day) => [day.date, day.count]));
+  const monthName = month.toLocaleDateString('pt-BR', { month: 'long' });
 
   return (
     <>
-      <Header title="Histórico de treinos" showBack />
-      <div className="space-y-4 px-4 py-5 pb-24">
-        <div>
-          <p className="text-sm text-muted">Total no mês</p>
-          <p className="text-3xl font-black text-brand-fg">{total} <span className="text-sm font-normal text-muted">treinos</span></p>
-        </div>
+      <Header title="Histórico" showBack />
+      <div className="space-y-[14px] px-5 pb-28 pt-2">
+        <Card tint="violet" className="enter flex items-end justify-between gap-3 !p-5" >
+          <div className="min-w-0">
+            <p className="text-[13px] font-bold uppercase tracking-[0.06em] text-muted">Treinos em {monthName}</p>
+            <p className="num mt-1 text-[56px] leading-none text-violet"><CountUp key={monthKey + total} value={total} /></p>
+          </div>
+          <p className="pb-1 text-right text-[15px] text-muted">{total === 1 ? 'sessão feita' : 'sessões feitas'}</p>
+        </Card>
+
+        {error && <ErrorState message={error} onRetry={() => { setError(null); setIsLoading(true); loadMonth().catch((e) => setError(getErrorMessage(e))).finally(() => setIsLoading(false)); }} />}
 
         {isLoading ? (
-          <div className="py-16 text-center text-muted">Carregando...</div>
+          <Skel className="h-[420px] rounded-lg" />
         ) : (
-          <MonthlyCalendar
-            month={month}
-            values={values}
-            onMonthChange={setMonth}
-            onDayClick={openDay}
-            selectedDate={selectedDate}
-          />
+          <div className="enter" style={stagger(1)}>
+            <TrainingCalendar month={month} counts={counts} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
+          </div>
         )}
 
-        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
-
         {selectedDate ? (
-          <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">{formatDayLabel(selectedDate)}</h3>
+          <div className="enter space-y-[14px] pt-2">
+            <h2 className="text-[17px] font-bold text-fg">{formatDayLabel(selectedDate).replace(/^./, (c) => c.toUpperCase())}</h2>
             {isLoadingDay ? (
-              <div className="py-8 text-center text-sm text-muted">Carregando treinos...</div>
+              <Skel className="h-[96px] rounded-lg" />
             ) : (
-              <div className="space-y-2">
+              <>
                 {(dayWorkouts ?? []).map((workout) => (
-                  <Card key={workout.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/workouts/${workout.id}`)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="truncate font-semibold text-fg">{workout.name}</p>
-                        <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-dim">
-                          <span>{formatTime(workout.date)}</span>
-                          {workout.duration_minutes ? <span>{workout.duration_minutes} min</span> : null}
-                          {workout.set_count ? <span>{workout.set_count} {workout.set_count === 1 ? 'série' : 'séries'}</span> : null}
+                  <Card key={workout.id} className="!p-0">
+                    <button type="button" onClick={() => navigate(`/workouts/${workout.id}`)} className="press flex min-h-[72px] w-full items-center gap-3 rounded-lg p-[18px] text-left">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[17px] font-bold text-fg">{workout.name}</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Chip icon={<Clock />}>{formatTime(workout.date)}{workout.duration_minutes ? `, ${workout.duration_minutes} min` : ''}</Chip>
+                          {workout.set_count ? <Chip icon={<Layers />}>{workout.set_count} {workout.set_count === 1 ? 'série' : 'séries'}</Chip> : null}
                         </div>
-                        {workout.notes && <p className="mt-1 truncate text-xs italic text-dim">{workout.notes}</p>}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => remove(workout)}
-                        aria-label={`Apagar ${workout.name}`}
-                        className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-danger"
-                      >
-                        Apagar
+                        {workout.notes && <p className="mt-2 line-clamp-2 text-[15px] text-muted">{workout.notes}</p>}
+                      </div>
+                    </button>
+                    <div className="border-t border-line px-2">
+                      <button type="button" onClick={() => remove(workout)} aria-label={`Apagar ${workout.name}`} className="press flex min-h-[48px] items-center gap-2 rounded-md px-3 text-[15px] font-semibold text-danger">
+                        <Trash className="h-4 w-4" /> Apagar
                       </button>
                     </div>
                   </Card>
                 ))}
-                {dayWorkouts?.length === 0 && (
-                  <p className="py-6 text-center text-sm text-dim">Nenhum treino neste dia.</p>
-                )}
-              </div>
+                {dayWorkouts?.length === 0 && <p className="py-6 text-center text-[15px] text-muted">Nenhum treino neste dia.</p>}
+              </>
             )}
           </div>
         ) : (
-          <p className="text-center text-xs text-dim">Toque num dia destacado para ver os treinos realizados.</p>
+          !isLoading && <p className="pt-2 text-center text-[15px] text-muted">{total === 0 ? 'Nenhum treino neste mês ainda.' : 'Toque num dia marcado para ver o que você fez.'}</p>
         )}
       </div>
     </>
