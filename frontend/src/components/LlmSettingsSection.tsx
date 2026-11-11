@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Card } from './Card';
 import { Button } from './Button';
+import { Notice, Skeleton } from './perfil/ui';
 import { DEFAULT_LLM_SETTINGS, KNOWN_LLM_PROVIDERS, llmApi, providerLabel, providerModels } from '../api/llm';
 import { getErrorMessage } from '../api/client';
 import { useOfflineStatus } from '../lib/offline';
@@ -68,41 +69,36 @@ export function LlmSettingsSection() {
   };
 
   if (isLoading) {
-    return (
-      <Card>
-        <p className="text-sm text-muted">Carregando configurações de IA...</p>
-      </Card>
-    );
+    return <Skeleton className="h-[160px]" />;
   }
+
+  const label = 'block text-[13px] font-semibold leading-[1.3] text-muted';
 
   return (
     <div className="space-y-3">
-      {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
-      {notice && <div className="rounded-md bg-brand-soft p-3 text-sm text-brand-fg">{notice}</div>}
+      {error && <Notice tone="danger">{error}</Notice>}
+      {notice && <Notice tone="ok">{notice}</Notice>}
 
-      {/* Current state, first thing on screen: the person needs to know whose credits pay for the AI. */}
-      <Card className={settings.using_shared_credits ? 'bg-sun-soft' : 'bg-brand-soft'}>
-        <p className="text-xs uppercase tracking-wide text-dim">Situação atual</p>
+      {/* Situação atual primeiro: a pessoa precisa saber de quem é o crédito que paga a IA. */}
+      <Card tint={settings.using_shared_credits ? 'sun' : 'ok'}>
+        <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Situação atual</p>
         {settings.using_shared_credits ? (
           <>
-            <p className="mt-1 text-sm font-bold text-sun">Usando o crédito compartilhado</p>
-            <p className="mt-2 text-xs leading-relaxed text-sun/80">
-              O MOB gratuito usa modelos de IA gratuitos, com um crédito compartilhado entre todos os usuários. Esse
-              crédito é limitado e <strong>pode acabar</strong> — quando isso acontece, criar planos e tirar dúvidas
-              param de funcionar até o crédito voltar. Se você não quiser dividir esse crédito, cadastre a sua própria
-              chave de API abaixo.
+            <p className="num mt-1 text-[24px] leading-[1.1] text-sun">Crédito compartilhado</p>
+            <p className="mt-2 text-[15px] leading-[1.45] text-muted">
+              O MOB gratuito usa modelos de IA gratuitos, com um crédito dividido entre todos os usuários. Esse
+              crédito é limitado e <strong className="text-fg">pode acabar</strong>. Quando isso acontece, criar planos e
+              tirar dúvidas param de funcionar até o crédito voltar. Para não dividir, cadastre a sua própria chave
+              de API abaixo.
             </p>
           </>
         ) : (
           <>
-            <p className="mt-1 text-sm font-bold text-brand-fg">
-              {settings.key_preview
-                ? `Usando a sua chave ${settings.key_preview}`
-                : 'Usando a sua chave de API'}
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-muted">
+            <p className="num mt-1 text-[24px] leading-[1.1] text-ok">Sua chave de API</p>
+            <p className="mt-2 text-[15px] leading-[1.45] text-muted">
+              {settings.key_preview ? `Chave ${settings.key_preview}. ` : ''}
               {providerLabel(settings.provider)}
-              {settings.model ? ` · ${settings.model}` : ''} — seu uso não depende do crédito compartilhado.
+              {settings.model ? `, ${settings.model}` : ''}. Seu uso não depende do crédito compartilhado.
             </p>
           </>
         )}
@@ -110,24 +106,24 @@ export function LlmSettingsSection() {
 
       <Card className="space-y-4">
         <div>
-          <h4 className="text-sm font-semibold text-fg">Usar a minha própria chave</h4>
-          <p className="mt-1 text-xs leading-relaxed text-dim">
+          <h4 className="text-[17px] font-bold text-fg">Usar a minha própria chave</h4>
+          <p className="mt-1 text-[15px] leading-[1.45] text-muted">
             A chave fica guardada na sua conta e é usada só nas suas requisições. O custo passa a ser cobrado
-            diretamente pelo provedor que você escolher.
+            direto pelo provedor que você escolher.
           </p>
         </div>
 
-        <label className="block text-sm text-muted">
-          Provedor
+        <label className="block">
+          <span className={label}>Provedor</span>
           <select
             value={provider}
             onChange={(event) => {
               setProvider(event.target.value);
               setModel('');
             }}
-            className="mt-2 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg"
+            className="mt-1.5 w-full"
           >
-            {/* Keeps an unknown provider coming from the backend selectable instead of silently switching it. */}
+            {/* Mantém selecionável um provedor desconhecido vindo do backend, em vez de trocá-lo em silêncio. */}
             {!KNOWN_LLM_PROVIDERS.some((item) => item.value === provider) && provider && (
               <option value={provider}>{provider}</option>
             )}
@@ -137,61 +133,66 @@ export function LlmSettingsSection() {
           </select>
         </label>
 
-        <label className="block text-sm text-muted">
-          Modelo
-          <input
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder={suggestions[0] ?? 'nome-do-modelo'}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            className="mt-2 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg placeholder:text-dim"
-          />
+        <div>
+          <label className="block">
+            <span className={label}>Modelo</span>
+            <input
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              placeholder={suggestions[0] ?? 'nome-do-modelo'}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              className="mt-1.5 w-full min-w-0"
+            />
+          </label>
           {suggestions.length > 0 && (
-            <span className="mt-2 flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {suggestions.map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setModel(item)}
-                  className={`rounded-full border px-3 py-2 text-xs ${
+                  aria-pressed={model === item}
+                  className={`press min-h-[44px] rounded-chip px-4 text-[15px] font-semibold ${
                     model === item ? 'bg-brand-soft text-brand-fg' : 'bg-surface-2 text-muted'
                   }`}
                 >
                   {item}
                 </button>
               ))}
-            </span>
+            </div>
           )}
-        </label>
+        </div>
 
-        <label className="block text-sm text-muted">
-          Chave de API
-          <span className="mt-2 flex items-stretch gap-2">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder={settings.configured ? `Cadastrada (${settings.key_preview || 'oculta'})` : 'Cole a sua chave aqui'}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              className="min-w-0 flex-1 rounded-md border border-transparent bg-surface-2 px-4 py-3.5 text-fg placeholder:text-dim"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey((current) => !current)}
-              className="shrink-0 rounded-md bg-surface-2 px-4 text-xs font-semibold text-muted"
-            >
-              {showKey ? 'Ocultar' : 'Mostrar'}
-            </button>
-          </span>
-          <span className="mt-2 block text-xs leading-relaxed text-dim">
+        <div>
+          <label className="block">
+            <span className={label}>Chave de API</span>
+            <span className="mt-1.5 flex items-stretch gap-2">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder={settings.configured ? `Cadastrada (${settings.key_preview || 'oculta'})` : 'Cole a sua chave aqui'}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="min-w-0 flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey((current) => !current)}
+                className="press min-h-[52px] shrink-0 rounded-md bg-surface-2 px-4 text-[15px] font-semibold text-muted"
+              >
+                {showKey ? 'Ocultar' : 'Mostrar'}
+              </button>
+            </span>
+          </label>
+          <p className="mt-2 text-[13px] leading-[1.45] text-muted">
             {KNOWN_LLM_PROVIDERS.find((item) => item.value === provider)?.keyHint ?? 'Chave fornecida pelo provedor.'}
-            {settings.configured && ' Por segurança a chave salva não é exibida — para trocar de provedor ou modelo, informe a chave de novo.'}
-          </span>
-        </label>
+            {settings.configured && ' Por segurança a chave salva não é exibida. Para trocar de provedor ou modelo, informe a chave de novo.'}
+          </p>
+        </div>
 
         <Button
           fullWidth
@@ -203,11 +204,11 @@ export function LlmSettingsSection() {
           {settings.configured ? 'Atualizar minha chave' : 'Salvar minha chave'}
         </Button>
         {!isOnline && (
-          <p className="text-center text-xs text-dim">Isso precisa de internet. Conecte-se e tente de novo.</p>
+          <p className="text-center text-[13px] text-muted">Isso precisa de internet. Conecte-se e tente de novo.</p>
         )}
 
         {settings.configured && (
-          <Button fullWidth variant="secondary" onClick={removeKey} disabled={isSaving || !isOnline}>
+          <Button fullWidth variant="danger" onClick={removeKey} disabled={isSaving || !isOnline}>
             Remover chave e voltar ao compartilhado
           </Button>
         )}

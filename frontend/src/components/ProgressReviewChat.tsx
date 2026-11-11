@@ -144,7 +144,7 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
           rows={1}
           maxLength={1500}
           placeholder="Escreva sua pergunta..."
-          className="max-h-28 min-h-[48px] flex-1 resize-none flex-1 resize-none text-fg disabled:opacity-50"
+          className="max-h-28 min-h-[52px] min-w-0 flex-1 resize-none text-fg disabled:opacity-50"
         />
         <button
           type="submit"

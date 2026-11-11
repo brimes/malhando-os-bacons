@@ -57,11 +57,11 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
         aria-modal="true"
         aria-label="Excluir minha conta"
       >
-        <h3 className="text-lg font-bold text-fg">Excluir minha conta</h3>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
+        <h3 className="num text-[28px] leading-[1.05] text-fg">Excluir minha conta</h3>
+        <p className="mt-2 text-[15px] leading-[1.45] text-muted">
           Isto apaga a sua conta e tudo que está nela, no aparelho e no servidor:
         </p>
-        <ul className="mt-3 space-y-1.5 text-sm text-muted">
+        <ul className="mt-3 space-y-2 text-[15px] text-muted">
           {[
             'Perfil, objetivo e medições',
             'Planos de treino, treinos feitos e cargas registradas',
@@ -69,33 +69,33 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
             'Conversas com a IA',
           ].map((item) => (
             <li key={item} className="flex gap-2">
-              <span className="text-danger">•</span>
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-chip bg-danger" aria-hidden="true" />
               <span>{item}</span>
             </li>
           ))}
         </ul>
-        <div className="mt-4 rounded-md bg-danger-soft p-3 text-xs font-semibold leading-relaxed text-danger">
+        <div className="mt-4 rounded-md bg-danger-soft p-3.5 text-[15px] font-semibold leading-[1.45] text-danger">
           A exclusão é imediata e não tem como desfazer. Não há backup para restaurar depois.
         </div>
 
         {error && (
-          <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>
+          <div className="mt-3 rounded-md bg-danger-soft p-3.5 text-[15px] text-danger">{error}</div>
         )}
 
         {hasPassword && (
-          <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
+          <label className="mt-4 block text-[13px] font-semibold text-muted">
             Sua senha
             <input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
-              className="mt-1 w-full rounded-md border border-transparent bg-surface-2 p-3 text-base text-fg"
+              className="mt-1.5 w-full min-w-0"
             />
           </label>
         )}
 
-        <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
+        <label className="mt-4 block text-[13px] font-semibold text-muted">
           Digite {CONFIRMATION} para confirmar
           <input
             type="text"
@@ -104,7 +104,7 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
-            className="mt-1 w-full rounded-md border border-transparent bg-surface-2 p-3 text-base text-fg"
+            className="mt-1.5 w-full min-w-0"
           />
         </label>
 
@@ -119,9 +119,9 @@ export function DeleteAccountModal({ hasPassword, onClose, onConfirm }: DeleteAc
         >
           Excluir definitivamente
         </Button>
-        <button type="button" onClick={onClose} disabled={isDeleting} className="mt-2 w-full py-3 text-sm text-muted">
+        <Button type="button" variant="ghost" fullWidth onClick={onClose} disabled={isDeleting} className="mt-2">
           Cancelar
-        </button>
+        </Button>
       </div>
     </div>
   );

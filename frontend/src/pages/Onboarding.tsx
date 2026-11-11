@@ -1,6 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
+import { Button } from '../components/Button';
+import { Icon, Segmented, fieldLabel } from '../components/perfil/ui';
 import type { BiologicalSex, TrainingExperience } from '../types';
 
 export function OnboardingPage() {
@@ -52,124 +54,124 @@ export function OnboardingPage() {
     // sob a Dynamic Island no iOS (no Android o padding nativo cobria tudo).
     <main className="min-h-screen bg-bg px-5 py-8 text-fg pt-safe pb-safe">
       <div className="mx-auto max-w-lg">
-        <header className="mb-8">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-brand-fg">Seu ponto de partida</p>
-          <h1 className="num text-4xl">Vamos personalizar seu acompanhamento</h1>
-          <div className="mt-6 grid grid-cols-2 gap-2">
-            <div className={`h-1.5 rounded-full ${profileComplete ? 'bg-brand' : 'bg-brand-soft'}`} />
-            <div className={`h-1.5 rounded-full ${profileComplete ? 'bg-brand-soft' : 'bg-surface-2'}`} />
+        <header className="enter mb-8">
+          <p className="mb-2 text-[13px] font-bold uppercase tracking-[0.06em] text-brand-fg">Etapa {profileComplete ? '2' : '1'} de 2</p>
+          <h1 className="num text-[34px] leading-[1.02] [overflow-wrap:break-word]">Vamos personalizar seu acompanhamento</h1>
+          <div className="mt-5 grid grid-cols-2 gap-2" role="progressbar" aria-valuemin={1} aria-valuemax={2} aria-valuenow={profileComplete ? 2 : 1}>
+            <div className="h-2 rounded-chip bg-brand-fg" />
+            <div className={`h-2 rounded-chip ${profileComplete ? 'bg-brand-fg' : 'bg-surface-2'}`} />
           </div>
-          <p className="mt-2 text-xs text-dim">Etapa {profileComplete ? '2' : '1'} de 2</p>
         </header>
 
-        {error && <div className="mb-4 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+        {error && <div className="mb-4 rounded-md bg-danger-soft p-3.5 text-[15px] text-danger" role="alert">{error}</div>}
 
         {!profileComplete ? (
-          <form onSubmit={saveBodyData} className="space-y-5">
+          <form onSubmit={saveBodyData} className="enter space-y-5">
             <div>
-              <h2 className="text-xl font-bold">Dados corporais</h2>
-              <p className="mt-1 text-sm text-muted">Usaremos estes dados para calcular idade e tornar os comparativos mais relevantes.</p>
+              <h2 className="text-[17px] font-bold">Dados corporais</h2>
+              <p className="mt-1 text-[15px] leading-[1.45] text-muted">Usaremos estes dados para calcular idade e tornar os comparativos mais relevantes.</p>
             </div>
 
-            <label className="block text-sm text-muted">
+            <label className={`block ${fieldLabel}`}>
               Data de nascimento
               <input type="date" required max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className="mt-2 w-full min-w-0" />
             </label>
 
             <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm text-muted">
+              <label className={fieldLabel}>
                 Altura (cm)
                 <input type="number" required min="50" max="260" step="0.1" value={height} onChange={(event) => setHeight(event.target.value)} placeholder="175" className="mt-2 w-full min-w-0" />
               </label>
-              <label className="text-sm text-muted">
+              <label className={fieldLabel}>
                 Peso atual (kg)
                 <input type="number" required min="20" max="500" step="0.1" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="78,5" className="mt-2 w-full min-w-0" />
               </label>
             </div>
 
             <fieldset>
-              <legend className="text-sm text-muted">Sexo biológico <span className="text-dim">(opcional)</span></legend>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {[
-                  { value: 'female', label: 'Feminino' },
-                  { value: 'male', label: 'Masculino' },
-                  { value: null, label: 'Não informar' },
-                ].map((option) => (
-                  <button key={option.label} type="button" onClick={() => setBiologicalSex(option.value as BiologicalSex | null)} className={`rounded-md min-h-[48px] px-2 py-3 text-[13px] ${biologicalSex === option.value ? 'bg-brand-soft text-brand-fg font-semibold' : 'bg-surface-2 text-muted'}`}>
-                    {option.label}
-                  </button>
-                ))}
+              <legend className={fieldLabel}>Sexo biológico <span className="font-medium text-dim">(opcional)</span></legend>
+              <div className="mt-2">
+                <Segmented<string> label="Sexo biológico" cols="grid-cols-3"
+                  options={[{ value: 'female', label: 'Feminino' }, { value: 'male', label: 'Masculino' }, { value: 'none', label: 'Não informar' }]}
+                  value={biologicalSex ?? 'none'}
+                  onChange={(v) => setBiologicalSex(v === 'none' ? null : (v as BiologicalSex))} />
               </div>
             </fieldset>
 
             <fieldset>
-              <legend className="text-sm text-muted">Experiência com academia</legend>
+              <legend className={fieldLabel}>Experiência com academia</legend>
               <div className="mt-2 grid grid-cols-2 gap-3">
-                <button type="button" onClick={() => setTrainingExperience('beginner')} className={`rounded-lg p-4 text-left ${trainingExperience === 'beginner' ? 'bg-brand-soft text-brand-fg' : 'bg-surface-2 text-muted'}`}>
-                  <span className="block text-lg">🌱</span><strong className="mt-2 block text-sm">Sou iniciante</strong><span className="mt-1 block text-xs opacity-70">Primeiro mês com treinos de adaptação</span>
-                </button>
-                <button type="button" onClick={() => setTrainingExperience('experienced')} className={`rounded-lg p-4 text-left ${trainingExperience === 'experienced' ? 'bg-brand-soft text-brand-fg' : 'bg-surface-2 text-muted'}`}>
-                  <span className="block text-lg">🏋️</span><strong className="mt-2 block text-sm">Já treino</strong><span className="mt-1 block text-xs opacity-70">Treinos começam sem fase de adaptação</span>
-                </button>
+                {([
+                  { v: 'beginner', icon: 'flame', title: 'Sou iniciante', sub: 'Primeiro mês com treinos de adaptação' },
+                  { v: 'experienced', icon: 'dumbbell', title: 'Já treino', sub: 'Começa sem fase de adaptação' },
+                ] as const).map((o) => {
+                  const on = trainingExperience === o.v;
+                  return (
+                    <button key={o.v} type="button" aria-pressed={on} onClick={() => setTrainingExperience(o.v)}
+                      className={`press min-h-[48px] rounded-lg p-4 text-left ${on ? 'bg-brand-soft ring-2 ring-brand-fg' : 'bg-surface-2'}`}>
+                      <span className={on ? 'text-brand-fg' : 'text-muted'}><Icon name={o.icon} className="h-6 w-6" /></span>
+                      <strong className="mt-2 block text-base text-fg">{o.title}</strong>
+                      <span className="mt-1 block text-[13px] leading-[1.35] text-muted">{o.sub}</span>
+                    </button>
+                  );
+                })}
               </div>
             </fieldset>
 
-            <label className="block text-sm text-muted">
-              Lesões, dores ou dificuldade em algum exercício <span className="text-dim">(opcional)</span>
-              <textarea value={injuriesOrLimitations} onChange={(event) => setInjuriesOrLimitations(event.target.value)} maxLength={1000} rows={3} placeholder="Ex: dor no joelho ao agachar, limitação no ombro direito..." className="mt-2 w-full resize-none" />
-              <span className="mt-1 block text-xs text-dim">Essas informações serão consideradas na criação dos seus treinos.</span>
+            <label className={`block ${fieldLabel}`}>
+              Lesões, dores ou dificuldade em algum exercício <span className="font-medium text-dim">(opcional)</span>
+              <textarea value={injuriesOrLimitations} onChange={(event) => setInjuriesOrLimitations(event.target.value)} maxLength={1000} rows={3} placeholder="Ex.: dor no joelho ao agachar" className="mt-2 w-full resize-none" />
+              <span className="mt-1 block text-[13px] font-medium text-muted">Essas informações serão consideradas na criação dos seus treinos.</span>
             </label>
 
             {biologicalSex === null && (
-              <div className="rounded-md bg-sun-soft p-4 text-sm text-sun">
+              <div className="rounded-md bg-sun-soft p-4 text-[15px] leading-[1.45] text-sun">
                 Sem essa informação, alguns cálculos e comparativos fisiológicos serão menos precisos, pois as referências variam conforme a biologia. Você poderá informar esse dado depois.
               </div>
             )}
 
-            <button disabled={isLoading || !trainingExperience} className="press w-full min-h-[52px] rounded-md bg-brand font-semibold text-white disabled:opacity-[.45]">
-              {isLoading ? 'Salvando...' : 'Continuar'}
-            </button>
+            <Button type="submit" size="lg" fullWidth disabled={!trainingExperience} isLoading={isLoading}>Continuar</Button>
           </form>
         ) : (
-          <section>
-            <h2 className="text-xl font-bold">Qual é o seu objetivo?</h2>
-            <p className="mt-1 text-sm text-muted">Converse naturalmente. Faremos no máximo uma pergunta por vez para entender seu objetivo, peso-alvo e prazo.</p>
+          <section className="enter">
+            <h2 className="num text-[28px] leading-[1.05]">Qual é o seu objetivo?</h2>
+            <p className="mt-2 text-[15px] leading-[1.45] text-muted">Converse naturalmente. Faremos no máximo uma pergunta por vez para entender seu objetivo, peso-alvo e prazo.</p>
 
             <div className="my-6 space-y-3">
               {state?.messages.map((item, index) => (
-                <div key={`${item.created_at}-${index}`} className={`max-w-[88%] rounded-lg px-4 py-3 text-sm ${item.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface shadow-card text-fg'}`}>
+                <div key={`${item.created_at}-${index}`} className={`max-w-[88%] rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${item.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface shadow-card text-fg'}`}>
                   {item.content}
                 </div>
               ))}
-              {isSending && <div className="w-fit rounded-lg bg-surface shadow-card px-4 py-3 text-sm text-dim">Analisando seu objetivo...</div>}
+              {isSending && <div className="w-fit rounded-lg bg-surface shadow-card px-4 py-3 text-[15px] text-muted">Analisando seu objetivo...</div>}
             </div>
 
             {!state?.completed && (
               <form onSubmit={submitMessage} className="space-y-3">
-                <textarea required maxLength={1000} rows={firstMessage ? 4 : 2} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={firstMessage ? 'Ex: Quero chegar aos 75 kg nos próximos seis meses.' : 'Digite sua resposta...'} className="w-full resize-none" />
-                <button disabled={isSending} className="press w-full min-h-[52px] rounded-md bg-brand font-semibold text-white disabled:opacity-[.45]">{isSending ? 'Aguarde...' : firstMessage ? 'Definir meu objetivo' : 'Responder'}</button>
+                <textarea required maxLength={1000} rows={firstMessage ? 4 : 2} value={message} onChange={(event) => setMessage(event.target.value)} placeholder={firstMessage ? 'Ex.: quero chegar aos 75 kg em seis meses.' : 'Digite sua resposta...'} className="w-full resize-none" />
+                <Button type="submit" size="lg" fullWidth isLoading={isSending}>{firstMessage ? 'Definir meu objetivo' : 'Responder'}</Button>
               </form>
             )}
 
-            <p className="mt-5 text-center text-xs text-dim">Suas respostas são processadas por IA para estruturar o objetivo. Isso não substitui orientação médica ou nutricional.</p>
+            <p className="mt-5 text-center text-[13px] leading-[1.4] text-muted">Suas respostas são processadas por IA para estruturar o objetivo. Isso não substitui orientação médica ou nutricional.</p>
           </section>
         )}
       </div>
 
       {profileComplete && state?.completed && state.goal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-bg/80 px-5 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="goal-summary-title">
-          <div className="w-full max-w-sm sheet-in rounded-lg bg-surface p-6 shadow-sheet">
-            <img src="/mob-icon.png" alt="" className="mx-auto -mt-16 mb-4 h-24 w-24 rounded-xl object-cover shadow-card" />
-            <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-brand-fg">Objetivo definido</p>
-            <h2 id="goal-summary-title" className="mt-2 text-center num text-3xl text-fg">Este é o seu foco</h2>
-            <p className="mt-4 rounded-md bg-surface-2 p-4 text-sm leading-relaxed text-fg">{state.goal.summary}</p>
-            {state.goal.feasibility_warning && <div className="mt-3 rounded-md bg-sun-soft p-3 text-xs leading-relaxed text-sun">{state.goal.feasibility_warning}</div>}
-            <div className="mt-4 grid grid-cols-2 gap-3 text-center">
-              {goalMetrics.map((metric) => <div key={metric.label} className="rounded-md bg-surface-2 p-3"><p className="text-xs uppercase text-dim">{metric.label}</p><p className="mt-1 font-bold text-brand-fg">{metric.value}</p></div>)}
-              <div className="rounded-md bg-surface-2 p-3"><p className="text-xs uppercase text-dim">Data-meta</p><p className="mt-1 font-bold text-brand-fg">{state.goal.target_date ? new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : 'Definida'}</p></div>
+          <div className="max-h-[90vh] w-full max-w-sm sheet-in overflow-y-auto rounded-xl bg-surface p-6 shadow-sheet">
+            <img src="/mob-icon.png" alt="" className="mx-auto mb-4 h-20 w-20 rounded-lg object-cover shadow-card" />
+            <p className="text-center text-[13px] font-bold uppercase tracking-[0.06em] text-brand-fg">Objetivo definido</p>
+            <h2 id="goal-summary-title" className="num mt-2 text-center text-[32px] leading-[1.05] text-fg">Este é o seu foco</h2>
+            <p className="mt-4 text-center text-base leading-[1.5] text-fg">{state.goal.summary}</p>
+            {state.goal.feasibility_warning && <div className="mt-3 rounded-md bg-sun-soft p-3.5 text-[15px] leading-[1.45] text-sun">{state.goal.feasibility_warning}</div>}
+            <div className="mt-5 grid grid-cols-2 gap-3 text-center">
+              {goalMetrics.map((metric) => <div key={metric.label} className="rounded-md bg-surface-2 p-3"><p className="num text-[24px] leading-[1.1] text-brand-fg">{metric.value}</p><p className="mt-1 text-[13px] font-semibold text-muted">{metric.label}</p></div>)}
+              <div className="rounded-md bg-surface-2 p-3"><p className="num text-[24px] leading-[1.1] text-brand-fg">{state.goal.target_date ? new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '') : 'Definida'}</p><p className="mt-1 text-[13px] font-semibold text-muted">Data-meta</p></div>
             </div>
-            <button autoFocus onClick={() => navigate('/')} className="press mt-6 w-full min-h-[52px] rounded-md bg-brand font-semibold text-white">OK, ir para o início</button>
-            <p className="mt-3 text-center text-xs text-dim">Você poderá redefinir este objetivo pelo perfil.</p>
+            <Button autoFocus size="lg" fullWidth onClick={() => navigate('/')} className="mt-6">Ir para o início</Button>
+            <p className="mt-3 text-center text-[13px] text-muted">Você pode redefinir este objetivo pelo perfil.</p>
           </div>
         </div>
       )}

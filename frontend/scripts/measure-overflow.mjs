@@ -56,7 +56,15 @@ const mocks = {
   '/training-plans/1': plan,
   '/gyms': [{ id: 1, name: LONG.slice(0, 50), notes: LONG, equipment: [LONG.slice(0, 40), 'halteres'], created_at: now }],
   '/gyms/1': { id: 1, name: LONG.slice(0, 50), notes: LONG, equipment: [LONG.slice(0, 40)], created_at: now },
-  '/results': { measurements: [], series: [], conditioning: [] },
+  '/results': {
+    measurements: [{ id: 1, measured_at: today, weight_kg: 76.4, body_fat_percentage: 24.1, waist_cm: 82, notes: LONG, created_at: now }],
+    series: [
+      { key: 'weight_kg', label: 'Peso', unit: 'kg', target: 72, points: [{ date: '2026-09-08', value: 80.9 }, { date: '2026-10-06', value: 78.2 }, { date: today, value: 76.4 }] },
+      { key: 'body_fat_percentage', label: 'Gordura corporal ' + LONG.slice(0, 30), unit: '%', points: [{ date: '2026-09-08', value: 26.8 }, { date: today, value: 24.1 }] },
+    ],
+    conditioning: [{ distance_meters: 640, perceived_exertion: 6, performed_at: now }, { distance_meters: 585, perceived_exertion: 7, performed_at: now }],
+  },
+  '/progress-reviews/latest': { id: 5, status: 'ready', period_start: today, period_end: today, performance: LONG, goal_assessment: LONG, goal_status: 'needs_change', applied_training: false, applied_nutrition: false, created_at: now },
   '/settings': { countdown_seconds: 5, vibration_enabled: true, auto_advance: true },
   '/steps': { steps: 5000 },
 };
