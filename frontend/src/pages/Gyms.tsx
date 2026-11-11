@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { EmptyState, ErrorState, SkelRows, stagger } from '../components/treinos/states';
+import { Pin, Plus } from '../components/treinos/icons';
 import { gymsApi } from '../api/gyms';
 import { getErrorMessage } from '../api/client';
 import type { Gym } from '../types';
@@ -13,43 +15,51 @@ export function GymsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
     gymsApi.list()
       .then(setGyms)
       .catch((requestError) => setError(getErrorMessage(requestError)))
       .finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+
   return (
     <>
-      <Header title="Minhas academias" showBack rightAction={<Button size="sm" onClick={() => navigate('/gyms/new')}>+ Academia</Button>} />
- <div className="space-y-3 px-4 py-5 pb-24">
- {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      <Header
+        title="Academias"
+        showBack
+        rightAction={<Button size="md" onClick={() => navigate('/gyms/new')} aria-label="Cadastrar academia" className="!min-w-[48px] !px-0 w-12"><Plus className="h-6 w-6" /></Button>}
+      />
+      <div className="space-y-[14px] px-5 pb-28 pt-2">
+        {error && <ErrorState message={error} onRetry={load} />}
 
         {isLoading ? (
- <div className="py-16 text-center text-dim">Carregando academias...</div>
-        ) : gyms.length === 0 ? (
- <div className="space-y-4 py-14 text-center">
- <p className="mx-auto max-w-xs text-sm text-dim">
-              Cadastre os lugares onde você treina e os aparelhos disponíveis em cada um, para o
-              assistente montar planos que dá para seguir de verdade.
-            </p>
-            <Button onClick={() => navigate('/gyms/new')}>Cadastrar academia</Button>
-          </div>
+          <SkelRows count={3} />
+        ) : gyms.length === 0 && !error ? (
+          <EmptyState
+            icon={<Pin />}
+            title="Onde você treina?"
+            text="Cadastre os lugares e os aparelhos de cada um. O assistente monta planos que dá para seguir de verdade."
+            action={{ label: 'Cadastrar academia', onClick: () => navigate('/gyms/new') }}
+          />
         ) : (
-          gyms.map((gym) => (
-            <Card key={gym.id} onClick={() => navigate(`/gyms/${gym.id}`)}>
- <div className="flex items-start justify-between gap-3">
- <div className="min-w-0">
- <h2 className="font-bold text-fg">{gym.name}</h2>
- {gym.notes && <p className="mt-1 line-clamp-2 text-xs text-dim">{gym.notes}</p>}
- <p className="mt-2 text-xs text-dim">
-                    {gym.equipment.length} aparelho{gym.equipment.length === 1 ? '' : 's'} cadastrado{gym.equipment.length === 1 ? '' : 's'}
-                  </p>
+          gyms.map((gym, index) => (
+            <div key={gym.id} className="enter" style={stagger(index)}>
+              <Card onClick={() => navigate(`/gyms/${gym.id}`)} className="flex min-h-[72px] items-center gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand-fg"><Pin className="h-6 w-6" /></span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{gym.name}</h2>
+                  {gym.notes && <p className="mt-0.5 line-clamp-2 text-[15px] leading-[1.4] text-muted">{gym.notes}</p>}
                 </div>
- <span className="shrink-0 text-dim">›</span>
-              </div>
-            </Card>
+                <div className="shrink-0 text-right">
+                  <p className="num text-[34px] leading-none text-fg">{gym.equipment.length}</p>
+                  <p className="mt-1 text-[13px] text-muted">{gym.equipment.length === 1 ? 'aparelho' : 'aparelhos'}</p>
+                </div>
+              </Card>
+            </div>
           ))
         )}
       </div>
