@@ -17,7 +17,7 @@ var ErrImageNotSupported = errors.New("the configured assistant provider does no
 
 // GeminiDefaultImageModel é o modelo de imagem do Gemini, acessível com a mesma
 // API key dos modelos de texto.
-const GeminiDefaultImageModel = "gemini-2.5-flash-image"
+const GeminiDefaultImageModel = "gemini-nano-banana-2.1"
 
 // ImageGenerator é implementado só por provedores que geram imagem. Separado
 // de StructuredGenerator pelo mesmo motivo de VisionGenerator: um provedor que
