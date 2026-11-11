@@ -32,7 +32,9 @@ animação que atrase o próximo toque. Com "reduzir movimento", só opacidade.
 **Padrões permitidos.** Degradê da marca em um cartão por tela; leve tom da cor de
 apoio no topo do cartão da área; números tabulares condensados; desfoque só atrás
 de modal; faíscas ao concluir série; faixas diagonais no estado "sem vídeo";
-contagem do preparo pulsando a cada segundo; pulso duplo quando o descanso termina.
+contagem do preparo pulsando a cada segundo; pulso duplo quando o descanso termina;
+ilustração do movimento em laço (troca de quadro a cada 700 ms), porque mostra o
+exercício, não decoração; pausa fora da tela.
 
 ### Emendas feitas nesta etapa
 
@@ -203,8 +205,11 @@ Regras:
 - Nenhuma animação bloqueia toque: botões ficam ativos durante a entrada.
 - `prefers-reduced-motion: reduce` → só opacidade, durações a 1 ms, sem faíscas,
   sem contagem (o número aparece direto), sem pulsos.
-- Laços permitidos: só a contagem do preparo e o pulso duplo do fim do descanso,
-  porque refletem estado real.
+- Laços permitidos: a contagem do preparo e o pulso duplo do fim do descanso,
+  porque refletem estado real, e a ilustração do movimento em laço (troca de quadro
+  a cada 700 ms, crossfade de opacidade de 120 ms), porque mostra o exercício, não
+  decoração; pausa fora da tela e com o app em segundo plano. Com "reduzir
+  movimento", os quadros ficam parados lado a lado, numerados.
 - Sem biblioteca de animação: CSS + Tailwind + `requestAnimationFrame` para contagem.
 
 ## Arquivos derivados
