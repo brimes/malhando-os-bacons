@@ -303,13 +303,14 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
   }
 
   const offline = !isNetworkOnline();
-  // Sem `overflow-hidden` nem altura fixa: a proporção dá o respiro em telas
-  // grandes e o `min-h` garante espaço para o botão em 320 px; se o texto pedir
-  // mais, o cartão cresce em vez de cortar o botão.
+  // Sem `overflow-hidden`, altura fixa nem `aspect-ratio`: com `min-h` explícito
+  // o `aspect-ratio` trava a altura pela largura e o cartão (centralizado)
+  // vaza por cima e por baixo. Assim o contêiner cresce com o conteúdo e o
+  // botão fica sempre inteiro; o `min-h` só dá respiro quando há pouco texto.
   return (
-    <div className={`relative flex min-h-[176px] aspect-[16/10] items-center justify-center rounded-lg p-3 ${className}`}>
+    <div className={`relative flex min-h-[176px] items-center justify-center rounded-lg p-2 ${className}`}>
       <div className="stripes absolute inset-0 rounded-lg" aria-hidden="true" />
-      <div className="relative flex w-full flex-col items-center rounded-md bg-surface p-4 text-center shadow-card">
+      <div className="relative flex w-full flex-col items-center rounded-md bg-surface p-3 text-center shadow-card">
         {fase === 'gerando' ? (
           <>
             <div className="h-1.5 w-full overflow-hidden rounded-chip bg-surface-2" role="progressbar" aria-label="Gerando ilustração">
@@ -322,7 +323,7 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
             <p className="text-[16px] font-semibold leading-snug text-fg">Não encontramos o vídeo deste exercício</p>
             <p className="mt-1 text-[15px] leading-[1.45] text-muted">Podemos criar uma ilustração do movimento para você.</p>
             {fase === 'falhou' && erro && <p role="alert" className="mt-2 text-[15px] leading-[1.45] text-danger">{erro}</p>}
-            <Button size="md" variant="secondary" className="mt-3" onClick={() => void gerar()} disabled={offline}>
+            <Button size="md" variant="secondary" className="mt-3 !px-3 [overflow-wrap:normal]" onClick={() => void gerar()} disabled={offline}>
               <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
                 <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />

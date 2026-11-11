@@ -89,3 +89,46 @@ func TestNormalizarDescricao(t *testing.T) {
 		t.Fatal("descrição vazia deve falhar")
 	}
 }
+
+func TestTipoDaImagem(t *testing.T) {
+	casos := map[string][]byte{
+		"png":          {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0},
+		"jpeg":         {0xff, 0xd8, 0xff, 0xe0},
+		"webp":         []byte("RIFF\x00\x00\x00\x00WEBPVP8 "),
+		"desconhecido": []byte("lixo"),
+	}
+	for esperado, d := range casos {
+		if got := tipoDaImagem(d); got != esperado {
+			t.Errorf("tipoDaImagem = %q, esperado %q", got, esperado)
+		}
+	}
+}
+
+// O modelo não divide a tira em partes iguais: o recorte tem de seguir o
+// conteúdo, não a grade.
+func TestRecortarQuadrosSegueOConteudo(t *testing.T) {
+	img := image.NewRGBA(image.Rect(0, 0, 900, 600))
+	draw.Draw(img, img.Bounds(), &image.Uniform{color.RGBA{230, 230, 230, 255}}, image.Point{}, draw.Src)
+	// painéis deslocados: um em 60..260, outro em 520..720 (não centrados nas metades)
+	draw.Draw(img, image.Rect(60, 100, 260, 500), &image.Uniform{color.RGBA{40, 30, 120, 255}}, image.Point{}, draw.Src)
+	draw.Draw(img, image.Rect(520, 100, 720, 500), &image.Uniform{color.RGBA{200, 30, 30, 255}}, image.Point{}, draw.Src)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	saida, err := RecortarQuadros(buf.Bytes(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, q := range saida {
+		im, err := jpeg.Decode(bytes.NewReader(q))
+		if err != nil {
+			t.Fatal(err)
+		}
+		b := im.Bounds()
+		r, _, bl, _ := im.At(b.Dx()/2, b.Dy()/2).RGBA()
+		if (i == 0 && bl>>8 < 100) || (i == 1 && r>>8 < 150) {
+			t.Fatalf("quadro %d não está centralizado no seu conteúdo", i)
+		}
+	}
+}
