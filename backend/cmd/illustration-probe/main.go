@@ -30,7 +30,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	imgModel := os.Getenv("IMAGE_MODEL")
+	imgModel := os.Getenv("GEMINI_IMAGE_MODEL")
+	if imgModel == "" {
+		imgModel = os.Getenv("IMAGE_MODEL")
+	}
 	for _, nome := range os.Args[2:] {
 		if err := um(gen, out, nome, imgModel); err != nil {
 			fmt.Printf("[%s] ERRO: %v\n", nome, err)
@@ -41,7 +44,7 @@ func main() {
 func um(gen *services.GeminiGenerator, out, nome, imgModel string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
-	dir := filepath.Join(out, nome)
+	dir := filepath.Join(out, slug(nome))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -61,10 +64,14 @@ func um(gen *services.GeminiGenerator, out, nome, imgModel string) error {
 	prompt := services.PromptTiraDeQuadros(nome, desc)
 	_ = os.WriteFile(filepath.Join(dir, "prompt.txt"), []byte(prompt), 0o644)
 
+	t0 := time.Now()
 	data, mime, err := gen.GenerateImage(ctx, imgModel, prompt, services.ProporcaoTira(desc.Frames))
 	if err != nil {
 		return fmt.Errorf("imagem: %w", err)
 	}
+	ms := time.Since(t0).Milliseconds()
+	meta, _ := json.Marshal(map[string]any{"model": imgModel, "exercise": nome, "frames": desc.Frames, "generation_ms": ms})
+	_ = os.WriteFile(filepath.Join(dir, "meta.json"), meta, 0o644)
 	n := len(data)
 	if n > 12 {
 		n = 12
@@ -117,4 +124,30 @@ func recortar(dir, nome string) error {
 	}
 	fmt.Printf("[%s] %d quadros regravados\n", nome, len(quadros))
 	return nil
+}
+
+// slug devolve o nome da pasta do exercício: minúsculas, sem acento nem espaço.
+func slug(nome string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(nome) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case strings.ContainsRune("áàâã", r):
+			b.WriteRune('a')
+		case strings.ContainsRune("éê", r):
+			b.WriteRune('e')
+		case r == 'í':
+			b.WriteRune('i')
+		case strings.ContainsRune("óôõ", r):
+			b.WriteRune('o')
+		case r == 'ú':
+			b.WriteRune('u')
+		case r == 'ç':
+			b.WriteRune('c')
+		default:
+			b.WriteRune('-')
+		}
+	}
+	return b.String()
 }

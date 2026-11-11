@@ -69,7 +69,7 @@ Fields:
 - start_position / end_position: body and equipment state at the start and at the end of one repetition.
 - moving_joint: the joint(s) that move and in which direction.
 - camera_view: the single camera angle that shows the movement best. "front" for hip adduction/abduction, lateral raises and flyes; "side" for bench press, squats, curls, rows, deadlifts; "three_quarter" if neither is clearly better; "back" for movements seen from behind.
-- frames: how many key frames (2 to 4) are the minimum that make the movement clear. Use 2 for a simple back-and-forth, 3 when a middle position matters, 4 only for multi-phase movements.
+- frames: how many key frames (2 to 4) are the minimum that make the movement clear. Use 3 (start, middle, end) whenever the movement has an intermediate phase, which is almost always; 4 only for multi-phase movements; 2 ONLY for isometric holds or movements with no meaningful middle position.
 - frame_descriptions: exactly "frames" strings, in order, each describing the pose and equipment state of that frame in one sentence.
 
 - Isometric holds (plank, wall sit, dead hang): the exercise has no repetition. Describe the correct final hold ONLY, and make every frame show that same hold (at most a tiny difference such as breathing). Never show a regression or a preparation such as kneeling, resting on the knees or lowering to the floor.
@@ -153,7 +153,7 @@ func PromptTiraDeQuadros(nome string, d DescricaoMovimento) string {
 		pos := fmt.Sprintf("position %d from the left", i+1)
 		fmt.Fprintf(&b, "Panel %d of %d (%s): %s\n", i+1, d.Frames, pos, q)
 	}
-	b.WriteString("Clean flat-style didactic illustration, anatomically correct posture. Absolutely no text, no letters, no numbers, no arrows, no captions, no labels, no watermarks anywhere in the image.")
+	b.WriteString("Style: clean, professional gym-manual illustration with a consistent line weight, realistic anatomical proportions, a simple face with basic features (eyes, nose, mouth), sober muted colours, and a plain solid white background. The equipment must look faithful to the real machine or barbell as found in a gym. Anatomically correct posture. Absolutely no text, no letters, no numbers, no arrows, no captions, no labels, no watermarks anywhere in the image.")
 	return b.String()
 }
 
