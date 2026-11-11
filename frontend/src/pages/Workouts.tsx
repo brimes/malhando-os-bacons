@@ -110,6 +110,8 @@ export function WorkoutsPage() {
           />
         ) : (
           <>
+            {progress && trackedPlan && <div className="enter" style={stagger(0)}><PlanWeekCard progress={progress} /></div>}
+
             {nextDay?.id && trackedPlan && (
               <NextWorkoutHero
                 eyebrow="Treino da vez"
@@ -144,8 +146,6 @@ export function WorkoutsPage() {
                 </p>
               </div>
             )}
-
-            {progress && trackedPlan && <div className="enter" style={stagger(2)}><PlanWeekCard progress={progress} /></div>}
 
             <div className="enter space-y-[14px] pt-3" style={stagger(3)}>
               <SectionTitle>Seus planos</SectionTitle>

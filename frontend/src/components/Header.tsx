@@ -26,8 +26,14 @@ export function Header({ title, showBack, rightAction }: HeaderProps) {
             </button>
           )}
           <h1
-            className={`num min-w-0 text-fg [overflow-wrap:break-word] [hyphens:none] [word-break:normal] ${
-              title.length > 18 ? 'text-[28px] leading-[1.05]' : 'text-[34px] leading-[1.02]'
+            title={title}
+            aria-label={title}
+            className={`num line-clamp-2 min-w-0 text-fg [overflow-wrap:break-word] [hyphens:none] [word-break:normal] ${
+              title.length > 32
+                ? 'text-[22px] leading-[1.1]'
+                : title.length > 18
+                  ? 'text-[28px] leading-[1.05]'
+                  : 'text-[34px] leading-[1.02]'
             }`}
           >{title}</h1>
         </div>
