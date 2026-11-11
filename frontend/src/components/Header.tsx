@@ -25,7 +25,11 @@ export function Header({ title, showBack, rightAction }: HeaderProps) {
               </svg>
             </button>
           )}
-          <h1 className="num min-w-0 text-[34px] leading-[1.02] text-fg">{title}</h1>
+          <h1
+            className={`num min-w-0 text-fg [overflow-wrap:break-word] [hyphens:none] [word-break:normal] ${
+              title.length > 18 ? 'text-[28px] leading-[1.05]' : 'text-[34px] leading-[1.02]'
+            }`}
+          >{title}</h1>
         </div>
         {rightAction && <div className="shrink-0">{rightAction}</div>}
       </div>

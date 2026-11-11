@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'tonal' | 'danger' | 'ghost';
-type Size = 'sm' | 'md' | 'lg';
+type Size = 'sm' | 'md' | 'lg' | 'icon';
 type Tone = 'brand' | 'teal' | 'violet' | 'sun' | 'ok';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,6 +13,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
   children: React.ReactNode;
 }
+
+// Botão só de ícone (size="icon"): 48x48, exige aria-label.
+type Props = ButtonProps &
+  ({ size: 'icon'; 'aria-label': string } | { size?: Exclude<Size, 'icon'> });
 
 // Cinco estados (MASTER): padrão, pressionado (.press: scale .97 em 120 ms),
 // foco (:focus-visible global), ativo/selecionado (aria-pressed) e desabilitado
@@ -36,6 +40,7 @@ const sizeClasses: Record<Size, string> = {
   sm: 'min-h-[40px] px-4 text-[15px] rounded-sm',
   md: 'min-h-[48px] px-5 text-base rounded-md',
   lg: 'min-h-[58px] px-6 text-[17px] font-bold rounded-md',
+  icon: 'h-12 w-12 shrink-0 rounded-md',
 };
 
 export function Button({
@@ -49,7 +54,7 @@ export function Button({
   className = '',
   type = 'button',
   ...props
-}: ButtonProps) {
+}: Props) {
   const color = variant === 'tonal' ? toneClasses[tone] : variantClasses[variant];
   return (
     <button
