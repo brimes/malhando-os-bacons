@@ -1,10 +1,9 @@
 package handlers
 
 import (
-	"bytes"
-	"image"
-	"image/png"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/mob/backend/internal/models"
 )
@@ -28,16 +27,53 @@ func TestStatusDoVideo(t *testing.T) {
 	}
 }
 
-func TestComprimirImagem(t *testing.T) {
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 600, 600))); err != nil {
-		t.Fatal(err)
+func TestStatusDaLinha(t *testing.T) {
+	agora := time.Now()
+	if statusDaLinha("ready", 1, agora, agora) != "outdated" {
+		t.Fatal("pronta de versão antiga deve ser outdated")
 	}
-	_, mime := comprimirImagem(buf.Bytes(), "image/png")
-	if mime != "image/jpeg" && mime != "image/png" {
-		t.Fatalf("mime inesperado %s", mime)
+	if statusDaLinha("ready", versaoIlustracao, agora, agora) != "ready" {
+		t.Fatal("pronta atual deve ser ready")
 	}
-	if out, m := comprimirImagem([]byte("lixo"), "image/png"); string(out) != "lixo" || m != "image/png" {
-		t.Fatal("dado inválido deve voltar intacto")
+	if statusDaLinha("pending", 1, agora.Add(-validadePendente-time.Second), agora) != "failed" {
+		t.Fatal("pendente órfã deve virar failed")
+	}
+	if statusDaLinha("pending", 1, agora, agora) != "pending" {
+		t.Fatal("pendente recente segue pending")
+	}
+}
+
+func TestCotaEsgotada(t *testing.T) {
+	if cotaEsgotada(limiteIlustracoesPorDia - 1) {
+		t.Fatal("abaixo do limite não esgota")
+	}
+	if !cotaEsgotada(limiteIlustracoesPorDia) {
+		t.Fatal("no limite esgota (regenerate recusa com 429)")
+	}
+}
+
+func TestQuadroDaQuery(t *testing.T) {
+	casos := map[string]struct {
+		i  int
+		ok bool
+	}{"": {0, true}, "2": {2, true}, "3": {3, true}, "4": {0, false}, "-1": {0, false}, "x": {0, false}}
+	for q, esperado := range casos {
+		r := httptest.NewRequest("GET", "/?name=a&frame="+q, nil)
+		if q == "" {
+			r = httptest.NewRequest("GET", "/?name=a", nil)
+		}
+		i, ok := quadroDaQuery(r)
+		if i != esperado.i || ok != esperado.ok {
+			t.Fatalf("frame=%q: got (%d,%v)", q, i, ok)
+		}
+	}
+}
+
+func TestImageRecusaQuadroInvalido(t *testing.T) {
+	h := &ExerciseIllustrationHandler{} // índice inválido responde antes de tocar no banco
+	w := httptest.NewRecorder()
+	h.Image(w, httptest.NewRequest("GET", "/?name=Cadeira+Adutora&frame=abc", nil))
+	if w.Code != 400 {
+		t.Fatalf("status %d, esperado 400", w.Code)
 	}
 }

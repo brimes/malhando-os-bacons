@@ -146,6 +146,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	// Ilustrações por IA dos exercícios sem vídeo: cache global por nome,
 	// geração assíncrona (POST inicia, GET status faz polling).
 	mux.HandleFunc("POST /api/exercise-illustrations", chain(exerciseIllustrationHandler.Request, auth))
+	mux.HandleFunc("POST /api/exercise-illustrations/regenerate", chain(exerciseIllustrationHandler.Regenerate, auth))
 	mux.HandleFunc("GET /api/exercise-illustrations", chain(exerciseIllustrationHandler.Status, auth))
 	mux.HandleFunc("GET /api/exercise-illustrations/image", chain(exerciseIllustrationHandler.Image, auth))
 

@@ -91,7 +91,9 @@ type ExerciseVideo struct {
 // ExerciseIllustration indica que há ilustração pronta; a imagem em si é
 // buscada em GET /api/exercise-illustrations/image.
 type ExerciseIllustration struct {
+	// "ready" ou "outdated" (versão antiga, imagem única: o app regenera).
 	Status string `json:"status"`
+	Frames int    `json:"frames,omitempty"`
 }
 
 type TrainingPlanInput struct {

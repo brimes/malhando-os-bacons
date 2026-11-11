@@ -24,24 +24,28 @@ const GeminiDefaultImageModel = "gemini-2.5-flash-image"
 // não gera imagem segue compilando e quem chama degrada para
 // ErrImageNotSupported.
 type ImageGenerator interface {
-	GenerateImage(ctx context.Context, model, prompt string) (data []byte, mimeType string, err error)
+	GenerateImage(ctx context.Context, model, prompt, aspectRatio string) (data []byte, mimeType string, err error)
 }
 
 // GenerateImage pede uma imagem ao modelo `model` e devolve os bytes.
 //
 // O modelo de imagem é outro (não o de texto do gerador), então é parâmetro.
 // A chave vai no header, como no resto do arquivo, para nunca cair em log.
-func (g *GeminiGenerator) GenerateImage(ctx context.Context, model, prompt string) ([]byte, string, error) {
+func (g *GeminiGenerator) GenerateImage(ctx context.Context, model, prompt, aspectRatio string) ([]byte, string, error) {
 	if strings.TrimSpace(model) == "" {
 		model = GeminiDefaultImageModel
+	}
+	generationConfig := map[string]any{"responseModalities": []string{"IMAGE"}}
+	// Proporção da imagem inteira (ex.: "21:9"): a tira de quadros precisa ser
+	// larga, e o padrão do modelo é quadrado.
+	if strings.TrimSpace(aspectRatio) != "" {
+		generationConfig["imageConfig"] = map[string]any{"aspectRatio": aspectRatio}
 	}
 	body := map[string]any{
 		"contents": []map[string]any{
 			{"role": "user", "parts": []map[string]string{{"text": prompt}}},
 		},
-		"generationConfig": map[string]any{
-			"responseModalities": []string{"IMAGE"},
-		},
+		"generationConfig": generationConfig,
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
