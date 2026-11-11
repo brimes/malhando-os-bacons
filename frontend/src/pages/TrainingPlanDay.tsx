@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { CountUp } from '../components/CountUp';
+import { EmptyState, Skel, stagger } from '../components/treinos/states';
+import { Clock, Dumbbell, Play, Wifi } from '../components/treinos/icons';
 import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChecklist';
 import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
@@ -121,17 +124,30 @@ export function TrainingPlanDayPage() {
     return (
       <>
         <Header title="Treino" showBack />
-        <div className="space-y-4 px-4 py-10 text-center">
-          <p className="text-sm text-muted">
-            Este treino ainda não foi aberto neste aparelho. Conecte-se uma vez para poder iniciá-lo sem internet.
-          </p>
-          <Button onClick={() => navigate('/workouts')}>Voltar para treinos</Button>
-        </div>
+        <EmptyState
+          icon={<Wifi />}
+          tint="teal"
+          title="Treino ainda não baixado"
+          text="Este treino não foi aberto neste aparelho. Conecte-se uma vez para poder iniciá-lo sem internet."
+          action={{ label: 'Voltar para treinos', onClick: () => navigate('/workouts') }}
+        />
       </>
     );
   }
 
-  if (!plan || !day) return <div className="py-20 text-center text-muted">Carregando treino...</div>;
+  if (!plan || !day) {
+    return (
+      <>
+        <Header title="Treino" showBack />
+        <div role="status" aria-label="Carregando" className="space-y-[14px] px-5 pt-2">
+          <Skel className="h-[220px] rounded-xl" />
+          <Skel className="h-[120px] rounded-lg" />
+          <Skel className="h-[120px] rounded-lg" />
+          <Skel className="h-[120px] rounded-lg" />
+        </div>
+      </>
+    );
+  }
 
   const exercises = day.exercises.filter((exercise) => exercise.id);
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
@@ -181,53 +197,79 @@ export function TrainingPlanDayPage() {
     }
   };
 
+  const allMarked = markedSets >= totalSets;
   return (
     <>
       <Header title={day.name} showBack />
-      <div className="space-y-4 px-4 py-5 pb-28">
-        <div>
-          <p className="text-sm text-muted">{day.focus}</p>
-          <p className="mt-1 text-xs text-dim">
-            Última vez: {day.last_done_at ? new Date(day.last_done_at).toLocaleDateString('pt-BR') : 'ainda não realizado'}
-          </p>
+      <div className="space-y-[14px] px-5 pb-8 pt-2">
+        <div className="enter bg-hero rounded-xl p-5 text-white shadow-card">
+          <p className="text-[13px] font-bold uppercase tracking-[0.06em] text-white/90">{session ? 'Treino em andamento' : 'Hoje'}</p>
+          {day.focus && <h2 className="num mt-1 break-words text-[32px] leading-[1.05]">{day.focus}</h2>}
+          <div className="mt-5 flex items-end justify-between gap-4">
+            <p className="num text-[56px] leading-none">
+              <CountUp key={markedSets} value={markedSets} />
+              <span className="font-sans text-[20px] font-semibold text-white/90"> de {totalSets} séries</span>
+            </p>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-chip bg-white/25" role="progressbar" aria-valuenow={markedSets} aria-valuemin={0} aria-valuemax={totalSets}>
+            <div className="h-full w-full origin-left rounded-chip bg-white transition-transform duration-ring ease-mob" style={{ transform: `scaleX(${totalSets ? markedSets / totalSets : 0})` }} />
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {[
+              { icon: <Dumbbell />, text: `${exercises.length} ${exercises.length === 1 ? 'exercício' : 'exercícios'}` },
+              { icon: <Clock />, text: day.last_done_at ? `Última vez em ${new Date(day.last_done_at).toLocaleDateString('pt-BR')}` : 'Ainda não realizado' },
+            ].map((c) => (
+              <span key={c.text} className="inline-flex h-8 items-center gap-1.5 rounded-chip bg-white/20 px-3 text-[13px] font-semibold text-white [&>svg]:h-[15px] [&>svg]:w-[15px]">{c.icon}{c.text}</span>
+            ))}
+          </div>
         </div>
 
-        {session && (
-          <Card className="bg-brand-soft text-sm text-brand-fg">
-            Treino em andamento — marque o que já fez ou volte para o acompanhamento.
-          </Card>
+        {error && <div role="alert" className="rounded-lg bg-danger-soft p-[18px] text-[15px] font-semibold text-danger">{error}</div>}
+        {day.instructions && (
+          <div className="enter" style={stagger(1)}>
+            <Card tint="sun">
+              <p className="text-[13px] font-bold uppercase tracking-[0.06em] text-muted">Instruções do dia</p>
+              <p className="mt-1.5 text-[16px] leading-[1.5] text-fg">{day.instructions}</p>
+            </Card>
+          </div>
         )}
 
-        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
-        {day.instructions && <Card className="text-sm leading-relaxed text-muted">{day.instructions}</Card>}
-
-        <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-dim">{markedSets} de {totalSets} séries marcadas</p>
+        <div className="enter flex items-center justify-between gap-3 pt-2" style={stagger(2)}>
+          <h2 className="text-[17px] font-bold text-fg">Exercícios</h2>
           <button
             type="button"
             onClick={() => setChecklist(Object.fromEntries(
               exercises.map((exercise) => [
                 exercise.id as number,
-                markedSets >= totalSets
+                allMarked
                   ? { setsDone: lockedFor(exercise.id as number), weight: checklist[exercise.id as number]?.weight ?? '' }
                   : { setsDone: exercise.sets, weight: checklist[exercise.id as number]?.weight || (exercise.last_weight_kg ? String(exercise.last_weight_kg) : '') },
               ]),
             ))}
-            className="text-xs font-semibold text-brand-fg"
+            className="press -mr-2 min-h-[48px] rounded-md px-3 text-[15px] font-semibold text-brand-fg"
           >
-            {markedSets >= totalSets ? 'Limpar marcações' : 'Marcar todos'}
+            {allMarked ? 'Limpar marcações' : 'Marcar todos'}
           </button>
         </div>
 
-        <WorkoutChecklist
-          exercises={day.exercises}
-          state={checklist}
-          onChange={(exerciseId, entry) => setChecklist((current) => ({ ...current, [exerciseId]: entry }))}
-          lockedFor={lockedFor}
-        />
-
-        <Button fullWidth size="lg" onClick={submit} isLoading={isBusy}>{label}</Button>
+        <div className="enter" style={stagger(3)}>
+          <WorkoutChecklist
+            exercises={day.exercises}
+            state={checklist}
+            onChange={(exerciseId, entry) => setChecklist((current) => ({ ...current, [exerciseId]: entry }))}
+            lockedFor={lockedFor}
+          />
+        </div>
       </div>
+
+      {/* Ação fixa acima da barra de navegação: com dez exercícios, ela não pode ficar lá embaixo. */}
+      <div className="sticky bottom-[calc(72px+env(safe-area-inset-bottom))] z-30 bg-gradient-to-t from-bg via-bg to-transparent px-5 pb-3 pt-6">
+        <Button fullWidth size="lg" onClick={submit} isLoading={isBusy}>
+          {mode === 'start' && <Play className="h-5 w-5" />}
+          {label}
+        </Button>
+      </div>
+      <div className="h-24" aria-hidden="true" />
     </>
   );
 }
