@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
+import { ErrorState, Icon, Notice, SectionTitle, Skeleton, stagger } from '../components/perfil/ui';
 import { progressReviewsApi } from '../api/progressReviews';
 import { ProgressReviewChat } from '../components/ProgressReviewChat';
 import { getErrorMessage } from '../api/client';
@@ -14,10 +16,10 @@ import type { ProgressReview } from '../types';
 const POLL_MS = 4000;
 const DEADLINE_MS = 9 * 60 * 1000;
 
-const GOAL_STATUS: Record<ProgressReview['goal_status'], { label: string; badge: string; card: string }> = {
-  on_track: { label: 'No caminho', badge: 'bg-ok-soft text-ok', card: '' },
-  needs_change: { label: 'Precisa de ajuste', badge: 'bg-sun-soft text-sun', card: '' },
-  at_risk: { label: 'Em risco', badge: 'bg-danger-soft text-danger', card: '' },
+const GOAL_STATUS: Record<ProgressReview['goal_status'], { label: string; text: string; tone: 'ok' | 'sun' | 'danger' }> = {
+  on_track: { label: 'No caminho', text: 'text-ok', tone: 'ok' },
+  needs_change: { label: 'Precisa de ajuste', text: 'text-sun', tone: 'sun' },
+  at_risk: { label: 'Em risco', text: 'text-danger', tone: 'danger' },
 };
 
 const formatDate = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR');
@@ -32,12 +34,12 @@ const LINE_MARK: Record<DiffLine['kind'], string> = { added: '+', removed: '−'
 
 function DiffList({ lines }: { lines: DiffLine[] }) {
   if (lines.length === 0) {
-    return <p className="mt-2 text-xs text-dim">O assistente reescreveu o plano sem alterar nada estrutural.</p>;
+    return <p className="mt-3 text-[13px] text-muted">O assistente reescreveu o plano sem alterar nada estrutural.</p>;
   }
   return (
-    <ul className="mt-2 space-y-1">
+    <ul className="mt-3 space-y-1.5">
       {lines.map((line, index) => (
-        <li key={index} className={`flex gap-2 text-xs leading-relaxed ${LINE_STYLE[line.kind]}`}>
+        <li key={index} className={`flex gap-2 text-[15px] leading-[1.45] ${LINE_STYLE[line.kind]}`}>
           <span className="font-bold">{LINE_MARK[line.kind]}</span>
           <span>{line.text}</span>
         </li>
@@ -64,24 +66,24 @@ function ChangeCard({
 }) {
   const [showDetail, setShowDetail] = useState(false);
   return (
-    <Card className={selected ? 'bg-violet-soft' : ''}>
-      <label className="flex items-start gap-3">
+    <Card tint={selected ? 'violet' : undefined}>
+      <label className="flex min-h-[48px] items-start gap-3">
         <input
           type="checkbox"
           checked={selected}
           disabled={disabled}
           onChange={onToggle}
-          className="mt-1 h-5 w-5 shrink-0 accent-brand"
+          className="mt-0.5 h-6 w-6 shrink-0 accent-violet"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-fg">{title}</p>
-          <p className="mt-1 text-sm leading-relaxed text-muted">{summary}</p>
+          <p className="text-base font-bold leading-[1.3] text-fg">{title}</p>
+          <p className="mt-1 text-[15px] leading-[1.45] text-muted">{summary}</p>
         </div>
       </label>
       <button
         type="button"
         onClick={() => setShowDetail((value) => !value)}
-        className="mt-3 text-xs font-medium text-violet"
+        className="press -mb-2 mt-1 min-h-[48px] text-[15px] font-semibold text-violet"
       >
         {showDetail ? 'Ocultar o que muda' : `Ver o que muda (${lines.length})`}
       </button>
@@ -215,74 +217,96 @@ export function ProgressReviewPage() {
     .filter(Boolean)
     .join(' ');
 
+  const status = review ? GOAL_STATUS[review.goal_status] : null;
+  const retry = () => {
+    setError(null);
+    setIsLoading(true);
+    progressReviewsApi
+      .latest()
+      .then((latest) => {
+        setReview(latest);
+        if (latest?.status === 'pending') startPolling(latest.id);
+      })
+      .catch((requestError) => setError(getErrorMessage(requestError)))
+      .finally(() => setIsLoading(false));
+  };
+
   return (
     <>
       <Header title="Avaliação" showBack />
-      <div className="space-y-4 px-4 py-5 pb-24">
-        {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
+        {isLoading && (
+          <div className="space-y-[14px]" aria-busy="true" aria-label="Carregando">
+            <Skeleton className="h-[200px]" />
+            <Skeleton className="h-[120px]" />
+          </div>
+        )}
 
-        {isLoading && <div className="py-20 text-center text-muted">Carregando...</div>}
+        {error && !isLoading && !review && <ErrorState message={error} onRetry={retry} />}
+        {error && review && <Notice tone="danger">{error}</Notice>}
 
-        {!isLoading && !review && (
-          <Card className="text-center">
-            <p className="text-4xl">🧭</p>
-            <h2 className="mt-3 font-bold text-fg">Avaliar o resultado</h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              O assistente lê tudo o que você registrou desde o início do plano — treinos executados, cargas,
-              alimentação e medições — e compara com o seu objetivo. Se fizer sentido mudar o treino ou a
-              nutrição, ele propõe a mudança e você decide se aplica.
+        {!isLoading && !review && !error && (
+          <Card tint="violet" className="enter py-8 text-center">
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-violet-soft text-violet">
+              <Icon name="compass" className="h-8 w-8" />
+            </span>
+            <h2 className="num mt-5 text-[28px] leading-[1.05] text-fg">Avaliar o resultado</h2>
+            <p className="mx-auto mt-2 max-w-[320px] text-[15px] leading-[1.45] text-muted">
+              O assistente lê o que você registrou desde o início do plano: treinos, cargas, alimentação e
+              medidas. Compara com o seu objetivo e, se fizer sentido, propõe mudanças que você decide aplicar.
             </p>
-            <Button fullWidth size="lg" className="mt-4" isLoading={isStarting} onClick={start}>
+            <Button fullWidth size="lg" className="mt-6" isLoading={isStarting} onClick={start}>
               Avaliar meu resultado
             </Button>
           </Card>
         )}
 
         {review?.status === 'pending' && (
-          <Card className="text-center">
-            <p className="animate-pulse text-4xl">🧭</p>
-            <h2 className="mt-3 font-bold text-fg">Analisando o período</h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Lendo treinos, alimentação e medições de {formatDate(review.period_start)} até{' '}
-              {formatDate(review.period_end)}. Isso leva alguns minutos — pode sair da tela e voltar depois.
+          <Card tint="violet" className="enter">
+            <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-violet">Em análise</p>
+            <h2 className="num mt-1 text-[28px] leading-[1.05] text-fg">Lendo o seu período</h2>
+            <p className="mt-2 text-[15px] leading-[1.45] text-muted">
+              Treinos, alimentação e medidas de {formatDate(review.period_start)} até {formatDate(review.period_end)}.
+              Leva alguns minutos e você pode sair da tela e voltar depois.
             </p>
+            <div className="mt-5 space-y-2.5" aria-hidden="true">
+              <Skeleton className="h-3 w-full !rounded-chip" />
+              <Skeleton className="h-3 w-5/6 !rounded-chip" />
+              <Skeleton className="h-3 w-2/3 !rounded-chip" />
+            </div>
           </Card>
         )}
 
         {review?.status === 'failed' && (
-          <Card>
-            <h2 className="font-bold text-fg">Não foi possível avaliar</h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">{review.error || 'O assistente não respondeu.'}</p>
+          <Card className="enter">
+            <h2 className="text-[17px] font-bold text-fg">Não foi possível avaliar</h2>
+            <p className="mt-1 text-[15px] leading-[1.45] text-muted">{review.error || 'O assistente não respondeu.'}</p>
             <Button fullWidth className="mt-4" isLoading={isStarting} onClick={start}>Tentar de novo</Button>
           </Card>
         )}
 
-        {review && review.status !== 'pending' && review.status !== 'failed' && (
+        {review && status && review.status !== 'pending' && review.status !== 'failed' && (
           <>
-            <p className="px-1 text-xs text-dim">
-              Período de {formatDate(review.period_start)} a {formatDate(review.period_end)}
-            </p>
-
-            <Card>
-              <h2 className="text-xs uppercase tracking-wide text-dim">Desempenho</h2>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-fg">{review.performance}</p>
+            <Card tint="violet" className="enter !p-5">
+              <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">
+                {formatDate(review.period_start)} a {formatDate(review.period_end)}
+              </p>
+              <h2 className={`num mt-1 text-[40px] leading-[1.02] ${status.text}`}>{status.label}</h2>
+              <p className="mt-3 whitespace-pre-line text-base leading-[1.5] text-fg">{review.goal_assessment}</p>
             </Card>
 
-            <Card className={GOAL_STATUS[review.goal_status].card}>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xs uppercase tracking-wide text-dim">Objetivo</h2>
-                <span className={`rounded-full px-2 py-1 text-xs font-bold ${GOAL_STATUS[review.goal_status].badge}`}>
-                  {GOAL_STATUS[review.goal_status].label}
-                </span>
-              </div>
-              <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-fg">{review.goal_assessment}</p>
-            </Card>
+            <section className="enter" style={stagger(1)}>
+              <SectionTitle>Desempenho</SectionTitle>
+              <Card>
+                <p className="whitespace-pre-line text-base leading-[1.5] text-fg">{review.performance}</p>
+              </Card>
+            </section>
 
             {hasProposal && (
-              <div className="space-y-3">
-                <div className="px-1">
-                  <h2 className="text-xs uppercase tracking-wide text-dim">Alterações sugeridas</h2>
-                  <p className="mt-1 text-xs leading-relaxed text-dim">
+              <section className="enter space-y-3 pt-2" style={stagger(2)}>
+                <div>
+                  <SectionTitle>Alterações sugeridas</SectionTitle>
+                  <p className="-mt-1 px-1 text-[15px] leading-[1.45] text-muted">
                     Nada muda até você confirmar. O que já foi treinado e registrado continua no histórico, e a
                     versão anterior do plano fica guardada.
                   </p>
@@ -290,7 +314,7 @@ export function ProgressReviewPage() {
 
                 {trainingIsReal && trainingChange && (
                   <ChangeCard
-                    title={`Treino — ${trainingChange.plan_name}`}
+                    title={`Treino: ${trainingChange.plan_name}`}
                     summary={trainingChange.summary}
                     lines={trainingLines}
                     selected={applyTraining}
@@ -301,7 +325,7 @@ export function ProgressReviewPage() {
 
                 {nutritionIsReal && nutritionChange && (
                   <ChangeCard
-                    title={`Nutrição — ${nutritionChange.plan_name}`}
+                    title={`Nutrição: ${nutritionChange.plan_name}`}
                     summary={nutritionChange.summary}
                     lines={nutritionLines}
                     selected={applyNutrition}
@@ -314,87 +338,79 @@ export function ProgressReviewPage() {
                   <Button fullWidth size="lg" isLoading={isApplying} disabled={nothingSelected} onClick={apply}>
                     Confirmar e atualizar os planos
                   </Button>
-                  <button
-                    type="button"
-                    disabled={isApplying}
-                    onClick={discard}
-                    className="w-full py-3 text-sm text-muted disabled:opacity-50"
-                  >
+                  <Button variant="ghost" fullWidth disabled={isApplying} onClick={discard}>
                     Manter os planos como estão
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </section>
             )}
 
             {/*
               Só se afirma que está tudo bem quando o próprio veredito diz isso.
               Antes esta era a única mensagem possível na ausência de proposta, e
-              ela aparecia embaixo de um "Precisa de ajuste" — dizendo à pessoa
+              ela aparecia embaixo de um "Precisa de ajuste", dizendo à pessoa
               que os planos estavam adequados logo depois de explicar por que não
               estavam.
             */}
             {advice.length > 0 && (
-              <Card>
-                <h2 className="text-xs uppercase tracking-wide text-dim">Recomendações</h2>
-                <p className="mt-1 text-xs text-dim">
-                  Orientação para seguir o plano que você já tem — não há alteração a confirmar aqui.
-                </p>
-                <ul className="mt-2 space-y-2">
-                  {advice.map((text) => (
-                    <li key={text} className="flex gap-2 text-sm leading-relaxed text-muted">
-                      <span className="text-violet">•</span>
-                      <span>{text}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
+              <section className="enter pt-2" style={stagger(2)}>
+                <SectionTitle>Recomendações</SectionTitle>
+                <Card>
+                  <p className="text-[13px] text-muted">
+                    Orientação para seguir o plano que você já tem. Não há alteração a confirmar aqui.
+                  </p>
+                  <ul className="mt-3 space-y-3">
+                    {advice.map((text) => (
+                      <li key={text} className="flex gap-3 text-[15px] leading-[1.45] text-fg">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-chip bg-violet" aria-hidden="true" />
+                        <span>{text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </section>
             )}
 
             {review.status === 'ready' && !hasProposal && advice.length === 0 && !proposalError
               && review.goal_status === 'on_track' && (
-              <Card className="">
-                <p className="text-sm leading-relaxed text-muted">
-                  Nenhuma alteração proposta: o assistente considerou que os planos atuais continuam adequados ao
-                  seu objetivo.
-                </p>
-              </Card>
+              <Notice tone="ok">
+                Nenhuma alteração proposta: o assistente considerou que os planos atuais continuam adequados ao
+                seu objetivo.
+              </Notice>
             )}
 
             {review.status === 'ready' && !hasProposal && proposalError && (
-              <Card className="bg-sun-soft">
-                <h2 className="text-sm font-bold text-sun">A alteração não ficou pronta</h2>
-                <p className="mt-1 text-sm leading-relaxed text-muted">{proposalError}</p>
-                <p className="mt-2 text-xs leading-relaxed text-dim">
-                  Seus planos continuam como estavam. Vale refazer a avaliação — ou perguntar abaixo o que
+              <Card>
+                <h2 className="text-[17px] font-bold text-sun">A alteração não ficou pronta</h2>
+                <p className="mt-1 text-[15px] leading-[1.45] text-muted">{proposalError}</p>
+                <p className="mt-2 text-[13px] leading-[1.4] text-muted">
+                  Seus planos continuam como estavam. Vale refazer a avaliação ou perguntar abaixo o que
                   mudar, e aplicar você mesmo pelo ajuste do plano.
                 </p>
-                <Button fullWidth className="mt-3" isLoading={isStarting} onClick={start}>Avaliar de novo</Button>
+                <Button fullWidth className="mt-4" isLoading={isStarting} onClick={start}>Avaliar de novo</Button>
               </Card>
             )}
 
             {review.status === 'applied' && (
-              <Card className="bg-ok-soft">
-                <p className="text-sm leading-relaxed text-ok">
+              <div className="flex items-center gap-3 rounded-lg bg-ok-soft p-[18px]">
+                <Chip tone="ok" className="shrink-0">Aplicado</Chip>
+                <p className="text-[15px] leading-[1.45] text-fg">
                   Planos atualizados{review.applied_training && review.applied_nutrition
                     ? ' (treino e nutrição)'
                     : review.applied_training
                       ? ' (treino)'
-                      : ' (nutrição)'}. O histórico de treinos e de alimentação continua intacto.
+                      : ' (nutrição)'}. O histórico continua intacto.
                 </p>
-              </Card>
+              </div>
             )}
 
             {review.status === 'discarded' && (
-              <Card>
-                <p className="text-sm leading-relaxed text-muted">
-                  Você optou por manter os planos como estavam.
-                </p>
-              </Card>
+              <Notice tone="violet">Você optou por manter os planos como estavam.</Notice>
             )}
 
             <ProgressReviewChat reviewId={review.id} />
 
-            <Button fullWidth variant="secondary" isLoading={isStarting} onClick={start} className="mt-2">
+            <Button fullWidth variant="secondary" isLoading={isStarting} onClick={start}>
               Fazer uma nova avaliação
             </Button>
           </>

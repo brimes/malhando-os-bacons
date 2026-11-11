@@ -2,9 +2,13 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
 import { Button } from '../components/Button';
+import { CountUp } from '../components/CountUp';
 import { resultsApi } from '../api/results';
 import { getErrorMessage } from '../api/client';
+import { TrendChart } from '../components/perfil/TrendChart';
+import { Chevron, ErrorState, Icon, Notice, SectionTitle, Skeleton, fieldLabel, stagger } from '../components/perfil/ui';
 import type { MeasurementField, MetricSeries, ResultsData, SaveBodyMeasurementInput } from '../types';
 
 const FIELDS: { key: MeasurementField; label: string; unit: string; step: number }[] = [
@@ -19,69 +23,93 @@ const FIELDS: { key: MeasurementField; label: string; unit: string; step: number
 ];
 
 const formatDate = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR');
+const shortDate = (value: string) =>
+  new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+const num = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${num(Math.abs(n))}`;
 const parseValue = (text: string) => {
   const value = Number(text.replace(',', '.'));
   return text.trim() === '' || !Number.isFinite(value) ? null : value;
 };
 
-/** Sparkline drawn inline — the chart lib is only worth loading on bigger views. */
-function Sparkline({ series }: { series: MetricSeries }) {
-  if (series.points.length < 2) return null;
-  const values = series.points.map((point) => point.value);
-  const min = Math.min(...values, series.target ?? Infinity);
-  const max = Math.max(...values, series.target ?? -Infinity);
-  const range = max - min || 1;
-  const width = 100;
-  const height = 28;
-  const path = series.points
-    .map((point, index) => {
-      const x = (index / (series.points.length - 1)) * width;
-      const y = height - ((point.value - min) / range) * height;
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-  const targetY = series.target != null ? height - ((series.target - min) / range) * height : null;
+// Variação e se ela aproxima da meta. Perder gordura e ganhar músculo andam em
+// sentidos opostos e os dois são progresso: o que importa é a direção da meta.
+function summarize(series: MetricSeries) {
+  const first = series.points[0];
+  const last = series.points[series.points.length - 1];
+  const delta = series.points.length > 1 ? last.value - first.value : 0;
+  const toward = series.target != null ? Math.abs(last.value - series.target) < Math.abs(first.value - series.target) : null;
+  return { first, last, delta, toward, count: series.points.length };
+}
 
+function DeltaChip({ series, className = '', short = false }: { series: MetricSeries; className?: string; short?: boolean }) {
+  const { first, delta, toward, count } = summarize(series);
+  if (count < 2) return <Chip className={className}>{short ? 'Novo' : 'Primeiro registro'}</Chip>;
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mt-2 h-8 w-full">
-      {targetY != null && (
-        <line x1="0" y1={targetY} x2={width} y2={targetY} stroke="currentColor" strokeWidth="0.5"
-          strokeDasharray="3 2" className="text-violet" />
-      )}
-      <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-violet"
-        vectorEffect="non-scaling-stroke" />
-    </svg>
+    <Chip tone={toward === false ? 'sun' : 'violet'} className={className}>
+      {signed(delta)} {series.unit}{short ? '' : ` desde ${shortDate(first.date)}`}
+    </Chip>
   );
 }
 
-function SeriesCard({ series }: { series: MetricSeries }) {
-  const last = series.points[series.points.length - 1];
-  const first = series.points[0];
-  const delta = series.points.length > 1 ? last.value - first.value : 0;
-  // Toward the goal is what matters, not up or down: losing fat and gaining
-  // muscle move in opposite directions and both can be progress.
-  const towardTarget = series.target != null
-    ? Math.abs(last.value - series.target) < Math.abs(first.value - series.target)
-    : null;
-
+// Protagonista da tela: a evolução principal em número grande e gráfico.
+function HeroSeries({ series }: { series: MetricSeries }) {
+  const { last } = summarize(series);
+  const remaining = series.target != null ? Math.abs(last.value - series.target) : null;
   return (
-    <Card>
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-medium text-fg">{series.label}</span>
-        <span className="text-lg font-black tabular-nums text-fg">
-          {last.value.toLocaleString('pt-BR')}<span className="ml-1 text-xs font-semibold text-dim">{series.unit}</span>
-        </span>
+    <Card tint="violet" className="enter !p-5">
+      <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">{series.label}</p>
+      <p className="num mt-1 text-[56px] leading-none text-violet">
+        <CountUp value={last.value * 10} format={(n) => num(n / 10)} />
+        <span className="ml-1.5 font-sans text-[17px] font-semibold text-muted">{series.unit}</span>
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <DeltaChip series={series} />
+        {remaining != null && remaining > 0 && <Chip>faltam {num(remaining)} {series.unit}</Chip>}
+        {remaining === 0 && <Chip tone="ok">meta atingida</Chip>}
       </div>
-      <div className="mt-1 flex items-center justify-between text-xs">
-        <span className={towardTarget === null ? 'text-muted' : towardTarget ? 'text-ok' : 'text-sun'}>
-          {series.points.length > 1
-            ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} ${series.unit} desde ${formatDate(first.date)}`
-            : 'primeiro registro'}
-        </span>
-        {series.target != null && <span className="text-dim">meta {series.target} {series.unit}</span>}
+      <div className="mt-4">
+        <TrendChart points={series.points} target={series.target} unit={series.unit} />
       </div>
-      <Sparkline series={series} />
     </Card>
+  );
+}
+
+function MiniSeries({ series, index }: { series: MetricSeries; index: number }) {
+  const { last, count } = summarize(series);
+  return (
+    <div className="enter min-w-0" style={stagger(index + 1)}>
+      <Card className="h-full !p-4">
+        <p className="truncate text-[13px] font-semibold text-muted">{series.label}</p>
+        <p className="num mt-1 text-[28px] leading-[1.05] text-fg">
+          {num(last.value)}<span className="ml-1 font-sans text-[13px] font-semibold text-muted">{series.unit}</span>
+        </p>
+        <div className="mt-2"><DeltaChip series={series} short className="!h-7 max-w-full !px-2.5 !text-[13px]" /></div>
+        {count > 1 && <div className="mt-3"><TrendChart points={series.points} unit={series.unit} compact /></div>}
+      </Card>
+    </div>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div className="space-y-[14px] px-5 pb-24 pt-2" aria-busy="true" aria-label="Carregando resultados">
+      <Skeleton className="h-[340px]" />
+      <div className="grid grid-cols-2 gap-3"><Skeleton className="h-[150px]" /><Skeleton className="h-[150px]" /></div>
+      <Skeleton className="h-[84px]" />
+    </div>
+  );
+}
+
+function EmptyIllustration() {
+  return (
+    <svg viewBox="0 0 160 96" className="mx-auto h-24 w-40" fill="none" aria-hidden="true">
+      <rect x="4" y="8" width="152" height="80" rx="16" fill="rgb(var(--surface-2))" />
+      <path d="M16 70 L50 56 L82 62 L116 36 L144 28" stroke="rgb(var(--violet))" strokeOpacity=".35" strokeWidth="5"
+        strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 10" />
+      <circle cx="144" cy="28" r="7" fill="rgb(var(--violet))" fillOpacity=".25" />
+      <circle cx="144" cy="28" r="3.5" fill="rgb(var(--violet))" />
+    </svg>
   );
 }
 
@@ -89,6 +117,7 @@ export function ResultsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<ResultsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -96,7 +125,11 @@ export function ResultsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
 
-  const load = () => resultsApi.get().then(setData).catch((e) => setError(getErrorMessage(e)));
+  const load = () => resultsApi.get()
+    .then((d) => { setData(d); setLoadError(null); })
+    .catch((e) => setLoadError(getErrorMessage(e)));
+
+  const reload = () => { setIsLoading(true); void load().finally(() => setIsLoading(false)); };
 
   useEffect(() => {
     load().finally(() => setIsLoading(false));
@@ -146,137 +179,169 @@ export function ResultsPage() {
       await resultsApi.delete(id);
       await load();
     } catch (requestError) {
-      setError(getErrorMessage(requestError));
+      setLoadError(getErrorMessage(requestError));
     }
   };
 
-  if (isLoading) return <div className="py-20 text-center text-muted">Carregando resultados...</div>;
+  const series = data?.series ?? [];
+  // O peso é o protagonista quando existe; senão, a série com mais pontos.
+  const hero = useMemo(
+    () => series.find((s) => s.key === 'weight_kg' && s.points.length > 0)
+      ?? [...series].filter((s) => s.points.length > 0).sort((a, b) => b.points.length - a.points.length)[0],
+    [series],
+  );
+  const others = series.filter((s) => s !== hero && s.points.length > 0);
+  const conditioning = data?.conditioning ?? [];
+  const isEmpty = !!data && series.length === 0 && conditioning.length === 0;
 
   return (
     <>
-      <Header title="Resultados" rightAction={<Button size="sm" onClick={openForm}>Registrar</Button>} />
-      <div className="space-y-5 px-4 py-5 pb-24">
-        {error && !showForm && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      <Header title="Resultados" rightAction={data ? <Button size="md" onClick={openForm}>Registrar</Button> : undefined} />
 
-        {data && data.series.length === 0 && data.conditioning.length === 0 ? (
-          <Card className="text-center">
-            <p className="text-4xl">📊</p>
-            <h2 className="mt-3 font-bold text-fg">Nenhum resultado ainda</h2>
-            <p className="mt-1 text-sm leading-relaxed text-muted">
-              Registre peso, gordura corporal, massa muscular ou medidas. Cada registro vira um ponto na
-              sua evolução ao longo do tempo.
-            </p>
-            <Button fullWidth className="mt-4" onClick={openForm}>Registrar primeiro resultado</Button>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {data?.series.map((series) => <SeriesCard key={series.key} series={series} />)}
-          </div>
-        )}
+      {isLoading && <ResultsSkeleton />}
 
-        <Card onClick={() => navigate('/results/review')} className="bg-violet-soft">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🧭</span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-fg">Avaliar o resultado</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                O assistente lê treinos, alimentação e medições do período e compara com o seu objetivo.
+      {!isLoading && !data && loadError && (
+        <div className="px-5 pb-24 pt-2"><ErrorState message={loadError} onRetry={reload} /></div>
+      )}
+
+      {!isLoading && data && (
+        <div className="space-y-[14px] px-5 pb-24 pt-2">
+          {loadError && <Notice tone="danger">{loadError}</Notice>}
+
+          {isEmpty ? (
+            <Card tint="violet" className="enter py-8 text-center">
+              <EmptyIllustration />
+              <h2 className="num mt-5 text-[28px] leading-[1.05] text-fg">Sua evolução começa aqui</h2>
+              <p className="mx-auto mt-2 max-w-[300px] text-[15px] leading-[1.45] text-muted">
+                Registre peso, gordura ou medidas. Cada registro vira um ponto na linha da sua evolução.
               </p>
-            </div>
-            <span className="text-lg text-dim">›</span>
-          </div>
-        </Card>
+              <Button fullWidth size="lg" className="mt-6" onClick={openForm}>Registrar primeiro resultado</Button>
+            </Card>
+          ) : (
+            <>
+              {hero && <HeroSeries series={hero} />}
+              {others.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  {others.map((s, i) => <MiniSeries key={s.key} series={s} index={i} />)}
+                </div>
+              )}
+            </>
+          )}
 
-        {data && data.conditioning.length > 0 && (
-          <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">Condicionamento</h3>
-            <Card>
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm text-muted">Caminhada de 6 minutos</span>
-                <span className="text-lg font-black text-fg">
-                  {data.conditioning[0].distance_meters}<span className="ml-1 text-xs text-dim">m</span>
-                </span>
+          <div className="enter" style={stagger(2)}>
+            <Card onClick={() => navigate('/results/review')} tint="violet" className="flex min-h-[72px] items-center gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-violet-soft text-violet">
+                <Icon name="compass" className="h-6 w-6" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold text-fg">Avaliar o resultado</p>
+                <p className="mt-0.5 text-[13px] leading-[1.4] text-muted">O assistente cruza treinos, alimentação e medidas com seu objetivo.</p>
               </div>
-              <p className="mt-1 text-xs text-dim">
-                {formatDate(data.conditioning[0].performed_at)} · esforço {data.conditioning[0].perceived_exertion}/10
-                {data.conditioning.length > 1 && ` · ${data.conditioning.length} testes registrados`}
-              </p>
+              <Chevron />
             </Card>
           </div>
-        )}
 
-        {data && data.measurements.length > 0 && (
-          <div>
-            <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">Histórico</h3>
-            <div className="space-y-2">
-              {data.measurements.map((measurement) => (
-                <Card key={measurement.id} className="py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-fg">{formatDate(measurement.measured_at)}</p>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-                        {FIELDS.filter(({ key }) => measurement[key] != null).map(({ key, label, unit }) => (
-                          <span key={key}>{label}: <strong className="text-fg">{measurement[key]}{unit}</strong></span>
-                        ))}
-                      </div>
-                      {measurement.notes && <p className="mt-1 text-xs italic text-dim">{measurement.notes}</p>}
-                    </div>
-                    <button type="button" onClick={() => remove(measurement.id)} className="shrink-0 text-xs text-danger">
-                      Apagar
-                    </button>
+          {conditioning.length > 0 && (() => {
+            const [now, before] = conditioning;
+            const gain = before ? now.distance_meters - before.distance_meters : null;
+            return (
+              <section className="enter pt-2" style={stagger(3)}>
+                <SectionTitle>Condicionamento</SectionTitle>
+                <Card>
+                  <p className="text-[13px] font-semibold text-muted">Caminhada de 6 minutos</p>
+                  <div className="mt-1 flex items-end justify-between gap-3">
+                    <p className="num text-[38px] leading-[1.05] text-fg">
+                      <CountUp value={now.distance_meters} />
+                      <span className="ml-1 font-sans text-[15px] font-semibold text-muted">m</span>
+                    </p>
+                    {gain != null && gain !== 0 && (
+                      <Chip tone={gain > 0 ? 'violet' : 'sun'} className="mb-1.5">{signed(gain)} m</Chip>
+                    )}
                   </div>
+                  <p className="mt-2 text-[13px] text-muted">
+                    {formatDate(now.performed_at)}, esforço {now.perceived_exertion} de 10
+                    {conditioning.length > 1 && `, ${conditioning.length} testes`}
+                  </p>
                 </Card>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+              </section>
+            );
+          })()}
+
+          {data.measurements.length > 0 && (
+            <section className="enter pt-2" style={stagger(4)}>
+              <SectionTitle>Histórico</SectionTitle>
+              <div className="space-y-2">
+                {data.measurements.map((measurement) => (
+                  <Card key={measurement.id} className="!py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base font-semibold text-fg">{formatDate(measurement.measured_at)}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {FIELDS.filter(({ key }) => measurement[key] != null).map(({ key, label, unit }) => (
+                            <Chip key={key} className="max-w-full">
+                              {label} <strong className="font-bold text-fg">{num(Number(measurement[key]))} {unit}</strong>
+                            </Chip>
+                          ))}
+                        </div>
+                        {measurement.notes && <p className="mt-2 text-[15px] leading-[1.45] text-muted">{measurement.notes}</p>}
+                      </div>
+                      <button type="button" onClick={() => remove(measurement.id)}
+                        className="press -mr-2 -mt-1 min-h-[48px] shrink-0 px-2 text-[15px] font-semibold text-danger">
+                        Apagar
+                      </button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-[100] flex items-end bg-bg/80 backdrop-blur-sm" onClick={() => setShowForm(false)}>
-          <form onSubmit={submit} className="max-h-[88vh] w-full overflow-y-auto rounded-t-xl bg-surface shadow-sheet sheet-in p-5"
+          <form onSubmit={submit} className="max-h-[88vh] w-full overflow-y-auto rounded-t-xl bg-surface p-5 shadow-sheet sheet-in"
+            role="dialog" aria-modal="true" aria-label="Registrar resultado"
             onClick={(event) => event.stopPropagation()}>
-            <h3 className="text-lg font-bold text-fg">Registrar resultado</h3>
-            <p className="mt-1 text-xs leading-relaxed text-dim">
+            <h3 className="num text-[28px] leading-[1.05] text-fg">Registrar resultado</h3>
+            <p className="mt-2 text-[15px] leading-[1.45] text-muted">
               Preencha só o que você mediu. Registrar de novo na mesma data corrige o registro anterior.
             </p>
 
-            {error && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+            {error && <div className="mt-3"><Notice tone="danger">{error}</Notice></div>}
 
-            <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
+            <label className={`mt-5 ${fieldLabel}`}>
               Data
               <input type="date" value={date} max={new Date().toISOString().slice(0, 10)}
                 onChange={(event) => setDate(event.target.value)}
-                className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-4 py-3 text-fg" />
+                className="mt-1.5 w-full min-w-0 text-fg" />
             </label>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               {FIELDS.map(({ key, label, unit, step }) => (
-                <label key={key} className="block text-xs text-muted">
-                  {label} <span className="text-dim">({unit})</span>
-                  <input type="number" inputMode="decimal" step={step} min={0} placeholder="—"
+                <label key={key} className={fieldLabel}>
+                  {label} <span className="font-medium text-dim">({unit})</span>
+                  <input type="number" inputMode="decimal" step={step} min={0} placeholder="0,0"
                     value={values[key] ?? ''}
                     onFocus={(event) => event.target.select()}
                     onChange={(event) => setValues((current) => ({ ...current, [key]: event.target.value }))}
-                    className="mt-1 w-full rounded-md border border-transparent bg-surface-2 px-3 py-2.5 text-center font-bold text-fg placeholder:text-dim" />
+                    className="mt-1.5 w-full min-w-0 text-center font-bold text-fg" />
                 </label>
               ))}
             </div>
 
-            <label className="mt-4 block text-xs uppercase tracking-wide text-dim">
+            <label className={`mt-4 ${fieldLabel}`}>
               Observações
               <textarea value={notes} rows={2} onChange={(event) => setNotes(event.target.value)}
-                placeholder="Ex: medido em jejum, pela manhã"
-                className="mt-1 w-full resize-none rounded-md border border-transparent bg-surface-2 px-4 py-3 text-sm text-fg placeholder:text-dim" />
+                placeholder="Ex.: em jejum, pela manhã"
+                className="mt-1.5 w-full resize-none text-fg" />
             </label>
 
             <div className="mt-5 space-y-2">
               <Button type="submit" fullWidth size="lg" isLoading={isSaving} disabled={filledCount === 0}>
                 Salvar{filledCount > 0 ? ` (${filledCount})` : ''}
               </Button>
-              <button type="button" onClick={() => setShowForm(false)} className="w-full py-3 text-sm text-muted">
-                Cancelar
-              </button>
+              <Button type="button" variant="ghost" fullWidth onClick={() => setShowForm(false)}>Cancelar</Button>
             </div>
           </form>
         </div>
