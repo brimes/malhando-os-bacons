@@ -1,10 +1,13 @@
 import { apiClient } from './client';
 
-export type IllustrationStatus = 'pending' | 'ready' | 'failed';
+// 'outdated': ilustração antiga (imagem única); o app pede a regeneração sozinho.
+export type IllustrationStatus = 'pending' | 'ready' | 'failed' | 'outdated';
 
 export interface IllustrationState {
   status: IllustrationStatus;
   error?: string;
+  /** Quadros do movimento. Ausente numa API antiga: conta como 1. */
+  frames?: number;
 }
 
 // Todas as chamadas são online-only e não-cacheáveis (ver client.ts e
@@ -20,10 +23,14 @@ export const exerciseIllustrationsApi = {
   status: async (exerciseName: string): Promise<IllustrationState> => (
     await apiClient.get<IllustrationState>('/exercise-illustrations', { params: { name: exerciseName } })
   ).data,
+  // "Não ficou bom": refaz descrição e quadros. Consome a cota diária (429).
+  regenerate: async (exerciseName: string): Promise<IllustrationState> => (
+    await apiClient.post<IllustrationState>('/exercise-illustrations/regenerate', { exercise_name: exerciseName })
+  ).data,
   // A rota exige Authorization, que um <img src> não carrega: busca o blob.
-  imageBlob: async (exerciseName: string): Promise<Blob> => (
+  imageBlob: async (exerciseName: string, frame = 0): Promise<Blob> => (
     await apiClient.get('/exercise-illustrations/image', {
-      params: { name: exerciseName },
+      params: { name: exerciseName, frame },
       responseType: 'blob',
       timeout: 30000,
     })

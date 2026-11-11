@@ -99,7 +99,7 @@ export interface TrainingPlanExercise {
    */
   video_status?: 'not_found';
   /** Ilustração gerada por IA já pronta para este nome. */
-  illustration?: { status: 'ready' };
+  illustration?: { status: 'ready' | 'outdated'; frames?: number };
   /**
    * Presente só na sessão ativa, e só quando o exercício foi trocado com
    * "Trocar só hoje": o nome original, para a tela explicar a troca sem a
