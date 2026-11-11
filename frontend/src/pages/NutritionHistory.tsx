@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { OriginBadge } from '../components/OriginBadge';
-import { MonthlyCalendar } from '../components/MonthlyCalendar';
+import { KcalCalendar } from '../components/nutricao/KcalCalendar';
+import { CountUp } from '../components/CountUp';
+import { EmptyState, ErrorState, SkeletonCard } from '../components/nutricao/States';
+import { CalendarIcon, CopyIcon } from '../components/nutricao/icons';
 import { EditFoodLogModal } from '../components/EditFoodLogModal';
 import { CopyFoodLogModal } from '../components/CopyFoodLogModal';
 import { nutritionApi } from '../api/nutrition';
@@ -68,7 +71,7 @@ export function NutritionHistoryPage() {
   // edit made in the day panel updates the month total with no extra plumbing.
   const allLogs = useLocalAll(foodLogsCache);
   const monthLogs = useMemo(
-    () => allLogs.filter((log) => { const key = dateKey(log.date); return key >= monthFrom && key <= monthTo; }),
+    () => (allLogs ?? []).filter((log) => { const key = dateKey(log.date); return key >= monthFrom && key <= monthTo; }),
     [allLogs, monthFrom, monthTo],
   );
   const localDays = useMemo(() => aggregateByDay(monthLogs), [monthLogs]);
@@ -118,7 +121,7 @@ export function NutritionHistoryPage() {
   // no copy of at all gets the network fallback below, or the "sem dados"
   // message when that fallback can't run either.
   const dayLogsLocal = useMemo(
-    () => (selectedDate ? allLogs.filter((log) => dateKey(log.date) === selectedDate) : []),
+    () => (selectedDate ? (allLogs ?? []).filter((log) => dateKey(log.date) === selectedDate) : []),
     [allLogs, selectedDate],
   );
   const dayIsKnownEmpty = selectedDate !== null && dayLogsLocal.length === 0 && isDateSynced(selectedDate);
@@ -184,79 +187,107 @@ export function NutritionHistoryPage() {
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
+  const retryDay = () => {
+    if (!selectedDate) return;
+    setDayFallbackError(null);
+    setIsLoadingDayFallback(true);
+    nutritionApi.getLogs(selectedDate)
+      .then(setNetworkDayLogs)
+      .catch(() => setDayFallbackError(NO_OFFLINE_DATA_MESSAGE))
+      .finally(() => setIsLoadingDayFallback(false));
+  };
+  const macros = [
+    { label: 'Proteína', v: dayTotals.protein, c: 'text-violet' },
+    { label: 'Carboidrato', v: dayTotals.carbs, c: 'text-sun' },
+    { label: 'Gordura', v: dayTotals.fat, c: 'text-brand-fg' },
+  ];
+
   return (
     <>
-      <Header title="Histórico de nutrição" showBack />
- <div className="space-y-4 px-4 py-5 pb-24">
- <div><p className="text-sm text-dim">Calorias registradas no mês</p><p className="text-3xl font-black text-brand-fg">{Math.round(total).toLocaleString('pt-BR')} <span className="text-sm font-normal text-dim">kcal</span></p></div>
-        {!monthFullyLocal && !isNetworkOnline() && (
- <p className="text-xs text-dim">Alguns dias mais antigos podem não aparecer offline.</p>
-        )}
-        <MonthlyCalendar month={month} values={values} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
+      <Header title="Calendário" showBack />
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
+        <div className="enter">
+          <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Calorias no mês</p>
+          <p className="num text-[44px] leading-none text-teal">
+            <CountUp value={Math.round(total)} format={(n) => n.toLocaleString('pt-BR')} />
+            <span className="font-sans text-[15px] font-medium text-muted"> kcal</span>
+          </p>
+          {!monthFullyLocal && !isNetworkOnline() && (
+            <p className="mt-2 text-[15px] text-muted">Alguns dias mais antigos podem não aparecer offline.</p>
+          )}
+        </div>
+
+        <div className="enter" style={{ '--i': 1 } as React.CSSProperties}>
+          <KcalCalendar month={month} values={values} onMonthChange={setMonth} onDayClick={openDay} selectedDate={selectedDate} />
+        </div>
 
         {selectedDate ? (
-          <div>
- <h3 className="mb-2 px-1 text-xs uppercase tracking-wide text-dim">{formatDayLabel(selectedDate)}</h3>
+          <div className="space-y-[14px]">
+            <h2 className="text-[17px] font-bold capitalize text-fg">{formatDayLabel(selectedDate)}</h2>
             {isLoadingDayFallback ? (
- <div className="py-8 text-center text-sm text-dim">Carregando...</div>
+              <SkeletonCard rows={2} />
             ) : dayFallbackError ? (
- <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{dayFallbackError}</div>
+              <ErrorState message={dayFallbackError} onRetry={retryDay} />
             ) : (
- <div className="space-y-4">
- <Card className="py-3">
- <p className="text-lg font-bold text-brand-fg">{Math.round(dayTotals.calories)} <span className="text-xs font-normal text-dim">kcal</span></p>
- <p className="text-xs text-dim">P:{Math.round(dayTotals.protein)}g C:{Math.round(dayTotals.carbs)}g G:{Math.round(dayTotals.fat)}g</p>
+              <>
+                <Card tint="teal" className="enter">
+                  <p className="num text-[38px] leading-[1.05] text-teal">{Math.round(dayTotals.calories)}<span className="font-sans text-[15px] font-medium text-muted"> kcal</span></p>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    {macros.map((m) => (
+                      <div key={m.label} className="min-w-0">
+                        <p className="truncate text-[13px] text-muted">{m.label}</p>
+                        <p className={`num text-[24px] leading-[1.1] ${m.c}`}>{Math.round(m.v)}<span className="font-sans text-[13px] font-medium text-muted"> g</span></p>
+                      </div>
+                    ))}
+                  </div>
                 </Card>
 
-                {/* Diferente da tela de hoje, uma refeição sem registro simplesmente não aparece: isto é histórico, não um checklist do dia. */}
-                {MEAL_ORDER.filter((meal) => (byMeal[meal]?.length ?? 0) > 0).map((meal) => {
+                {/* Histórico, não checklist: refeição sem registro não aparece. */}
+                {MEAL_ORDER.filter((meal) => (byMeal[meal]?.length ?? 0) > 0).map((meal, mi) => {
                   const logs = byMeal[meal] ?? [];
                   const mealCal = logs.reduce((sum, log) => sum + log.calories, 0);
                   return (
-                    <div key={meal}>
- <div className="mb-2 flex items-center justify-between">
- <h4 className="text-sm font-semibold text-fg">{MEAL_TYPE_LABELS[meal]}</h4>
- <span className="text-xs text-dim">{Math.round(mealCal)} kcal</span>
-                      </div>
- <div className="space-y-2">
-                        {logs.map((log) => (
- <Card key={log.id} className="py-3">
- <div className="flex items-center gap-2">
- <button type="button" className="flex min-w-0 flex-1 items-center justify-between text-left" onClick={() => setEditingLog(log)}>
- <div className="min-w-0 flex-1">
- <p className="truncate text-sm font-medium text-fg">
-                                  {log.food_name}
-                                  <OriginBadge origin={log.origin} />
-                                </p>
- <p className="text-xs text-dim">{log.quantity_g}g</p>
-                              </div>
- <div className="shrink-0 text-right">
- <p className="text-sm font-semibold text-brand-fg">{Math.round(log.calories)} kcal</p>
- <p className="text-xs text-dim">
-                                  P:{Math.round(log.protein_g)}g C:{Math.round(log.carbs_g)}g G:{Math.round(log.fat_g)}g
-                                </p>
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Copiar ${log.food_name} para outro dia`}
-                              onClick={() => setCopyingLog(log)}
- className="shrink-0 rounded-lg border border-line px-2.5 py-2 text-xs text-muted active:bg-surface-2"
-                            >
-                              Copiar
-                            </button>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
+                    <div key={meal} className="enter" style={{ '--i': mi + 2 } as React.CSSProperties}>
+                      <Card className="!px-0">
+                        <div className="flex items-center justify-between px-[18px]">
+                          <h3 className="text-[17px] font-bold text-fg">{MEAL_TYPE_LABELS[meal]}</h3>
+                          <p className="num text-[24px] leading-[1.1] text-fg">{Math.round(mealCal)}<span className="font-sans text-[13px] font-medium text-muted"> kcal</span></p>
+                        </div>
+                        <ul className="mt-1">
+                          {logs.map((log) => (
+                            <li key={log.id} className="flex min-h-[64px] items-center gap-1 pl-[18px] pr-2">
+                              <button type="button" className="press flex min-h-[64px] min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setEditingLog(log)}>
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-base font-semibold text-fg">{log.food_name}</p>
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
+                                    <span className="num text-[15px] text-muted">{Math.round(log.quantity_g)} g</span>
+                                    <OriginBadge origin={log.origin} />
+                                  </div>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  <p className="num text-[22px] leading-[1.1] text-fg">{Math.round(log.calories)}</p>
+                                  <p className="text-[13px] text-dim">kcal</p>
+                                </div>
+                              </button>
+                              <button type="button" aria-label={`Copiar ${log.food_name} para outro dia`} onClick={() => setCopyingLog(log)} className="press flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-teal">
+                                <CopyIcon />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </Card>
                     </div>
                   );
                 })}
-              </div>
+              </>
             )}
           </div>
+        ) : Object.keys(values).length === 0 ? (
+          <Card>
+            <EmptyState icon={<CalendarIcon />} title="Nenhum registro neste mês" text="Os dias com comida registrada aparecem aqui, mais escuros quanto mais calorias." />
+          </Card>
         ) : (
- <p className="text-center text-xs text-dim">Toque num dia destacado para ver o que você comeu.</p>
+          <p className="text-center text-[15px] text-muted">Toque num dia destacado para ver o que você comeu.</p>
         )}
       </div>
 

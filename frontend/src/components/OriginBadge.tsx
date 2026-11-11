@@ -1,31 +1,22 @@
+import { Chip } from './Chip';
+import { CameraIcon, ChatIcon, CalendarIcon, FlameIcon, LeafIcon } from './nutricao/icons';
 import type { FoodLog } from '../types';
 
-// A badge of procedence, never "gerado por IA" — the AI disclosure lives only
-// in the acceptance terms (see CLAUDE.md), repeating it on every entry would
-// just become noise nobody reads. `manual` gets no badge at all.
-//
-// Shared by Nutrition.tsx (today's diary) and NutritionHistory.tsx (the day
-// panel of the calendar) — kept in one place so the two never drift apart.
-const ORIGIN_LABELS: Partial<Record<FoodLog['origin'], string>> = {
-  photo_plate: 'Foto',
-  photo_label: 'Foto',
-  plan: 'Plano',
-  cheat_day: 'Dia do lixo',
-  // Procedência, não aviso de IA: diz que os números vieram de uma descrição
-  // conversada, que é o que a pessoa precisa reconhecer ao reler o histórico.
-  assistant: 'Conversa',
-  // Diferente das outras: não é uma medição do dia, é a mediana de dias
-  // parecidos confirmada com um toque. Precisa ficar claro que é estimativa,
-  // não um registro item a item.
-  routine: 'Rotina (estimativa)',
+// Procedência como chip, nunca "gerado por IA": o aviso de IA vive só no termo de
+// aceite (CLAUDE.md). `manual` não ganha chip. Compartilhado por Nutrition e NutritionHistory.
+const ORIGINS: Partial<Record<FoodLog['origin'], { label: string; tone: 'teal' | 'violet' | 'sun' | 'neutral'; icon: React.ReactNode }>> = {
+  photo_plate: { label: 'Foto', tone: 'teal', icon: <CameraIcon /> },
+  photo_label: { label: 'Foto', tone: 'teal', icon: <CameraIcon /> },
+  plan: { label: 'Plano', tone: 'violet', icon: <LeafIcon /> },
+  cheat_day: { label: 'Dia do lixo', tone: 'sun', icon: <FlameIcon /> },
+  // Procedência: os números vieram de uma descrição conversada.
+  assistant: { label: 'Conversa', tone: 'teal', icon: <ChatIcon /> },
+  // Mediana de dias parecidos confirmada com um toque: estimativa, não medição.
+  routine: { label: 'Rotina, estimativa', tone: 'neutral', icon: <CalendarIcon /> },
 };
 
 export function OriginBadge({ origin }: { origin: FoodLog['origin'] }) {
-  const label = ORIGIN_LABELS[origin];
-  if (!label) return null;
-  return (
- <span className="ml-2 rounded-full bg-surface-2 px-1.5 py-0.5 align-middle text-xs font-medium text-muted">
-      {label}
-    </span>
-  );
+  const o = ORIGINS[origin];
+  if (!o) return null;
+  return <Chip tone={o.tone} icon={o.icon}>{o.label}</Chip>;
 }
