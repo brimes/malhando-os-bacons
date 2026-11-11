@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { SignInWithApple } from '@capacitor-community/apple-sign-in';
-import { APPLE_BUNDLE_ID, googleClientIdForPlatform } from '../lib/authConfig';
+import { APPLE_BUNDLE_ID, APPLE_SIGN_IN_ENABLED, googleClientIdForPlatform } from '../lib/authConfig';
 import { Button } from '../components/Button';
 import { useAuthStore } from '../stores/useAuthStore';
 
@@ -51,7 +51,7 @@ export function LoginPage() {
   };
 
   const googleClientId = Capacitor.isNativePlatform() ? googleClientIdForPlatform() : '';
-  const showApple = Capacitor.getPlatform() === 'ios';
+  const showApple = APPLE_SIGN_IN_ENABLED && Capacitor.getPlatform() === 'ios';
 
   const handleGoogle = async () => {
     clearError();

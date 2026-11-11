@@ -16,6 +16,13 @@ export const GOOGLE_IOS_CLIENT_ID = 'TODO_GOOGLE_IOS_CLIENT_ID.apps.googleuserco
  */
 export const GOOGLE_IOS_REVERSED_CLIENT_ID = 'TODO_GOOGLE_IOS_REVERSED_CLIENT_ID';
 
+/**
+ * Interruptor do botão "Entrar com Apple". Desligado: a capability Sign in with
+ * Apple ainda não está habilitada no App ID net.brimes.mob, então o login falha
+ * (e a Apple recusou o app por isso). Ligar quando a capability estiver ativa.
+ */
+export const APPLE_SIGN_IN_ENABLED = false;
+
 export const APPLE_BUNDLE_ID = 'net.brimes.mob';
 
 /** Client ID a passar ao plugin na plataforma atual, ou '' se ainda não configurado. */
