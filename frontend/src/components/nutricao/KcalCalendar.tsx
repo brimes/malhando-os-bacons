@@ -35,7 +35,7 @@ export function KcalCalendar({ month, values, onMonthChange, onDayClick, selecte
     <Card className="!px-3">
       <div className="mb-2 flex items-center justify-between">
         <button aria-label="Mês anterior" onClick={() => onMonthChange(new Date(year, mi - 1, 1))} className="press flex h-12 w-12 items-center justify-center rounded-md text-muted">{arrow('l')}</button>
-        <h2 className="num text-[22px] capitalize leading-[1.1] text-fg">{month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h2>
+        <h2 className="num text-[22px] leading-[1.1] text-fg">{(() => { const t = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(' de ', ' '); return t.charAt(0).toUpperCase() + t.slice(1); })()}</h2>
         <button aria-label="Próximo mês" onClick={() => onMonthChange(new Date(year, mi + 1, 1))} className="press flex h-12 w-12 items-center justify-center rounded-md text-muted">{arrow('r')}</button>
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -46,12 +46,12 @@ export function KcalCalendar({ month, values, onMonthChange, onDayClick, selecte
           const v = values[k];
           const inten = Math.min(Math.max(v?.intensity ?? 0, 0), 1);
           const sel = selectedDate === k;
-          const cls = `relative flex min-h-[52px] w-full min-w-0 flex-col items-center justify-center rounded-sm ${v ? '' : 'bg-surface-2'} ${sel ? 'outline outline-[3px] -outline-offset-[3px] outline-teal' : k === todayKey ? 'outline outline-2 -outline-offset-2 outline-fg/40' : ''}`;
-          const style = v ? { backgroundColor: `rgb(var(--teal) / ${0.14 + inten * 0.36})` } : undefined;
+          const cls = `relative flex min-h-[52px] w-full min-w-0 flex-col items-center justify-center rounded-sm ${v ? '' : k === todayKey ? 'bg-teal-soft' : 'bg-surface-2'} ${sel ? '!bg-teal' : ''} ${k === todayKey && !sel ? 'outline outline-2 -outline-offset-2 outline-teal' : ''}`;
+          const style = v && !sel ? { backgroundColor: `rgb(var(--teal) / ${0.14 + inten * 0.36})` } : undefined;
           const content = (
             <>
-              <span className={`num text-[18px] leading-[1.1] ${v ? 'text-fg' : 'text-dim'}`}>{day}</span>
-              {v && <span className="max-w-full truncate px-0.5 text-[12px] font-semibold leading-[1.2] text-fg">{short(v.label)}</span>}
+              <span className={`num text-[18px] leading-[1.1] ${sel ? 'text-on-teal' : v ? 'text-fg' : k === todayKey ? 'text-teal' : 'text-dim'}`}>{day}</span>
+              {v && <span className={`max-w-full truncate px-0.5 text-[12px] font-semibold leading-[1.2] ${sel ? 'text-on-teal' : 'text-fg'}`}>{short(v.label)}</span>}
             </>
           );
           if (onDayClick && v) {

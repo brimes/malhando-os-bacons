@@ -32,7 +32,7 @@ export function CompensationCard() {
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" /></svg>
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[15px] font-semibold text-fg">Compensação — {plan.name}</p>
+          <p className="truncate text-[15px] font-semibold text-fg">Compensação {plan.name}</p>
           {expiresLabel && <p className="text-[13px] text-muted">válida até {expiresLabel}</p>}
         </div>
       </div>

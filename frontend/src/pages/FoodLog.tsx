@@ -4,6 +4,10 @@ import { useNutritionStore } from '../stores/useNutritionStore';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
+import { CountUp } from '../components/CountUp';
+import { MealPicker } from '../components/nutricao/MealPicker';
+import { ChatIcon, ChevronIcon, PlusIcon } from '../components/nutricao/icons';
+import { SkeletonBlock } from '../components/nutricao/States';
 import { getErrorMessage } from '../api/client';
 import { FoodLogAssistant } from '../components/FoodLogAssistant';
 import { isNetworkOnline } from '../lib/offline';
@@ -100,17 +104,24 @@ function sortHistory(entries: FoodLogHistoryEntry[]): FoodLogHistoryEntry[] {
 }
 
 function EmptyNote({ text }: { text: string }) {
- return <p className="px-1 py-2 text-sm text-dim">{text}</p>;
+  return <p className="px-1 py-3 text-[15px] leading-[1.45] text-muted">{text}</p>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
- <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-dim">{title}</h3>
- <div className="space-y-2">{children}</div>
-    </div>
+    <section>
+      <h2 className="flex min-h-[40px] items-center text-[17px] font-bold text-fg">{title}</h2>
+      <ul className="overflow-hidden rounded-lg bg-surface shadow-card">{children}</ul>
+    </section>
   );
 }
+
+const Kcal = ({ v }: { v: number }) => (
+  <div className="shrink-0 text-right">
+    <p className="num text-[22px] leading-[1.1] text-fg">{Math.round(v)}</p>
+    <p className="text-[13px] text-dim">kcal</p>
+  </div>
+);
 
 function HistoryRow({
   entry,
@@ -125,40 +136,44 @@ function HistoryRow({
 }) {
   const favorited = Boolean(entry.favorite_id);
   return (
- <Card className="flex items-center gap-2 py-3">
- <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
- <p className="truncate text-sm font-medium text-fg">{entry.food_name}</p>
- <p className="text-xs text-dim">
-          {entry.quantity_g}g · {MEAL_TYPE_LABELS[entry.meal_type]} · {Math.round(entry.calories)} kcal
-        </p>
+    <li className="flex min-h-[64px] items-center gap-1 pl-[18px] pr-2">
+      <button type="button" onClick={onSelect} className="press flex min-h-[64px] min-w-0 flex-1 items-center gap-3 text-left">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-fg">{entry.food_name}</p>
+          <p className="text-[13px] text-muted"><span className="num text-[15px]">{Math.round(entry.quantity_g)} g</span>, {MEAL_TYPE_LABELS[entry.meal_type]}</p>
+        </div>
+        <Kcal v={entry.calories} />
       </button>
       <button
         type="button"
         onClick={onToggleFavorite}
         disabled={isTogglingFavorite}
+        aria-pressed={favorited}
         aria-label={favorited ? `Desfavoritar ${entry.food_name}` : `Favoritar ${entry.food_name}`}
- className={`shrink-0 p-1.5 text-xl leading-none disabled:opacity-50 ${
-          favorited ? 'text-sun' : 'text-dim'
-        }`}
+        className={`press flex h-12 w-12 shrink-0 items-center justify-center rounded-md disabled:opacity-[.45] ${favorited ? 'text-sun' : 'text-dim'}`}
       >
-        {favorited ? '★' : '☆'}
+        <svg className="h-6 w-6" viewBox="0 0 24 24" fill={favorited ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
+        </svg>
       </button>
-    </Card>
+    </li>
   );
 }
 
 function FoodItemRow({ food, onSelect }: { food: FoodItem; onSelect: () => void }) {
   return (
- <button type="button" onClick={onSelect} className="w-full text-left">
- <Card className="py-3">
- <p className="text-sm font-medium text-fg">
- {food.name} {food.brand && <span className="text-dim">· {food.brand}</span>}
-        </p>
- <p className="text-xs text-dim">
-          {food.calories_per_100g} kcal/100g · P:{food.protein_g}g C:{food.carbs_g}g G:{food.fat_g}g
-        </p>
-      </Card>
-    </button>
+    <li>
+      <button type="button" onClick={onSelect} className="press flex min-h-[64px] w-full items-center gap-3 px-[18px] text-left">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-fg">{food.name}</p>
+          <p className="truncate text-[13px] text-muted">{food.brand ? `${food.brand}, ` : ''}P {food.protein_g} g, C {food.carbs_g} g, G {food.fat_g} g</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="num text-[22px] leading-[1.1] text-fg">{Math.round(food.calories_per_100g)}</p>
+          <p className="text-[13px] text-dim">kcal/100 g</p>
+        </div>
+      </button>
+    </li>
   );
 }
 
@@ -224,7 +239,7 @@ export function FoodLogPage() {
     }
   }, [query, searchFoods, searchHistory, clearSearch]);
 
-  const sortedHistory = useMemo(() => sortHistory(logHistory), [logHistory]);
+  const sortedHistory = useMemo(() => sortHistory(logHistory ?? []), [logHistory]);
   const favorites = useMemo(() => sortedHistory.filter((e) => e.favorite_id), [sortedHistory]);
   const rest = useMemo(() => sortedHistory.filter((e) => !e.favorite_id), [sortedHistory]);
 
@@ -239,7 +254,7 @@ export function FoodLogPage() {
     () => sortedHistory.filter((e) => e.food_name.toLowerCase().includes(normalizedQuery)),
     [sortedHistory, normalizedQuery]
   );
-  const matchingHistory = historyResults.length > 0 ? historyResults : localMatches;
+  const matchingHistory = (historyResults ?? []).length > 0 ? historyResults : localMatches;
 
   const openFromFoodItem = (food: FoodItem) => {
     setSubmitError(null);
@@ -383,15 +398,33 @@ export function FoodLogPage() {
   };
 
   const showList = !selection && !manualMode && !aiMode;
+  const inputCls = 'h-[52px] w-full rounded-md border-2 border-transparent bg-surface-2 px-4 text-base text-fg placeholder:text-dim focus:border-brand-fg focus:outline-none';
+  const bigNum = 'h-[64px] w-full rounded-md border-2 border-transparent bg-surface-2 px-4 text-center input-num text-fg focus:border-brand-fg focus:outline-none';
+  const lbl = 'mb-2 block text-[13px] font-semibold uppercase tracking-[0.06em] text-muted';
+  const back = (
+    <button type="button" onClick={backToList} className="press -ml-2 flex min-h-[48px] items-center gap-1 px-2 text-[15px] font-semibold text-muted">
+      <ChevronIcon className="h-5 w-5 rotate-180" /> Voltar à lista
+    </button>
+  );
+  const macroCells = (m: { calories: number; protein: number; carbs: number; fat: number }) => (
+    <div className="mt-3 grid grid-cols-3 gap-3">
+      {[['Proteína', m.protein, 'text-violet'], ['Carboidrato', m.carbs, 'text-sun'], ['Gordura', m.fat, 'text-brand-fg']].map(([l, v, c]) => (
+        <div key={l as string} className="min-w-0">
+          <p className="truncate text-[13px] text-muted">{l}</p>
+          <p className={`num text-[24px] leading-[1.1] ${c}`}>{Math.round(v as number)}<span className="font-sans text-[13px] font-medium text-muted"> g</span></p>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <>
-      <Header title="Registrar Alimento" showBack />
- <div className="px-4 py-4 pb-24 space-y-4">
+      <Header title="Registrar" showBack />
+      <div className="space-y-[14px] px-5 pb-24 pt-2">
         {aiMode && (
           <>
- <button type="button" onClick={() => setAiMode(false)} className="text-sm text-dim">
-              ← Voltar para a busca
+            <button type="button" onClick={() => setAiMode(false)} className="press -ml-2 flex min-h-[48px] items-center gap-1 px-2 text-[15px] font-semibold text-muted">
+              <ChevronIcon className="h-5 w-5 rotate-180" /> Voltar para a busca
             </button>
             <FoodLogAssistant onRegistrar={registrarDoAssistente} />
           </>
@@ -399,44 +432,40 @@ export function FoodLogPage() {
 
         {showList && (
           <>
- <div className="relative">
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-dim" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
               <input
-                type="text"
+                type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar alimento..."
+                placeholder="Buscar alimento"
+                aria-label="Buscar alimento"
                 autoFocus
- className="w-full bg-surface border border-line rounded-lg px-4 py-3.5 text-fg placeholder-dim focus:outline-none transition-colors"
+                className="h-14 w-full rounded-md border-2 border-transparent bg-surface pl-12 pr-12 text-base text-fg shadow-card placeholder:text-dim focus:border-brand-fg focus:outline-none"
               />
               {isSearching && (
- <div className="absolute right-3 top-1/2 -translate-y-1/2">
- <div className="w-4 h-4 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-fg border-t-transparent" />
                 </div>
               )}
             </div>
 
- <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => { setSubmitError(null); setAiMode(true); }}
- className="rounded-lg bg-brand-soft px-4 py-3 text-center text-sm font-semibold text-brand-fg"
-              >
-                Descrever conversando
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={() => { setSubmitError(null); setAiMode(true); }} className="press tint-teal flex min-h-[72px] items-center gap-3 rounded-lg bg-surface px-4 text-left shadow-card">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><ChatIcon /></span>
+                <span className="text-[15px] font-semibold leading-[1.25] text-fg">Descrever conversando</span>
               </button>
-              <button
-                type="button"
-                onClick={openManual}
- className="rounded-lg border border-dashed border-line px-4 py-3 text-center text-sm font-semibold text-brand-fg"
-              >
-                + Criar do zero
+              <button type="button" onClick={openManual} className="press flex min-h-[72px] items-center gap-3 rounded-lg bg-surface px-4 text-left shadow-card">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-muted"><PlusIcon /></span>
+                <span className="text-[15px] font-semibold leading-[1.25] text-fg">Criar do zero</span>
               </button>
             </div>
 
- {favoriteError && <p className="text-xs text-danger">{favoriteError}</p>}
+            {favoriteError && <p role="alert" className="text-[15px] text-danger">{favoriteError}</p>}
 
-            {isLoadingHistory && logHistory.length === 0 && (
- <div className="flex justify-center py-4">
- <div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+            {isLoadingHistory && (logHistory ?? []).length === 0 && (
+              <div className="space-y-2" aria-busy="true">
+                {[0, 1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-16 w-full" />)}
               </div>
             )}
 
@@ -444,67 +473,50 @@ export function FoodLogPage() {
               <>
                 <Section title="Já registrei">
                   {matchingHistory.length === 0 ? (
-                    <EmptyNote text="Nada encontrado no que você já registrou." />
+                    <li className="px-[18px]"><EmptyNote text="Nada encontrado no que você já registrou." /></li>
                   ) : (
                     matchingHistory.map((entry) => (
-                      <HistoryRow
-                        key={entry.group_key}
-                        entry={entry}
-                        onSelect={() => openFromHistory(entry)}
-                        onToggleFavorite={() => handleToggleFavorite(entry)}
-                        isTogglingFavorite={pendingFavoriteKey === entry.group_key}
-                      />
+                      <HistoryRow key={entry.group_key} entry={entry} onSelect={() => openFromHistory(entry)} onToggleFavorite={() => handleToggleFavorite(entry)} isTogglingFavorite={pendingFavoriteKey === entry.group_key} />
                     ))
                   )}
                 </Section>
 
                 <Section title="Catálogo">
                   {!isNetworkOnline() ? (
-                    <EmptyNote text="A busca de alimentos precisa de internet." />
+                    <li className="px-[18px]"><EmptyNote text="A busca de alimentos precisa de internet." /></li>
                   ) : trimmedQuery.length < 2 ? (
-                    <EmptyNote text="Digite ao menos 2 letras para buscar no catálogo." />
+                    <li className="px-[18px]"><EmptyNote text="Digite ao menos 2 letras para buscar no catálogo." /></li>
                   ) : isSearching ? (
-                    <EmptyNote text="Buscando..." />
-                  ) : searchResults.length === 0 ? (
-                    <EmptyNote text="Nada encontrado no catálogo." />
+                    <li className="px-[18px]"><EmptyNote text="Buscando" /></li>
+                  ) : (searchResults ?? []).length === 0 ? (
+                    <li className="px-[18px]"><EmptyNote text="Nada encontrado no catálogo." /></li>
                   ) : (
-                    searchResults.map((food) => (
-                      <FoodItemRow key={food.id} food={food} onSelect={() => openFromFoodItem(food)} />
-                    ))
+                    searchResults.map((food) => <FoodItemRow key={food.id} food={food} onSelect={() => openFromFoodItem(food)} />)
                   )}
                 </Section>
               </>
             ) : sortedHistory.length === 0 ? (
               !isLoadingHistory && (
-                <EmptyNote text="Você ainda não registrou nada. Busque um alimento ou crie do zero." />
+                <div className="rounded-lg bg-surface px-4 py-8 text-center shadow-card">
+                  <p className="text-[17px] font-bold text-fg">Nada registrado ainda</p>
+                  <p className="mx-auto mt-1 max-w-[280px] text-[15px] leading-[1.45] text-muted">Busque um alimento acima ou crie do zero. O que você registrar volta aqui para repetir com um toque.</p>
+                </div>
               )
             ) : (
               <>
                 {favorites.length > 0 && (
                   <Section title="Favoritos">
                     {favorites.map((entry) => (
-                      <HistoryRow
-                        key={entry.group_key}
-                        entry={entry}
-                        onSelect={() => openFromHistory(entry)}
-                        onToggleFavorite={() => handleToggleFavorite(entry)}
-                        isTogglingFavorite={pendingFavoriteKey === entry.group_key}
-                      />
+                      <HistoryRow key={entry.group_key} entry={entry} onSelect={() => openFromHistory(entry)} onToggleFavorite={() => handleToggleFavorite(entry)} isTogglingFavorite={pendingFavoriteKey === entry.group_key} />
                     ))}
                   </Section>
                 )}
                 <Section title="Já registrei">
                   {rest.length === 0 ? (
-                    <EmptyNote text="Tudo o que você já registrou está em Favoritos." />
+                    <li className="px-[18px]"><EmptyNote text="Tudo o que você já registrou está em Favoritos." /></li>
                   ) : (
                     rest.map((entry) => (
-                      <HistoryRow
-                        key={entry.group_key}
-                        entry={entry}
-                        onSelect={() => openFromHistory(entry)}
-                        onToggleFavorite={() => handleToggleFavorite(entry)}
-                        isTogglingFavorite={pendingFavoriteKey === entry.group_key}
-                      />
+                      <HistoryRow key={entry.group_key} entry={entry} onSelect={() => openFromHistory(entry)} onToggleFavorite={() => handleToggleFavorite(entry)} isTogglingFavorite={pendingFavoriteKey === entry.group_key} />
                     ))
                   )}
                 </Section>
@@ -514,226 +526,89 @@ export function FoodLogPage() {
         )}
 
         {selection && (
- <form onSubmit={handleSelectionSubmit} className="space-y-4">
- <button type="button" onClick={backToList} className="text-xs text-dim">
-              ‹ Voltar à lista
-            </button>
+          <form onSubmit={handleSelectionSubmit} className="space-y-[14px]">
+            {back}
 
-            <Card>
- <p className="text-sm font-semibold text-fg">{selection.name}</p>
+            <Card tint="teal" className="enter !p-5">
+              <h2 className="num break-words text-[28px] leading-[1.05] text-fg">{selection.name}</h2>
+              {computedMacros && (
+                <>
+                  <p className="num mt-3 text-[44px] leading-none text-teal"><CountUp value={Math.round(computedMacros.calories)} /><span className="font-sans text-[15px] font-medium text-muted"> kcal</span></p>
+                  {macroCells(computedMacros)}
+                </>
+              )}
             </Card>
 
-            <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Refeição</label>
- <div className="grid grid-cols-2 gap-2">
-                {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, label]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setMealType(type)}
- className={`py-2.5 rounded-md text-sm font-medium transition-colors ${
-                      mealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted hover:bg-surface-2'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Data</label>
-              <input
-                type="date"
-                value={date}
-                max={todayLocalDate()}
-                onChange={(e) => setDate(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
-              />
-            </div>
+            <MealPicker value={mealType} onChange={setMealType} />
 
             <Card>
               {selection.servingGrams && (
- <div className="mb-3 grid grid-cols-2 rounded-md bg-bg p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUseServing(true);
-                      setQuantity(String(selection.servingGrams));
-                    }}
- className={`rounded-lg py-2 text-xs font-semibold ${useServing ? 'bg-brand text-white' : 'text-dim'}`}
-                  >
+                <div className="mb-4 grid grid-cols-2 gap-1 rounded-md bg-surface-2 p-1">
+                  <button type="button" onClick={() => { setUseServing(true); setQuantity(String(selection.servingGrams)); }} className={`press min-h-[48px] rounded-sm text-[15px] font-semibold ${useServing ? 'bg-teal text-on-teal' : 'text-muted'}`}>
                     {selection.servingLabel || 'Porção'}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setUseServing(false)}
- className={`rounded-lg py-2 text-xs font-semibold ${!useServing ? 'bg-brand text-white' : 'text-dim'}`}
-                  >
+                  <button type="button" onClick={() => setUseServing(false)} className={`press min-h-[48px] rounded-sm text-[15px] font-semibold ${!useServing ? 'bg-teal text-on-teal' : 'text-muted'}`}>
                     Gramas
                   </button>
                 </div>
               )}
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">
-                {useServing ? `Quantidade (${selection.servingLabel || 'porções'})` : 'Quantidade (gramas)'}
-              </label>
-              <input
-                type="number"
-                value={quantity}
-                min={1}
-                step={1}
-                onChange={(e) => setQuantity(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
-              />
+              <label className={lbl} htmlFor="qtd">{useServing ? `Quantidade (${selection.servingLabel || 'porções'})` : 'Quantidade (gramas)'}</label>
+              <input id="qtd" type="number" inputMode="decimal" value={quantity} min={1} step={1} onChange={(e) => setQuantity(e.target.value)} className={bigNum} />
+              <label className={`${lbl} mt-4`} htmlFor="dia">Data</label>
+              <input id="dia" type="date" value={date} max={todayLocalDate()} onChange={(e) => setDate(e.target.value)} className={inputCls} />
             </Card>
 
-            {computedMacros && (
-              <Card>
- <p className="text-xs text-dim uppercase tracking-wide mb-3">Valores nutricionais</p>
- <div className="grid grid-cols-4 gap-2 text-center">
-                  <div>
- <p className="text-lg font-bold text-brand-fg">{Math.round(computedMacros.calories)}</p>
- <p className="text-xs text-dim">kcal</p>
-                  </div>
-                  <div>
- <p className="text-lg font-bold text-teal">{Math.round(computedMacros.protein)}g</p>
- <p className="text-xs text-dim">proteína</p>
-                  </div>
-                  <div>
- <p className="text-lg font-bold text-sun">{Math.round(computedMacros.carbs)}g</p>
- <p className="text-xs text-dim">carbs</p>
-                  </div>
-                  <div>
- <p className="text-lg font-bold text-danger">{Math.round(computedMacros.fat)}g</p>
- <p className="text-xs text-dim">gordura</p>
-                  </div>
-                </div>
-              </Card>
-            )}
+            {submitError && <p role="alert" className="text-[15px] text-danger">{submitError}</p>}
 
- {submitError && <p className="text-xs text-danger">{submitError}</p>}
-
-            <Button type="submit" fullWidth size="lg" disabled={!(Number(quantity) > 0)}>
-              Registrar Alimento
-            </Button>
+            <Button type="submit" fullWidth size="lg" disabled={!(Number(quantity) > 0)}>Registrar alimento</Button>
           </form>
         )}
 
         {manualMode && (
- <form onSubmit={handleManualSubmit} className="space-y-4">
- <button type="button" onClick={backToList} className="text-xs text-dim">
-              ‹ Voltar à lista
-            </button>
+          <form onSubmit={handleManualSubmit} className="space-y-[14px]">
+            {back}
 
-            <Card>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Nome</label>
-              <input
-                type="text"
-                value={manualName}
-                onChange={(e) => setManualName(e.target.value)}
-                placeholder="Ex.: Marmita da vovó"
-                autoFocus
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
-              />
+            <Card className="space-y-4">
+              <div>
+                <label className={lbl} htmlFor="nome">Nome</label>
+                <input id="nome" type="text" value={manualName} onChange={(e) => setManualName(e.target.value)} placeholder="Ex.: Marmita da vovó" autoFocus className={inputCls} />
+              </div>
+              <MealPicker value={manualMealType} onChange={setManualMealType} />
+              <div>
+                <label className={lbl} htmlFor="mdia">Data</label>
+                <input id="mdia" type="date" value={manualDate} max={todayLocalDate()} onChange={(e) => setManualDate(e.target.value)} className={inputCls} />
+              </div>
             </Card>
 
-            <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Refeição</label>
- <div className="grid grid-cols-2 gap-2">
-                {(Object.entries(MEAL_TYPE_LABELS) as [MealType, string][]).map(([type, label]) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setManualMealType(type)}
- className={`py-2.5 rounded-md text-sm font-medium transition-colors ${
-                      manualMealType === type ? 'bg-brand text-white' : 'bg-surface-2 text-muted hover:bg-surface-2'
-                    }`}
-                  >
-                    {label}
-                  </button>
+            <Card tint="teal" className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={lbl} htmlFor="mq">Gramas</label>
+                <input id="mq" type="number" inputMode="decimal" value={manualQuantity} min={1} step={1} onChange={(e) => setManualQuantity(e.target.value)} className={bigNum} />
+              </div>
+              <div>
+                <label className={`${lbl} !text-teal`} htmlFor="mk">Calorias</label>
+                <input id="mk" type="number" inputMode="decimal" value={manualCalories} min={1} step={1} onChange={(e) => setManualCalories(e.target.value)} className={bigNum} />
+              </div>
+            </Card>
+
+            <Card>
+              <p className={lbl}>Macros (opcional)</p>
+              <div className="grid grid-cols-3 gap-3">
+                {([
+                  ['Proteína (g)', manualProtein, setManualProtein, 'text-violet'],
+                  ['Carbo (g)', manualCarbs, setManualCarbs, 'text-sun'],
+                  ['Gordura (g)', manualFat, setManualFat, 'text-brand-fg'],
+                ] as const).map(([l, v, set, c]) => (
+                  <label key={l} className={`block text-[13px] font-semibold ${c}`}>{l}
+                    <input type="number" inputMode="decimal" value={v} min={0} step={1} onChange={(e) => set(e.target.value)} className="mt-2 h-12 w-full min-w-0 rounded-sm border-2 border-transparent bg-surface-2 px-1 text-center font-sans text-base font-semibold text-fg focus:border-brand-fg focus:outline-none" />
+                  </label>
                 ))}
               </div>
-            </div>
-
-            <div>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Data</label>
-              <input
-                type="date"
-                value={manualDate}
-                max={todayLocalDate()}
-                onChange={(e) => setManualDate(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg focus:outline-none"
-              />
-            </div>
-
-            <Card>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Quantidade (gramas)</label>
-              <input
-                type="number"
-                value={manualQuantity}
-                min={1}
-                step={1}
-                onChange={(e) => setManualQuantity(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
-              />
             </Card>
 
-            <Card>
- <label className="block text-xs text-muted uppercase tracking-wide mb-2">Calorias (kcal)</label>
-              <input
-                type="number"
-                value={manualCalories}
-                min={1}
-                step={1}
-                onChange={(e) => setManualCalories(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-md px-4 py-3 text-fg text-center text-2xl font-bold focus:outline-none transition-colors"
-              />
-            </Card>
+            {submitError && <p role="alert" className="text-[15px] text-danger">{submitError}</p>}
 
-            <Card>
- <p className="text-xs text-dim uppercase tracking-wide mb-3">Macros (opcional)</p>
- <div className="grid grid-cols-3 gap-2">
-                <div>
- <label className="block text-xs text-dim mb-1">Proteína (g)</label>
-                  <input
-                    type="number"
-                    value={manualProtein}
-                    min={0}
-                    step={1}
-                    onChange={(e) => setManualProtein(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
-                  />
-                </div>
-                <div>
- <label className="block text-xs text-dim mb-1">Carbs (g)</label>
-                  <input
-                    type="number"
-                    value={manualCarbs}
-                    min={0}
-                    step={1}
-                    onChange={(e) => setManualCarbs(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
-                  />
-                </div>
-                <div>
- <label className="block text-xs text-dim mb-1">Gordura (g)</label>
-                  <input
-                    type="number"
-                    value={manualFat}
-                    min={0}
-                    step={1}
-                    onChange={(e) => setManualFat(e.target.value)}
- className="w-full bg-surface-2 border border-line rounded-lg px-2 py-2 text-fg text-center text-sm focus:outline-none"
-                  />
-                </div>
-              </div>
-            </Card>
-
- {submitError && <p className="text-xs text-danger">{submitError}</p>}
-
-            <Button type="submit" fullWidth size="lg" disabled={!manualValid}>
-              Registrar
-            </Button>
+            <Button type="submit" fullWidth size="lg" disabled={!manualValid}>Registrar</Button>
           </form>
         )}
       </div>

@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { compressImage } from '../lib/imageCompress';
 import { getErrorMessage } from '../api/client';
+import { Button } from './Button';
+import { CameraIcon } from './nutricao/icons';
 
 interface FoodPhotoCaptureProps {
   label: string;
@@ -64,36 +66,23 @@ export function FoodPhotoCapture({ label, hint, onCapture, disabled }: FoodPhoto
   };
 
   return (
- <div className="space-y-2">
-      <button
-        type="button"
-        disabled={disabled || isCapturing}
-        onClick={capture}
- className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-line bg-surface px-4 py-8 text-center disabled:opacity-50"
-      >
- <span className="text-3xl">📷</span>
- <span className="text-sm font-semibold text-fg">{isCapturing ? 'Processando...' : label}</span>
- {hint && <span className="text-xs text-dim">{hint}</span>}
-      </button>
-
-      <button
-        type="button"
-        disabled={disabled || isCapturing}
-        onClick={() => fileInputRef.current?.click()}
- className="w-full text-center text-xs text-dim underline disabled:opacity-50"
-      >
+    <div className="space-y-3">
+      {/* Visor: moldura com cantos, só decoração; o toque é no botão abaixo. */}
+      <div className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-xl bg-surface px-6 text-center shadow-card tint-teal">
+        {[ 'left-4 top-4 border-l-4 border-t-4 rounded-tl-lg', 'right-4 top-4 border-r-4 border-t-4 rounded-tr-lg', 'bottom-4 left-4 border-b-4 border-l-4 rounded-bl-lg', 'bottom-4 right-4 border-b-4 border-r-4 rounded-br-lg' ].map((c) => (
+          <span key={c} className={`absolute h-8 w-8 border-teal ${c}`} aria-hidden="true" />
+        ))}
+        <CameraIcon className="h-12 w-12 text-teal" />
+        {hint && <p className="max-w-[240px] text-[15px] leading-[1.45] text-muted">{hint}</p>}
+      </div>
+      <Button size="lg" fullWidth disabled={disabled || isCapturing} onClick={capture}>
+        <CameraIcon className="h-6 w-6" /> {isCapturing ? 'Processando' : label}
+      </Button>
+      <Button size="md" variant="ghost" fullWidth disabled={disabled || isCapturing} onClick={() => fileInputRef.current?.click()}>
         Ou escolher um arquivo
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
- className="hidden"
-        onChange={handleFileInput}
-      />
-
- {error && <div className="rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
+      </Button>
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileInput} />
+      {error && <div role="alert" className="rounded-md bg-danger/15 p-3 text-[15px] text-danger">{error}</div>}
     </div>
   );
 }

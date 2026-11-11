@@ -25,8 +25,10 @@ import { MEAL_TYPE_LABELS, type FoodLog, type MealType, type UpdateFoodLogInput 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const NO_OFFLINE_DATA_MESSAGE = 'Sem conexão e sem dados salvos neste dispositivo.';
 
-const formatDayLabel = (date: string) =>
-  new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+const formatDayLabel = (date: string) => {
+  const t = new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};
 
 function monthBounds(month: Date): { from: string; to: string } {
   const year = month.getFullYear();
@@ -223,13 +225,14 @@ export function NutritionHistoryPage() {
 
         {selectedDate ? (
           <div className="space-y-[14px]">
-            <h2 className="text-[17px] font-bold capitalize text-fg">{formatDayLabel(selectedDate)}</h2>
+            <h2 className="text-[17px] font-bold text-fg">{formatDayLabel(selectedDate)}</h2>
             {isLoadingDayFallback ? (
               <SkeletonCard rows={2} />
             ) : dayFallbackError ? (
               <ErrorState message={dayFallbackError} onRetry={retryDay} />
             ) : (
               <>
+                {dayLogs.length === 0 && <p className="text-[15px] text-muted">Nada registrado neste dia.</p>}
                 <Card tint="teal" className="enter">
                   <p className="num text-[38px] leading-[1.05] text-teal">{Math.round(dayTotals.calories)}<span className="font-sans text-[15px] font-medium text-muted"> kcal</span></p>
                   <div className="mt-3 grid grid-cols-3 gap-3">

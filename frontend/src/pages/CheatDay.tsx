@@ -34,7 +34,7 @@ export function CheatDayPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [session?.messages.length, isSending]);
+  }, [session?.messages?.length, isSending]);
 
   // Só dispara uma vez, e só numa conversa vazia: sessão de dia do lixo é
   // única por pessoa (ver CheatDaySession), então chegar aqui com mensagens
@@ -42,7 +42,7 @@ export function CheatDayPage() {
   // uma nova a partir do relato do excesso.
   useEffect(() => {
     if (isLoading || sentInitialMessage.current || !initialMessage) return;
-    if ((session?.messages.length ?? 0) > 0) return;
+    if ((session?.messages?.length ?? 0) > 0) return;
     sentInitialMessage.current = true;
     void send(initialMessage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -170,7 +170,7 @@ export function CheatDayPage() {
             {messages.length > 0 && (
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <Button variant="secondary" onClick={discard} disabled={isSending || isAccepting}>Descartar</Button>
-                <Button tone="sun" variant="tonal" isLoading={isAccepting} onClick={accept} disabled={isSending}>Pedir compensação</Button>
+                <Button tone="sun" variant="tonal" isLoading={isAccepting} onClick={accept} disabled={isSending}>Compensar</Button>
               </div>
             )}
 
@@ -187,7 +187,7 @@ export function CheatDayPage() {
                 disabled={isSending}
                 rows={1}
                 maxLength={1000}
-                placeholder="Ex.: rodízio de pizza hoje à noite"
+                placeholder="Ex.: rodízio de pizza"
                 className="max-h-28 min-h-[52px] flex-1 resize-none rounded-md border-2 border-transparent bg-surface-2 px-4 py-3.5 text-base text-fg placeholder:text-dim focus:border-brand-fg focus:outline-none disabled:opacity-[.45]"
               />
               <Button type="submit" size="lg" disabled={isSending || draft.trim().length === 0} className="!min-h-[52px] shrink-0">Enviar</Button>

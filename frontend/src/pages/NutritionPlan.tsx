@@ -125,14 +125,14 @@ export function NutritionPlanPage() {
   const active = plans.find((p) => p.active);
   const macroCols = (p: { protein_target: number; carbs_target: number; fat_target: number }) => [
     { label: 'Proteína', v: p.protein_target, c: 'text-violet' },
-    { label: 'Carboidrato', v: p.carbs_target, c: 'text-sun' },
+    { label: 'Carbo', v: p.carbs_target, c: 'text-sun' },
     { label: 'Gordura', v: p.fat_target, c: 'text-brand-fg' },
   ];
 
   return (
     <>
       <Header
-        title="Plano alimentar"
+        title="Plano"
         showBack
         rightAction={
           <Button size="md" variant={showForm ? 'secondary' : 'primary'} onClick={() => setShowForm(!showForm)}>
