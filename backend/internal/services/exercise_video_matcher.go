@@ -234,40 +234,20 @@ func (m *exerciseVideoMatcher) filtrarPendentes(ctx context.Context, names []str
 
 func (m *exerciseVideoMatcher) resolverLote(ctx context.Context, generator StructuredGenerator, nomes []string) error {
 	candidatosPorNome := make(map[string][]ExercicioCatalogo, len(nomes))
-	var prompt strings.Builder
-	comCandidatos := 0
+	nomesDosCandidatos := make(map[string][]string, len(nomes))
 	for _, nome := range nomes {
 		candidatos := CandidatosCatalogo(nome, candidatosPorExercicio)
 		candidatosPorNome[nome] = candidatos
-		if len(candidatos) == 0 {
-			continue
-		}
-		comCandidatos++
-		fmt.Fprintf(&prompt, "\nExercício: %s\nCandidatos:\n", nome)
 		for _, c := range candidatos {
-			fmt.Fprintf(&prompt, "  - %s\n", c.Nome)
+			nomesDosCandidatos[nome] = append(nomesDosCandidatos[nome], c.Nome)
 		}
 	}
 
-	// Nenhum nome teve candidato: não há o que perguntar. Grava a recusa para
-	// não repetir a busca.
-	if comCandidatos == 0 {
-		for _, nome := range nomes {
-			if err := m.gravar(ctx, nome, nil, "none"); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	var resposta respostaAssociador
-	if err := generator.Generate(ctx, promptAssociador, prompt.String(), esquemaAssociador, &resposta); err != nil {
-		return fmt.Errorf("assistente: %w", err)
-	}
-
-	escolhaPorNome := make(map[string]string, len(resposta.Escolhas))
-	for _, e := range resposta.Escolhas {
-		escolhaPorNome[e.Exercicio] = strings.TrimSpace(e.Escolhido)
+	// Nenhum nome tendo candidato, não há o que perguntar: escolherEntre não
+	// chama o assistente e todos caem na recusa, que também é gravada.
+	escolhaPorNome, err := escolherEntre(ctx, generator, promptAssociador, nomes, nomesDosCandidatos)
+	if err != nil {
+		return err
 	}
 
 	for _, nome := range nomes {
@@ -278,31 +258,73 @@ func (m *exerciseVideoMatcher) resolverLote(ctx context.Context, generator Struc
 			}
 			continue
 		}
-
-		// O nome escolhido tem de ser um dos candidatos DAQUELE exercício. Um
-		// modelo que alucina um nome plausível, ou que reaproveita o candidato
-		// de outro item do lote, produziria um vínculo que aponta para o vídeo
-		// errado — e nada depois disso perceberia.
-		entrada, valido := ExercicioCatalogo{}, false
 		for _, c := range candidatosPorNome[nome] {
 			if c.Nome == escolhido {
-				entrada, valido = c, true
+				entrada := c
+				if err := m.gravar(ctx, nome, &entrada, "llm"); err != nil {
+					return err
+				}
+				break
+			}
+		}
+	}
+	return nil
+}
+
+// escolherEntre é o estágio 2, compartilhado pelo associador de vídeos e pelo
+// de ilustrações: pergunta ao assistente, para cada nome, qual dos candidatos
+// é o MESMO movimento, com permissão de recusar. Devolve nome -> escolhido,
+// com "" para recusa.
+//
+// O nome escolhido tem de ser um dos candidatos DAQUELE exercício. Um modelo
+// que alucina um nome plausível, ou que reaproveita o candidato de outro item
+// do lote, produziria um vínculo que aponta para o vídeo (ou desenho) errado —
+// e nada depois disso perceberia. Escolha fora da lista vira recusa.
+func escolherEntre(ctx context.Context, generator StructuredGenerator, sistema string, nomes []string, candidatos map[string][]string) (map[string]string, error) {
+	var prompt strings.Builder
+	perguntados := 0
+	for _, nome := range nomes {
+		if len(candidatos[nome]) == 0 {
+			continue
+		}
+		perguntados++
+		fmt.Fprintf(&prompt, "\nExercício: %s\nCandidatos:\n", nome)
+		for _, c := range candidatos[nome] {
+			fmt.Fprintf(&prompt, "  - %s\n", c)
+		}
+	}
+	escolhas := make(map[string]string, len(nomes))
+	if perguntados == 0 {
+		return escolhas, nil
+	}
+
+	var resposta respostaAssociador
+	if err := generator.Generate(ctx, sistema, prompt.String(), esquemaAssociador, &resposta); err != nil {
+		return nil, fmt.Errorf("assistente: %w", err)
+	}
+	brutas := make(map[string]string, len(resposta.Escolhas))
+	for _, e := range resposta.Escolhas {
+		brutas[e.Exercicio] = strings.TrimSpace(e.Escolhido)
+	}
+	for _, nome := range nomes {
+		escolhido := brutas[nome]
+		if escolhido == "" {
+			continue
+		}
+		valido := false
+		for _, c := range candidatos[nome] {
+			if c == escolhido {
+				valido = true
 				break
 			}
 		}
 		if !valido {
-			slog.Warn("assistente escolheu nome fora dos candidatos",
-				"exercicio", nome, "escolhido", escolhido)
-			if err := m.gravar(ctx, nome, nil, "none"); err != nil {
-				return err
-			}
+			slog.Warn("assistente escolheu nome fora dos candidatos", "exercicio", nome, "escolhido", escolhido)
 			continue
 		}
-		if err := m.gravar(ctx, nome, &entrada, "llm"); err != nil {
-			return err
-		}
+		escolhas[nome] = escolhido
 	}
-	return nil
+	return escolhas, nil
 }
 
 // gravar persiste o vínculo. entrada nil registra "procuramos e não existe".

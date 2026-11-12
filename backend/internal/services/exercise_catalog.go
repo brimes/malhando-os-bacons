@@ -194,6 +194,34 @@ func jaccard(a, b map[string]struct{}) float64 {
 // elimina a resposta certa antes que alguém possa reconhecê-la.
 func CandidatosCatalogo(consulta string, n int) []ExercicioCatalogo {
 	carregarCatalogo()
+	indices := peneirar(consulta, catalogoAlvos, n)
+	if len(indices) == 0 {
+		return nil
+	}
+	saida := make([]ExercicioCatalogo, 0, len(indices))
+	for _, i := range indices {
+		saida = append(saida, catalogoAlvos[i].ExercicioCatalogo)
+	}
+	return saida
+}
+
+// novoAlvo prepara um nome qualquer para a peneira, com a mesma normalização
+// do catálogo. Serve a quem peneira um conjunto que não é o catálogo (as
+// ilustrações já geradas), sem duplicar o critério.
+func novoAlvo(nome string) alvoCatalogo {
+	return alvoCatalogo{
+		ExercicioCatalogo: ExercicioCatalogo{Nome: nome},
+		tokens:            conjuntoTokens(nome),
+		trigramas:         trigramas(nome),
+	}
+}
+
+// peneirar é o estágio 1 sobre qualquer lista de alvos: devolve os índices dos
+// n mais parecidos com a consulta, do melhor para o pior. O IDF é o do
+// catálogo (o vocabulário de exercícios é o mesmo), então a peneira não
+// degrada quando a lista é pequena.
+func peneirar(consulta string, alvos []alvoCatalogo, n int) []int {
+	carregarCatalogo()
 	tokens := conjuntoTokens(consulta)
 	if len(tokens) == 0 {
 		return nil
@@ -210,11 +238,11 @@ func CandidatosCatalogo(consulta string, n int) []ExercicioCatalogo {
 	}
 
 	type pontuado struct {
-		alvo  ExercicioCatalogo
-		ponto float64
+		indice int
+		ponto  float64
 	}
-	pontos := make([]pontuado, 0, len(catalogoAlvos))
-	for _, a := range catalogoAlvos {
+	pontos := make([]pontuado, 0, len(alvos))
+	for i, a := range alvos {
 		peso := 0.0
 		for t := range tokens {
 			if _, ok := a.tokens[t]; ok {
@@ -225,15 +253,15 @@ func CandidatosCatalogo(consulta string, n int) []ExercicioCatalogo {
 		if ponto <= 0 {
 			continue
 		}
-		pontos = append(pontos, pontuado{alvo: a.ExercicioCatalogo, ponto: ponto})
+		pontos = append(pontos, pontuado{indice: i, ponto: ponto})
 	}
 	sort.SliceStable(pontos, func(i, j int) bool { return pontos[i].ponto > pontos[j].ponto })
 	if len(pontos) > n {
 		pontos = pontos[:n]
 	}
-	saida := make([]ExercicioCatalogo, 0, len(pontos))
+	saida := make([]int, 0, len(pontos))
 	for _, p := range pontos {
-		saida = append(saida, p.alvo)
+		saida = append(saida, p.indice)
 	}
 	return saida
 }

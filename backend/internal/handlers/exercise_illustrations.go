@@ -84,6 +84,8 @@ type ExerciseIllustrationHandler struct {
 	// provedor do usuário/compartilhado de texto não gera imagem (opencode).
 	// nil quando não há GEMINI_API_KEY.
 	fallback services.ImageGenerator
+	// aliases reaproveita a ilustração de outro nome quando é o mesmo exercício.
+	aliases *services.IlustracaoAliases
 }
 
 // NewExerciseIllustrationHandler lê GEMINI_IMAGE_MODEL e GEMINI_API_KEY do
@@ -93,7 +95,8 @@ func NewExerciseIllustrationHandler(database *db.DB, resolver services.Generator
 	if model == "" {
 		model = services.GeminiDefaultImageModel
 	}
-	h := &ExerciseIllustrationHandler{db: database, resolver: resolver, photoDir: photoDir, model: model}
+	h := &ExerciseIllustrationHandler{db: database, resolver: resolver, photoDir: photoDir, model: model,
+		aliases: &services.IlustracaoAliases{DB: database, Versao: versaoIlustracao}}
 	if gen, err := services.NewGeminiGenerator(os.Getenv("GEMINI_API_KEY"), ""); err == nil {
 		h.fallback = gen
 	}
@@ -126,8 +129,14 @@ func anexarIlustracoes(ctx context.Context, database *db.DB, exercicios []models
 	for _, e := range exercicios {
 		chaves = append(chaves, chaveIlustracao(e.ExerciseName))
 	}
+	// Um nome com alias usa os quadros do alvo (o alias tem precedência).
 	rows, err := database.Pool.Query(ctx,
-		`SELECT name_key, frames, version FROM exercise_illustrations WHERE status = 'ready' AND name_key = ANY($1)`, chaves)
+		`SELECT k.name_key, i.frames, i.version
+		   FROM unnest($1::text[]) AS k(name_key)
+		   LEFT JOIN exercise_illustration_aliases a
+		          ON a.name_key = k.name_key AND a.target_name_key IS NOT NULL
+		   JOIN exercise_illustrations i
+		     ON i.name_key = COALESCE(a.target_name_key, k.name_key) AND i.status = 'ready'`, chaves)
 	if err != nil {
 		slog.Warn("falha ao consultar ilustrações", "erro", err)
 		return
@@ -220,24 +229,52 @@ func (h *ExerciseIllustrationHandler) iniciar(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	generator, err := h.imageGenerator(ctx, userID)
-	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable,
-			map[string]string{"error": "geração de ilustração indisponível no momento"})
-		return
+	// Nome que já é alias (ou que vira um agora) usa a ilustração do alvo: daqui
+	// em diante `chave` e `nome` são os do alvo. "Não ficou bom" (forcar) num
+	// alias regenera o ALVO, de propósito: todos os nomes que o apontam passam a
+	// ver a versão nova, e o pedido não cria uma segunda imagem do mesmo exercício.
+	if alvo, ok, _ := h.aliases.Alvo(ctx, chave); ok {
+		chave = alvo
+		nome = h.nomeDaIlustracao(ctx, alvo, nome)
 	}
 
 	var status string
 	var updatedAt time.Time
 	var version, frames int
 	existe := true
-	err = h.db.Pool.QueryRow(ctx,
-		`SELECT status, updated_at, version, frames FROM exercise_illustrations WHERE name_key = $1`,
-		chave).Scan(&status, &updatedAt, &version, &frames)
-	if errors.Is(err, pgx.ErrNoRows) {
-		existe = false
-	} else if err != nil {
+	consultar := func() error {
+		existe = true
+		err := h.db.Pool.QueryRow(ctx,
+			`SELECT status, updated_at, version, frames FROM exercise_illustrations WHERE name_key = $1`,
+			chave).Scan(&status, &updatedAt, &version, &frames)
+		if errors.Is(err, pgx.ErrNoRows) {
+			existe = false
+			return nil
+		}
+		return err
+	}
+	if err := consultar(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "falha ao consultar"})
+		return
+	}
+
+	// Antes de pagar uma imagem: o nome sem linha (ou com a linha desatualizada)
+	// pode ser outro nome de uma ilustração que já temos. Não consome cota.
+	if !forcar && (!existe || (status == "ready" && version < versaoIlustracao)) {
+		if alvo, _ := h.aliases.Resolver(ctx, h.resolver.For(ctx, userID), chave, nome); alvo != "" {
+			chave = alvo
+			nome = h.nomeDaIlustracao(ctx, alvo, nome)
+			if err := consultar(); err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "falha ao consultar"})
+				return
+			}
+		}
+	}
+
+	generator, err := h.imageGenerator(ctx, userID)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable,
+			map[string]string{"error": "geração de ilustração indisponível no momento"})
 		return
 	}
 	if forcar && !existe {
@@ -304,6 +341,26 @@ func (h *ExerciseIllustrationHandler) iniciar(w http.ResponseWriter, r *http.Req
 
 	go h.gerar(chave, nome, h.resolver.For(ctx, userID), generator)
 	writeJSON(w, http.StatusAccepted, respostaIlustracao{Status: "pending"})
+}
+
+// nomeDaIlustracao devolve o exercise_name da linha do alvo (o nome que foi
+// usado no prompt da imagem); alternativo se não achar.
+func (h *ExerciseIllustrationHandler) nomeDaIlustracao(ctx context.Context, chave, alternativo string) string {
+	var nome string
+	if err := h.db.Pool.QueryRow(ctx,
+		`SELECT exercise_name FROM exercise_illustrations WHERE name_key = $1`, chave).Scan(&nome); err != nil {
+		return alternativo
+	}
+	return nome
+}
+
+// chaveEfetiva é a chave cujos quadros o nome usa: a do alvo se houver alias.
+func (h *ExerciseIllustrationHandler) chaveEfetiva(ctx context.Context, nome string) string {
+	chave := chaveIlustracao(nome)
+	if alvo, ok, _ := h.aliases.Alvo(ctx, chave); ok {
+		return alvo
+	}
+	return chave
 }
 
 // imageGenerator escolhe a credencial: a do usuário (Gemini próprio) ou a
@@ -417,7 +474,7 @@ func (h *ExerciseIllustrationHandler) Status(w http.ResponseWriter, r *http.Requ
 	var version, frames int
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT status, error, updated_at, version, frames FROM exercise_illustrations WHERE name_key = $1`,
-		chaveIlustracao(nome)).Scan(&status, &msg, &updatedAt, &version, &frames)
+		h.chaveEfetiva(r.Context(), nome)).Scan(&status, &msg, &updatedAt, &version, &frames)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "sem ilustração para este exercício"})
 		return
@@ -455,7 +512,7 @@ func (h *ExerciseIllustrationHandler) Image(w http.ResponseWriter, r *http.Reque
 	var frames, version int
 	err := h.db.Pool.QueryRow(r.Context(),
 		`SELECT storage_path, content_type, updated_at, frames, version FROM exercise_illustrations
-		 WHERE name_key = $1 AND status = 'ready'`, chaveIlustracao(nome)).Scan(&path, &mime, &updatedAt, &frames, &version)
+		 WHERE name_key = $1 AND status = 'ready'`, h.chaveEfetiva(r.Context(), nome)).Scan(&path, &mime, &updatedAt, &frames, &version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "ilustração não encontrada"})
 		return

@@ -68,6 +68,17 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 - **O nome do arquivo em disco é o nome com percent-encoding**, não hash:
   reversível, sem colisão, 117 bytes no pior caso. O nome do catálogo em si
   nunca é alterado em ponto nenhum — há teste dos dois lados para isso.
+- **Ilustração gerada é reaproveitada por equivalência.** Antes de pagar uma
+  imagem para um nome sem linha (ou com linha desatualizada), o mesmo associador
+  em dois estágios compara o nome com as ilustrações `ready` da versão atual
+  (`peneirar` + `escolherEntre`, compartilhados com os vídeos). Equivalente grava
+  um alias em `exercise_illustration_aliases` — sem copiar arquivo, sem cota — e
+  GET de status/imagem resolvem para o alvo. A recusa também é gravada; falha do
+  assistente não é (a próxima tentativa pergunta de novo).
+- **"Não ficou bom" num alias regenera o ALVO**, de propósito: todo nome que o
+  aponta passa a ver a versão nova. Inclinação, pegada, unilateral e máquina vs
+  livre são exercícios diferentes — na dúvida o prompt manda recusar, porque
+  gerar custa uma imagem e reaproveitar a errada mostra o movimento errado.
 - `backend/Dockerfile.gotest` existe só para rodar `go test`/`vet`/`gofmt`, já que
   não há Go no host e bind mount monta o módulo incompleto.
 
