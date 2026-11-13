@@ -28,6 +28,7 @@ const fullMutation: Required<PendingMutation> = {
   lastError: 'timeout',
   localEntityId: -7,
   trainingPlanDayId: 42,
+  userId: 3,
 };
 
 const secondMutation: PendingMutation = {

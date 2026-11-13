@@ -49,6 +49,10 @@ export {
   referencesLocalId,
   normalizePath,
   QUEUE_SYNC_KEY,
+  currentUserId,
+  legacyMutations,
+  adoptLegacyMutations,
+  discardLegacyMutations,
 } from './offlineSync';
 
 export type { ReadThroughOptions, MutationExecutor } from './offlineSync';

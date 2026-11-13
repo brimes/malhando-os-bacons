@@ -6,6 +6,7 @@ import {
   reportNetworkFailure,
 } from './network';
 import {
+  dropQueuedMutations,
   getQueue,
   invalidateCacheByPrefix,
   markSynced,
@@ -190,6 +191,56 @@ export function registerMutationExecutor(executor: MutationExecutor): void {
   if (isNetworkOnline() && getQueue().length > 0) void flushQueue();
 }
 
+/**
+ * Id da conta logada, lido na hora (nunca em cache de módulo). `mob_user` é
+ * gravado junto do token; o `mob-auth` persistido cobre sessões abertas antes
+ * de `mob_user` existir. `null` = ninguém logado.
+ */
+export function currentUserId(): number | null {
+  if (typeof localStorage === 'undefined') return null;
+  const read = (key: string): unknown => {
+    try {
+      return JSON.parse(localStorage.getItem(key) ?? 'null');
+    } catch {
+      return null;
+    }
+  };
+  const direct = read('mob_user') as { id?: unknown } | null;
+  if (typeof direct?.id === 'number') return direct.id;
+  const persisted = read('mob-auth') as { state?: { user?: { id?: unknown } } } | null;
+  const id = persisted?.state?.user?.id;
+  return typeof id === 'number' ? id : null;
+}
+
+/**
+ * A fila tem dono. Item de outra conta, ou legado sem dono (veio de antes do
+ * campo existir, ou de um backup restaurado), nunca sai sozinho: ficaria
+ * indistinguível de trabalho da conta errada.
+ */
+export function isOwnedBy(mutation: PendingMutation, userId: number | null): boolean {
+  return userId !== null && mutation.userId === userId;
+}
+
+/** Itens sem dono: aguardam decisão explícita no painel de sincronização. */
+export function legacyMutations(): PendingMutation[] {
+  return getQueue().filter((mutation) => mutation.userId === undefined);
+}
+
+/** "Enviar para esta conta": adota os itens legados para o usuário logado. */
+export function adoptLegacyMutations(): number {
+  const userId = currentUserId();
+  if (userId === null) return 0;
+  const legacy = legacyMutations();
+  for (const mutation of legacy) patchQueuedMutation(mutation.localId, { userId });
+  if (legacy.length > 0) flushQueueIfPending();
+  return legacy.length;
+}
+
+/** "Descartar": só por ação explícita do usuário. */
+export function discardLegacyMutations(): number {
+  return dropQueuedMutations((mutation) => mutation.userId === undefined);
+}
+
 let localIdCounter = 0;
 
 export function enqueueMutation(input: {
@@ -211,12 +262,20 @@ export function enqueueMutation(input: {
     attempts: 0,
     localEntityId: input.localEntityId,
     trainingPlanDayId: input.trainingPlanDayId,
+    userId: currentUserId() ?? undefined,
   };
   pushToQueue(mutation);
   return mutation;
 }
 
 let runningFlush: Promise<void> | null = null;
+
+/** Primeiro item da fila que pertence à conta logada agora. */
+function nextEligible(): PendingMutation | undefined {
+  const userId = currentUserId();
+  if (userId === null || !localStorage.getItem('mob_token')) return undefined;
+  return getQueue().find((mutation) => isOwnedBy(mutation, userId));
+}
 
 /**
  * Replays the queue in FIFO order, one at a time. Order matters: a later
@@ -240,7 +299,7 @@ export function flushQueue(): Promise<void> {
  * queue until the app is reopened.
  */
 export function flushQueueIfPending(): void {
-  if (runningFlush || !isNetworkOnline() || getQueue().length === 0) return;
+  if (runningFlush || !isNetworkOnline() || nextEligible() === undefined) return;
   void flushQueue();
 }
 
@@ -268,14 +327,14 @@ function failMutationAndDependents(mutation: PendingMutation, reason: string): v
 
 async function runFlush(): Promise<void> {
   if (!executeMutation || !isNetworkOnline()) return;
-  if (getQueue().length === 0) return;
+  if (nextEligible() === undefined) return;
 
   setSyncing(true);
   let replayed = 0;
   try {
     // Re-read the queue on every step: a screen may have appended to it while
     // the previous replay was in flight.
-    for (let mutation = getQueue()[0]; mutation !== undefined; mutation = getQueue()[0]) {
+    for (let mutation = nextEligible(); mutation !== undefined; mutation = nextEligible()) {
       try {
         const result = await executeMutation(mutation);
         removeFromQueue(mutation.localId);
@@ -334,8 +393,18 @@ async function runFlush(): Promise<void> {
         // An expired session rejects every pending write the same way. Parking
         // them one by one would burn the whole queue (and the failed list only
         // keeps the last few), so stop and keep everything for after re-login.
+        // O 401 de um reenvio não desloga ninguém (ver client.ts): o item fica
+        // retido e, se a recusa persistir, vira falha explicada em vez de
+        // tentar para sempre a cada resposta que chega.
         if (status === 401 || status === 403) {
-          patchQueuedMutation(mutation.localId, { lastError: 'Sessão expirada. Entre de novo para enviar o que ficou pendente.' });
+          if (attempts >= MAX_MUTATION_ATTEMPTS) {
+            failMutationAndDependents(mutation, 'O servidor recusou a sessão várias vezes ao reenviar.');
+            continue;
+          }
+          patchQueuedMutation(mutation.localId, {
+            attempts,
+            lastError: 'O servidor recusou a sessão. Vamos tentar de novo depois.',
+          });
           break;
         }
         // Closing a session the server no longer has open is not a failure:

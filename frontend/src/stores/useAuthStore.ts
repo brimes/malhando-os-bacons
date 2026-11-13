@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient, getErrorMessage, registerUnauthorizedHandler } from '../api/client';
-import { clearOfflineData, discardPendingWrites, isConnectivityError } from '../lib/offline';
+import { clearOfflineData, discardPendingWrites, flushQueueIfPending, isConnectivityError } from '../lib/offline';
 import type { User, AuthResponse } from '../types';
 
 interface AuthState {
@@ -21,6 +21,14 @@ interface AuthState {
   fetchMe: () => Promise<void>;
 }
 
+/** Token e dono da sessão gravados juntos; a fila offline lê os dois no envio. */
+function persistSession(token: string, user: User): void {
+  localStorage.setItem('mob_token', token);
+  localStorage.setItem('mob_user', JSON.stringify(user));
+  // A resposta do login não dispara o reenvio (ainda não havia token); agora há.
+  flushQueueIfPending();
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -34,7 +42,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const { data } = await apiClient.post<AuthResponse>('/auth/login', { email, password });
-          localStorage.setItem('mob_token', data.token);
+          persistSession(data.token, data.user);
           set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
           set({ error: getErrorMessage(err), isLoading: false });
@@ -46,7 +54,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const { data } = await apiClient.post<AuthResponse>('/auth/register', { name, email, password });
-          localStorage.setItem('mob_token', data.token);
+          persistSession(data.token, data.user);
           set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
           set({ error: getErrorMessage(err), isLoading: false });
@@ -58,7 +66,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const { data } = await apiClient.post<AuthResponse>('/auth/google', { id_token: idToken });
-          localStorage.setItem('mob_token', data.token);
+          persistSession(data.token, data.user);
           set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
           set({ error: getErrorMessage(err), isLoading: false });
@@ -74,7 +82,7 @@ export const useAuthStore = create<AuthState>()(
             authorization_code: authorizationCode,
             ...(name ? { name } : {}),
           });
-          localStorage.setItem('mob_token', data.token);
+          persistSession(data.token, data.user);
           set({ token: data.token, user: data.user, isAuthenticated: true, isLoading: false });
         } catch (err) {
           set({ error: getErrorMessage(err), isLoading: false });
@@ -84,6 +92,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         localStorage.removeItem('mob_token');
+        localStorage.removeItem('mob_user');
         // The local cache and the pending queue belong to this account. On a
         // shared device the next login must not inherit either of them.
         clearOfflineData();
@@ -102,6 +111,7 @@ export const useAuthStore = create<AuthState>()(
           throw err;
         }
         localStorage.removeItem('mob_token');
+        localStorage.removeItem('mob_user');
         clearOfflineData();
         discardPendingWrites();
         set({ token: null, user: null, isAuthenticated: false, isLoading: false });
@@ -113,6 +123,7 @@ export const useAuthStore = create<AuthState>()(
         if (!get().token) return;
         try {
           const { data } = await apiClient.get<User>('/auth/me');
+          localStorage.setItem('mob_user', JSON.stringify(data));
           set({ user: data, isAuthenticated: true });
         } catch (error) {
           // Being offline is no reason to sign anyone out — the token is still

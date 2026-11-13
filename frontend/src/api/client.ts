@@ -229,7 +229,9 @@ apiClient.interceptors.response.use(
     reportNetworkSuccess();
     // ...so anything waiting in the queue can go out now. Relying only on the
     // `online` event leaves writes stranded whenever the link never dropped.
-    if (!config.isOfflineReplay) flushQueueIfPending();
+    // Menos nas rotas de auth: a resposta de login chega aqui ANTES de o
+    // chamador gravar o token, então o reenvio saía sem Authorization.
+    if (!config.isOfflineReplay && !/^\/auth\//.test(normalizePath(config.url ?? ''))) flushQueueIfPending();
     const url = config.url ?? '';
     const method = (config.method ?? 'get').toUpperCase();
     // Every GET is cached on the way through, which is what lets screens that
@@ -240,7 +242,11 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    // Um 401 no reenvio da fila não é "sessão inválida": é aquele item (ou um
+    // token ainda por gravar). Quem decide é flushQueue; só requisição de
+    // tela/usuário derruba a sessão.
+    const failedConfig = error.config as OfflineAwareConfig | undefined;
+    if (error.response?.status === 401 && !failedConfig?.isOfflineReplay) {
       localStorage.removeItem('mob_token');
       localStorage.removeItem('mob_user');
       // Nada de `window.location.href` aqui. No WebView do Capacitor isso é
@@ -263,7 +269,10 @@ apiClient.interceptors.response.use(
 // Lets the queue replay through this very instance (auth header, base URL and
 // the 401 handling included) without offlineSync having to import it.
 registerMutationExecutor(async (mutation) => {
+  // Token lido AGORA, não herdado de quando o flush foi disparado.
+  const token = localStorage.getItem('mob_token');
   const response = await apiClient.request({
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     method: mutation.method,
     url: mutation.url,
     data: mutation.body,
@@ -275,12 +284,21 @@ registerMutationExecutor(async (mutation) => {
   return response.data;
 });
 
+const API_ERROR_TRANSLATIONS: Record<string, string> = {
+  'invalid email or password': 'E-mail ou senha inválidos.',
+};
+
+function translateApiError(message: string | undefined): string | undefined {
+  if (!message) return message;
+  return API_ERROR_TRANSLATIONS[message.trim().toLowerCase()] ?? message;
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     // "Network Error" says nothing to whoever is holding the phone.
     if (isConnectivityError(error)) return 'Sem conexão com o servidor. Tente novamente quando estiver online.';
     const data = error.response?.data as { error?: string } | undefined;
-    return data?.error ?? error.message;
+    return translateApiError(data?.error) ?? error.message;
   }
   if (error instanceof Error) return error.message;
   return 'Erro desconhecido';

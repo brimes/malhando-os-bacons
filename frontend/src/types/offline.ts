@@ -46,6 +46,12 @@ export interface PendingMutation {
    * queue, by the time anything reads this mutation again.
    */
   trainingPlanDayId?: number;
+  /**
+   * Conta que criou o item (de `mob_user` no enqueue). Ausente em itens de
+   * versões anteriores ou restaurados por backup: esses ficam retidos até o
+   * usuário decidir no painel de sincronização.
+   */
+  userId?: number;
 }
 
 /** A mutation the server refused, or that ran out of retries. Kept for inspection. */

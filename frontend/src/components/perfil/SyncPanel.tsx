@@ -1,4 +1,6 @@
-import { useOfflineStatus } from '../../lib/offline';
+import { useState } from 'react';
+import { adoptLegacyMutations, discardLegacyMutations, useOfflineStatus } from '../../lib/offline';
+import { useOfflineStore } from '../../lib/offlineStore';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { Chip } from '../Chip';
@@ -20,14 +22,45 @@ function formatRelative(timestamp: number | null): string {
 export function SyncPanel() {
   const { isOnline, lastSyncAt, pendingCount, failedCount, failedMutations, isSyncing, syncNow, discardFailedMutations } =
     useOfflineStatus();
+  // Itens sem dono (de antes do campo existir ou restaurados por backup) não
+  // saem sozinhos: a pessoa decide se são desta conta.
+  const legacyCount = useOfflineStore((state) => state.queue.filter((m) => m.userId === undefined).length);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-lg bg-surface shadow-card">
         <Row icon="sync" tone={isOnline ? 'ok' : 'sun'} label="Estado" value={isOnline ? 'Conectado' : 'Sem internet'} />
         <Row label="Última sincronização" value={formatRelative(lastSyncAt)} />
-        {pendingCount > 0 && <Row label="Aguardando envio" value={<Chip tone="teal">{pendingCount}</Chip>} />}
+        {pendingCount - legacyCount > 0 && <Row label="Aguardando envio" value={<Chip tone="teal">{pendingCount - legacyCount}</Chip>} />}
       </div>
+
+      {legacyCount > 0 && (
+        <Card>
+          <p className="text-base font-semibold">
+            {legacyCount} {legacyCount === 1 ? 'item de uma sessão anterior aguardando' : 'itens de uma sessão anterior aguardando'}
+          </p>
+          <p className="mt-1 text-[13px] leading-[1.4] text-muted">
+            Não sabemos de qual conta eles vieram, então não foram enviados. Envie só se forem seus.
+          </p>
+          <Button variant="secondary" fullWidth className="mt-3" onClick={() => { adoptLegacyMutations(); }}>
+            Enviar para esta conta
+          </Button>
+          {confirmingDiscard ? (
+            <div className="mt-2 space-y-2">
+              <p className="text-[13px] leading-[1.4] text-danger">Isso apaga esses itens do aparelho e não dá para desfazer.</p>
+              <Button variant="secondary" fullWidth className="text-danger" onClick={() => { discardLegacyMutations(); setConfirmingDiscard(false); }}>
+                Confirmar descarte
+              </Button>
+              <Button variant="secondary" fullWidth onClick={() => setConfirmingDiscard(false)}>Cancelar</Button>
+            </div>
+          ) : (
+            <Button variant="secondary" fullWidth className="mt-2 text-danger" onClick={() => setConfirmingDiscard(true)}>
+              Descartar
+            </Button>
+          )}
+        </Card>
+      )}
 
       {failedCount > 0 && (
         <Card className="bg-danger-soft">
