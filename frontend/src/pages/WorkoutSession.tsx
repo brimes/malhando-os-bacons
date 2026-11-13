@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -73,6 +73,14 @@ function PhaseButton({ fase, onClick, disabled, pulse, children }: {
 /** Ação secundária em linha: 48 px (ou 44 px quando discreta), sem preenchimento forte. */
 const ACAO_SECUNDARIA = 'press min-h-[48px] rounded-md bg-surface-2 px-3 text-[15px] font-semibold text-fg disabled:cursor-not-allowed disabled:opacity-[.45]';
 const ACAO_DISCRETA = 'press min-h-[44px] rounded-md px-1 text-[15px] font-semibold';
+/**
+ * Ação do rodapé do treino: botão de verdade (48 px, fundo `surface` com sombra, que é o que separa de um fundo que já é `surface-2`), ícone
+ * acima do rótulo. `[overflow-wrap:normal]` + `whitespace-nowrap` porque o
+ * `overflow-wrap:anywhere` global quebrava "Descartar" em "Descartar" + "r".
+ * Cabe em 320 px: quatro colunas de ~64 px para um rótulo de 12 px.
+ */
+const ACAO_RODAPE = 'press flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-md bg-surface px-1 text-[12px] font-semibold leading-none whitespace-nowrap shadow-card [overflow-wrap:normal] disabled:cursor-not-allowed disabled:opacity-[.45]';
+const ICONE_RODAPE = { className: 'h-[18px] w-[18px] shrink-0', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true } as const;
 
 /**
  * O alvo da série — repetições, ou tempo quando o exercício é por duração.
@@ -83,9 +91,9 @@ function AlvoDaSerie({ exercise }: { exercise: TrainingPlanExercise }) {
   const valor = porTempo ? formatClock(exercise.duration_seconds ?? 0) : String(exercise.reps);
   const rotulo = porTempo ? 'de execução' : 'repetições';
   return (
-    <div className="flex min-w-0 flex-col items-center justify-center rounded-lg bg-surface px-3 py-3 shadow-card">
-      <p className="num text-[44px] leading-none text-fg">{valor}</p>
-      <p className={`mt-1.5 text-muted ${EYEBROW}`}>{rotulo}</p>
+    <div className="flex h-[68px] [@media(max-height:600px)]:h-14 min-w-0 flex-col items-center justify-center rounded-lg bg-surface px-3 shadow-card">
+      <p className="num text-[34px] [@media(max-height:600px)]:text-[28px] leading-none text-fg">{valor}</p>
+      <p className={`mt-1 text-muted ${EYEBROW}`}>{rotulo}</p>
     </div>
   );
 }
@@ -100,13 +108,13 @@ function SeloDoCronometro({ fase, valor }: { fase: 'countdown' | 'executing'; va
   return (
     // `key` na fase para o selo remontar ao passar de "Prepare-se" para
     // "Executando": a cor e o rótulo entram com fade em vez de trocar secos.
-    <div key={fase} className={`fade-in-mob flex min-w-0 flex-col items-center justify-center rounded-lg px-3 py-3 ${tom.soft}`}>
+    <div key={fase} className={`fade-in-mob flex h-[68px] [@media(max-height:600px)]:h-14 min-w-0 flex-col items-center justify-center rounded-lg px-3 ${tom.soft}`}>
       {fase === 'countdown' ? (
-        <p key={valor} className={`pulse-count num text-[64px] leading-none ${tom.text}`}>{valor}</p>
+        <p key={valor} className={`pulse-count num text-[40px] [@media(max-height:600px)]:text-[32px] leading-none ${tom.text}`}>{valor}</p>
       ) : (
-        <p className={`num text-[44px] leading-none ${tom.text}`}>{valor}</p>
+        <p className={`num text-[34px] [@media(max-height:600px)]:text-[28px] leading-none ${tom.text}`}>{valor}</p>
       )}
-      <p className={`mt-1.5 ${tom.text} ${EYEBROW}`}>{tom.label}</p>
+      <p className={`mt-1 ${tom.text} ${EYEBROW}`}>{tom.label}</p>
     </div>
   );
 }
@@ -117,7 +125,7 @@ function SeloDoCronometro({ fase, valor }: { fase: 'countdown' | 'executing'; va
  */
 function FaixaDeSeries({ total, feitas, fase }: { total: number; feitas: number; fase: keyof typeof phaseTone }) {
   return (
-    <ol className="flex shrink-0 flex-wrap justify-center gap-2" aria-label={`${feitas} de ${total} séries concluídas`}>
+    <ol className="flex shrink-0 flex-wrap justify-center gap-1.5" aria-label={`${feitas} de ${total} séries concluídas`}>
       {Array.from({ length: total }, (_, index) => {
         const numero = index + 1;
         const concluida = numero <= feitas;
@@ -131,7 +139,7 @@ function FaixaDeSeries({ total, feitas, fase }: { total: number; feitas: number;
           <li
             key={numero}
             aria-current={atual ? 'step' : undefined}
-            className={`num flex h-10 min-w-[40px] items-center justify-center rounded-sm px-2 text-[20px] leading-none transition-colors duration-press ease-mob ${cor}`}
+            className={`num flex h-8 min-w-[36px] items-center justify-center rounded-sm px-2 text-[18px] leading-none transition-colors duration-press ease-mob ${cor}`}
           >
             {numero}
           </li>
@@ -148,10 +156,10 @@ function StepperDeCarga({ value, placeholder, onChange, onStep }: {
   onChange: (value: string) => void;
   onStep: (delta: number) => void;
 }) {
-  const botao = 'press num flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-surface-2 text-[28px] leading-none text-fg';
+  const botao = 'press num flex h-14 w-14 [@media(max-height:600px)]:h-12 [@media(max-height:600px)]:w-12 shrink-0 items-center justify-center rounded-md bg-surface text-[28px] leading-none text-fg shadow-card';
   return (
     <div className="shrink-0">
-      <p className={`mb-1.5 text-center text-muted ${EYEBROW}`}>Carga (kg)</p>
+      <p className={`mb-1 text-center text-muted ${EYEBROW} [@media(max-height:700px)]:sr-only`}>Carga (kg)</p>
       <div className="flex items-center justify-center gap-3">
         <button type="button" onClick={() => onStep(-2.5)} aria-label="Diminuir 2,5 kg" className={botao}>−</button>
         <input
@@ -168,7 +176,7 @@ function StepperDeCarga({ value, placeholder, onChange, onStep }: {
           // instead of being appended to it.
           onFocus={(event) => event.target.select()}
           onChange={(event) => onChange(event.target.value)}
-          className="input-num min-w-0 flex-1 text-center"
+          className="input-num min-w-0 flex-1 !bg-surface text-center shadow-card [@media(max-height:600px)]:!h-12 [@media(max-height:600px)]:!min-h-0"
         />
         <button type="button" onClick={() => onStep(2.5)} aria-label="Aumentar 2,5 kg" className={botao}>+</button>
       </div>
@@ -259,8 +267,26 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
   );
 }
 
+/** Tela com no máximo `altura` px de altura (celular pequeno ou com barras do sistema). */
+function useAlturaAte(altura: number): boolean {
+  const query = `(max-height: ${altura}px)`;
+  return useSyncExternalStore(
+    (onChange) => {
+      if (typeof window.matchMedia !== 'function') return () => undefined;
+      const mq = window.matchMedia(query);
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    () => typeof window.matchMedia === 'function' && window.matchMedia(query).matches,
+    () => false,
+  );
+}
+
 export function WorkoutSessionPage() {
   const navigate = useNavigate();
+  // Tela baixa cede espaço à mídia; muito baixa (iPhone SE, 320×568) compacta também o resto.
+  const telaBaixa = useAlturaAte(700);
+  const telaMuitoBaixa = useAlturaAte(600);
   const [active, setActive] = useState<ActiveWorkout | null>(null);
   const [settings, setSettings] = useState<TrainingSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
@@ -951,55 +977,58 @@ export function WorkoutSessionPage() {
 
         <div className="shrink-0 px-5 pt-1">
           {errorBox && <div className="mb-3">{errorBox}</div>}
-          <div className="flex items-center justify-between gap-3 text-[13px] font-semibold text-muted">
+          <div className="flex items-center justify-between gap-3 text-[13px] font-semibold text-muted [@media(max-height:600px)]:hidden">
             <span>{doneSets} de {totalSets} séries</span>
             <span>{pendingExercises.length} exercício{pendingExercises.length === 1 ? '' : 's'} restante{pendingExercises.length === 1 ? '' : 's'}</span>
           </div>
           <Bar className="mt-2" progress={totalSets ? doneSets / totalSets : 0} />
         </div>
 
-        {/* O miolo. `min-h-0` é o que permite ele encolher dentro do flex — sem
-            isso o conteúdo empurra a coluna e o rodapé sai da tela de novo.
-            `overflow-y-auto` é a rede de segurança: em tela baixa o que não cabe
-            rola em vez de ser cortado. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4 text-center">
+        {/* O miolo. Sem rolagem: tudo o que a pessoa precisa a cada série — mídia
+            inteira, carga e botão — tem de caber na tela, então só a mídia é
+            elástica (`min-h-0 flex-1`) e encolhe com `object-contain`, nunca
+            recorta. O stepper de carga fica fora da área elástica: antes ele
+            era o último item de uma coluna que rolava e a mídia o empurrava
+            para fora da tela. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-5 pt-3 text-center">
           <div className="shrink-0">
             <p className={`${phaseTone[phase].text} ${EYEBROW}`}>
               Série {currentSetNumber} de {currentExercise.sets}
             </p>
-            <h2 className="num mt-1 line-clamp-2 text-[28px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
+            <h2 className="num mt-0.5 line-clamp-2 text-[24px] [@media(max-height:600px)]:text-[20px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
             {currentExercise.substituted_from && (
               <p className="mt-0.5 text-[13px] text-muted">no lugar de {currentExercise.substituted_from}</p>
             )}
           </div>
 
-          <FaixaDeSeries total={currentExercise.sets} feitas={currentSetNumber - 1} fase={phase} />
+          {/* Em tela baixa o "Série X de Y" acima já diz o mesmo; a faixa cede o
+              espaço para a mídia. */}
+          {!telaBaixa && <FaixaDeSeries total={currentExercise.sets} feitas={currentSetNumber - 1} fase={phase} />}
 
           {/* Duas leituras da mesma tela, conforme o que a pessoa está fazendo.
-              Durante o esforço o que importa é ver o movimento, então o vídeo
+              Durante o esforço o que importa é ver o movimento, então a mídia
               fica com toda a folga e cronômetro e alvo dividem uma linha acima.
               No descanso não há movimento para conferir: o anel assume, porque
               aí o tempo é a única coisa que interessa. */}
           {emDescanso ? (
-            <div key="descanso" className="enter flex flex-1 flex-col items-center justify-center gap-4">
-              <div className={restDone ? 'pulse-double' : ''}>
+            <div key="descanso" className="enter flex min-h-0 flex-1 flex-col items-center justify-center gap-3">
+              <div className={`shrink-0 ${restDone ? 'pulse-double' : ''}`}>
                 <Ring
                   progress={restDone || restSeconds <= 0 ? 1 : Math.max(0, restLeft) / restSeconds}
-                  size={160}
-                  stroke={12}
+                  size={telaMuitoBaixa ? 88 : telaBaixa ? 104 : 128}
+                  stroke={telaMuitoBaixa ? 8 : telaBaixa ? 9 : 10}
                   colorClass="text-teal"
                 >
                   <div className="text-center">
-                    <p className="num text-[44px] leading-none text-teal">{restDone ? '0:00' : formatClock(restLeft)}</p>
-                    <p className={`mt-1 text-muted ${EYEBROW}`}>Descanso</p>
+                    <p className={`num leading-none text-teal ${telaMuitoBaixa ? 'text-[26px]' : telaBaixa ? 'text-[30px]' : 'text-[36px]'}`}>{restDone ? '0:00' : formatClock(restLeft)}</p>
+                    {!telaMuitoBaixa && <p className={`mt-1 text-muted ${EYEBROW}`}>Descanso</p>}
                   </div>
                 </Ring>
               </div>
-              {restDone && <p className="text-[15px] font-semibold text-teal">Pronto para a próxima série</p>}
-              <div className="w-full rounded-lg bg-surface px-4 py-3 shadow-card">
+              {restDone && <p className="shrink-0 text-[15px] font-semibold text-teal">Pronto para a próxima série</p>}
+              <div className="w-full shrink-0 rounded-lg bg-surface px-4 py-2.5 shadow-card">
                 <p className={`text-dim ${EYEBROW}`}>Próxima série · {currentSetNumber} de {currentExercise.sets}</p>
-                <p className="mt-1 text-[16px] font-semibold leading-snug text-fg">{currentExercise.exercise_name}</p>
-                <p className="num mt-1 text-[24px] leading-[1.1] text-teal">
+                <p className="num mt-1 text-[22px] leading-[1.1] text-teal">
                   {isTimed
                     ? formatClock(currentExercise.duration_seconds ?? 0)
                     : `${nextWeight > 0 ? `${String(nextWeight).replace('.', ',')} kg × ` : ''}${currentExercise.reps} reps`}
@@ -1007,7 +1036,7 @@ export function WorkoutSessionPage() {
               </div>
             </div>
           ) : (
-            <div key="esforco" className="fade-in-mob flex flex-1 flex-col gap-3">
+            <div key="esforco" className="fade-in-mob flex min-h-0 flex-1 flex-col gap-2">
               <div className="grid shrink-0 grid-cols-2 gap-3">
                 <SeloDoCronometro
                   fase={phase === 'countdown' ? 'countdown' : 'executing'}
@@ -1022,23 +1051,24 @@ export function WorkoutSessionPage() {
                 <AlvoDaSerie exercise={currentExercise} />
               </div>
               {currentExercise.video ? (
-                // Absorve toda a folga que sobrar, em vez de ter altura própria:
-                // é o único elemento aqui que pode encolher sem perder função.
-                // `h-full w-auto`: o vídeo é quadrado, e esticá-lo na largura
-                // deixava duas faixas nas laterais.
-                <div className="flex min-h-[96px] flex-1 items-center justify-center">
-                  <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-auto max-w-full object-contain" />
+                // Absorve toda a folga que sobrar. `h-full w-full object-contain`:
+                // a mídia (quadrada, retrato ou paisagem) cabe inteira no espaço,
+                // com faixas se a proporção não casar, e nunca é recortada. O
+                // mesmo contêiner mostra "Carregando vídeo…" enquanto o vídeo
+                // não está disponível, no mesmo tamanho.
+                <div className="min-h-[72px] flex-1">
+                  <ExerciseVideoPlayer video={currentExercise.video} className="h-full w-full object-contain" />
                 </div>
               ) : (
-                // Sem vídeo: o estado "não encontramos" ocupa a altura que o
-                // conteúdo pede (nunca altura fixa, para o botão não ser cortado);
-                // o miolo rola se a tela for baixa demais.
-                <div className="my-auto shrink-0">
-                  <ExerciseIllustration exercise={currentExercise} className="w-full" />
+                // Sem vídeo: o estado "não encontramos" (ou a ilustração) ocupa
+                // o espaço restante; se o conteúdo não couber, rola por dentro
+                // da área em vez de empurrar o stepper e o botão.
+                <div className="flex min-h-[72px] flex-1 flex-col overflow-y-auto">
+                  <ExerciseIllustration exercise={currentExercise} className="my-auto w-full" fit />
                 </div>
               )}
               {currentExercise.notes && (
-                <p className="line-clamp-2 shrink-0 text-[13px] leading-snug text-muted">{currentExercise.notes}</p>
+                <p className="line-clamp-2 shrink-0 text-[13px] leading-snug text-muted [@media(max-height:760px)]:hidden">{currentExercise.notes}</p>
               )}
             </div>
           )}
@@ -1055,7 +1085,7 @@ export function WorkoutSessionPage() {
 
         {/* Rodapé ancorado. `pb-24` livra a barra de navegação, que é fixa e
             flutua por cima de tudo. */}
-        <div className="shrink-0 space-y-2 px-5 pb-24 pt-3">
+        <div className="shrink-0 space-y-2 px-5 pb-[72px] pt-3">
           <div className="relative">
             {phase === 'executing' && (
               <PhaseButton fase="executing" onClick={() => recordSet(elapsed)} disabled={isBusy}>
@@ -1074,20 +1104,26 @@ export function WorkoutSessionPage() {
             {sparking && <Sparks />}
           </div>
 
-          {/* Secundárias em linha, 48 px. Finalizar e descartar são saídas, não o
-              caminho normal: discretas, 44 px, logo abaixo do que se aperta a
-              cada série. */}
-          <div className="grid grid-cols-4 gap-1">
-            <button type="button" onClick={goBack} disabled={isBusy || completedSets.length === 0} aria-label="Voltar série" className={ACAO_DISCRETA}>
-              ← Voltar
+          {/* Secundárias: quatro botões iguais em grade. Finalizar e descartar são
+              saídas, não o caminho normal, mas ainda assim têm de parecer
+              tocáveis — texto solto lia-se como legenda. */}
+          <div className="grid grid-cols-4 gap-2">
+            <button type="button" onClick={goBack} disabled={isBusy || completedSets.length === 0} aria-label="Voltar série" className={`${ACAO_RODAPE} text-fg`}>
+              <svg {...ICONE_RODAPE}><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></svg>
+              Voltar
             </button>
-            <button type="button" onClick={() => setShowPostpone(true)} disabled={pendingExercises.length < 2} aria-label="Adiar exercício" className={ACAO_DISCRETA}>
+            <button type="button" onClick={() => setShowPostpone(true)} disabled={pendingExercises.length < 2} aria-label="Adiar exercício" className={`${ACAO_RODAPE} text-fg`}>
+              <svg {...ICONE_RODAPE}><path d="M5 4l10 8-10 8z" /><path d="M19 5v14" /></svg>
               Adiar
             </button>
-            <button type="button" onClick={openFinishSheet} aria-label="Finalizar treino agora" className={`${ACAO_DISCRETA} text-brand-fg`}>
+            <button type="button" onClick={openFinishSheet} aria-label="Finalizar treino agora" className={`${ACAO_RODAPE} text-brand-fg`}>
+              <svg {...ICONE_RODAPE}><path d="M5 13l4 4L19 7" /></svg>
               Finalizar
             </button>
-            <button type="button" onClick={cancel} className={`${ACAO_DISCRETA} text-danger`}>Descartar</button>
+            <button type="button" onClick={cancel} aria-label="Descartar treino" className={`${ACAO_RODAPE} text-danger`}>
+              <svg {...ICONE_RODAPE}><path d="M4 7h16" /><path d="M10 11v6M14 11v6" /><path d="M6 7l1 13h10l1-13" /><path d="M9 7V4h6v3" /></svg>
+              Descartar
+            </button>
           </div>
         </div>
       </div>

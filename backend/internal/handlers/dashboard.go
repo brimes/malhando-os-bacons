@@ -59,7 +59,8 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	).Scan(&resp.WorkoutStats.TotalWorkouts)
 
 	h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', $2::date)`,
+		userID, today,
 	).Scan(&resp.WorkoutStats.WorkoutsThisWeek)
 
 	h.db.Pool.QueryRow(ctx,

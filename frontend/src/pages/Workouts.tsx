@@ -10,6 +10,7 @@ import { Archive, Calendar, ChevronRight, Clock, Dumbbell, History, Pencil, Plus
 import { PlanWeekCard } from '../components/PlanWeekCard';
 import { computePlanWeekProgress } from '../lib/planProgress';
 import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
+import { useServerWeekDone } from '../lib/useWeekDone';
 import { useLocalAll } from '../lib/local/useLocal';
 import { pullTrainingPlans, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import { pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
@@ -31,6 +32,7 @@ export function WorkoutsPage() {
   const [isLoading, setIsLoading] = useState(!trainingPlansCache.isLoaded());
   // Sessions finished with no signal live only in the queue; re-render when it moves.
   const queue = useOfflineStore((state) => state.queue);
+  const serverWeekDone = useServerWeekDone();
 
   useEffect(() => {
     let alive = true;
@@ -60,8 +62,9 @@ export function WorkoutsPage() {
       plan: detail ?? trackedPlan,
       workouts: history,
       pending: pendingCompletedWorkouts(queue),
+      serverDone: serverWeekDone,
     });
-  }, [trackedPlan, detail, history, queue]);
+  }, [trackedPlan, detail, history, queue, serverWeekDone]);
 
   const next = progress?.days.find((entry) => entry.isNext);
   const nextDay = next?.day;

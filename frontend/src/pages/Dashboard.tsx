@@ -9,11 +9,13 @@ import { Bar } from '../components/Ring';
 import { MacroProgress } from '../components/Chart';
 import { Button } from '../components/Button';
 import { workoutsApi } from '../api/workouts';
+import { NextWorkoutHero } from '../components/treinos/NextWorkoutHero';
 import { SyncBanner } from '../components/SyncStatus';
 import { CompensationCard } from '../components/CompensationCard';
 import type { ActiveWorkout, DashboardData } from '../types';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { todayLocalDate } from '../lib/date';
+import { useWeekDone, serverWeekDone } from '../lib/useWeekDone';
 import { readCache, resourceKeyForRequest } from '../lib/offline';
 
 export function DashboardPage() {
@@ -51,6 +53,8 @@ export function DashboardPage() {
     workoutsApi.active().then(setActiveWorkout).catch(() => setActiveWorkout(null));
   }, []);
 
+  const weekDone = useWeekDone(serverWeekDone(data));
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -71,7 +75,7 @@ export function DashboardPage() {
   });
 
   const streak = data?.workout_stats.streak_days ?? 0;
-  const workoutsThisWeek = data?.workout_stats.workouts_this_week ?? 0;
+  const workoutsThisWeek = weekDone;
   const weeklyTarget = data?.weekly_performance?.target_per_week ?? 0;
   const next = data?.next_workout;
 
@@ -150,63 +154,34 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* Hero: o único bloco em degradê da tela. Só o botão navega, para não aninhar controles. */}
+      {/* Hero: o único bloco em degradê da tela. Mesmo componente de Treinos. */}
       {!activeWorkout && !data?.today_workout && next && (
-        <div className="enter bg-hero rounded-xl p-5 text-white" style={{ '--i': 2 } as React.CSSProperties}>
-          <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-white/90">Seu próximo treino</p>
-          <h3 className="num mt-1 break-words text-[40px] leading-[1.02]">{next.day_name}</h3>
-          {next.focus && <p className="mt-1 line-clamp-2 text-[15px] text-white/90">{next.focus}</p>}
-
-          {(() => {
-            const nums = [
-              { label: 'exercícios', value: next.exercises?.length ?? 0 },
-              { label: 'séries', value: next.total_sets ?? 0 },
-              { label: 'minutos', value: next.session_duration_minutes ?? 0 },
-            ].filter((n) => n.value > 0);
-            if (nums.length === 0) return null;
-            return (
-              <div className="mt-4 flex gap-6">
-                {nums.map((n) => (
-                  <div key={n.label}>
-                    <p className="num text-[34px] leading-none"><CountUp value={n.value} /></p>
-                    <p className="mt-1 text-[13px] text-white/90">{n.label}</p>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {(next.exercises?.length ?? 0) > 0 && (
-            <ul className="mt-4 space-y-2">
-              {next.exercises.slice(0, 3).map((ex) => (
-                <li key={ex.name} className="flex items-baseline justify-between gap-3 text-[15px]">
-                  <span className="min-w-0 truncate font-semibold">{ex.name}</span>
-                  <span className="shrink-0 text-[13px] text-white/90">
-                    <span className="num text-[17px] text-white">{prescription(ex)}</span>
-                    {ex.last_weight_kg ? ` · ${ex.last_weight_kg} kg` : ''}
-                  </span>
-                </li>
-              ))}
-              {next.exercises.length > 3 && (
-                <li className="text-[13px] text-white/90">e mais {next.exercises.length - 3}</li>
-              )}
-            </ul>
-          )}
-
-          <button
-            onClick={() => navigate(`/training-plans/${next.plan_id}/days/${next.day_id}`)}
-            className="press mt-5 inline-flex min-h-[58px] w-full items-center justify-center gap-2 rounded-md bg-white px-6 text-[17px] font-bold text-brand"
-          >
-            Começar treino
-          </button>
-          <p className="mt-3 text-center text-[13px] text-white/90">
-            {data!.days_since_last_workout == null
+        <NextWorkoutHero
+          index={2}
+          eyebrow="Seu próximo treino"
+          title={next.day_name}
+          focus={next.focus}
+          stats={[
+            { label: 'exercícios', value: next.exercises?.length ?? 0 },
+            { label: 'séries', value: next.total_sets ?? 0 },
+            { label: 'minutos', value: next.session_duration_minutes ?? 0 },
+          ]}
+          exercises={(next.exercises ?? []).slice(0, 3).map((ex) => ({
+            name: ex.name,
+            prescription: prescription(ex),
+            detail: ex.last_weight_kg ? `${ex.last_weight_kg} kg` : undefined,
+          }))}
+          moreExercises={Math.max(0, (next.exercises?.length ?? 0) - 3)}
+          buttonLabel="Começar treino"
+          onStart={() => navigate(`/training-plans/${next.plan_id}/days/${next.day_id}`)}
+          footnote={
+            data!.days_since_last_workout == null
               ? 'Seu primeiro treino'
               : data!.days_since_last_workout === 0
                 ? 'Você treinou hoje mais cedo'
-                : `Há ${data!.days_since_last_workout} ${data!.days_since_last_workout === 1 ? 'dia' : 'dias'} sem treinar`}
-          </p>
-        </div>
+                : `Há ${data!.days_since_last_workout} ${data!.days_since_last_workout === 1 ? 'dia' : 'dias'} sem treinar`
+          }
+        />
       )}
 
       {!activeWorkout && !data?.today_workout && !next && (
@@ -241,27 +216,32 @@ export function DashboardPage() {
 
           {data?.weekly_performance && (() => {
             const perf = data.weekly_performance;
-            const pct = perf.target_per_week > 0 ? Math.min(1, perf.done_this_week / perf.target_per_week) : 0;
-            const tone = perf.on_track
+            // Mesma conta de Treinos (`useWeekDone`): o servidor sozinho não vê a fila do aparelho.
+            const done = weekDone;
+            const remaining = Math.max(0, perf.target_per_week - done);
+            const onTrack = remaining === 0;
+            const stillPossible = remaining <= perf.days_left_in_week;
+            const pct = perf.target_per_week > 0 ? Math.min(1, done / perf.target_per_week) : 0;
+            const tone = onTrack
               ? { bar: 'bg-ok', text: 'text-ok' }
-              : perf.still_possible
+              : stillPossible
                 ? { bar: 'bg-brand-fg', text: 'text-brand-fg' }
                 : { bar: 'bg-sun', text: 'text-sun' };
-        const message = perf.on_track
+        const message = onTrack
           ? 'Meta da semana batida. Excelente!'
-          : perf.still_possible
-            ? `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} e ainda restam ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Dá tempo!`
+          : stillPossible
+            ? `Faltam ${remaining} ${remaining === 1 ? 'treino' : 'treinos'} e ainda restam ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Dá tempo!`
             // Zero dias restantes só passou a ser alcançável quando o dia em que
             // já se treinou deixou de contar; sem este ramo a frase vira
             // "faltam 2 treinos para 0 dias".
             : perf.days_left_in_week === 0
-              ? `A semana fechou com ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} a menos. Volte firme na próxima.`
-              : `Faltam ${perf.remaining} ${perf.remaining === 1 ? 'treino' : 'treinos'} para ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Recupere o que der e volte firme na próxima semana.`;
+              ? `A semana fechou com ${remaining} ${remaining === 1 ? 'treino' : 'treinos'} a menos. Volte firme na próxima.`
+              : `Faltam ${remaining} ${remaining === 1 ? 'treino' : 'treinos'} para ${perf.days_left_in_week} ${perf.days_left_in_week === 1 ? 'dia' : 'dias'}. Recupere o que der e volte firme na próxima semana.`;
             return (
               <Card>
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">Desempenho da semana</p>
-                  <p className="num shrink-0 text-xl text-fg">{perf.done_this_week} de {perf.target_per_week}</p>
+                  <p className="num shrink-0 text-xl text-fg">{done} de {perf.target_per_week}</p>
                 </div>
                 <Bar progress={pct} colorClass={tone.bar} className="mt-3" />
                 <p className={`mt-3 text-sm leading-relaxed ${tone.text}`}>{message}</p>

@@ -63,7 +63,7 @@ export function BottomNav() {
               <>
                 {isActive && <span className="absolute -top-2 h-[3px] w-7 rounded-b-[3px] bg-brand-fg" aria-hidden="true" />}
                 {item.icon}
-                <span>{item.label}</span>
+                <span className="whitespace-nowrap [overflow-wrap:normal]">{item.label}</span>
               </>
             )}
           </NavLink>

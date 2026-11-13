@@ -50,6 +50,37 @@ function parseCalendarDate(value: string | null | undefined): number | null {
   return Number.isNaN(time) ? null : time;
 }
 
+/**
+ * A definição única de "treinos feitos esta semana", usada pelo Início e por
+ * Treinos: todo treino concluído desde a segunda-feira local, tenha sido feito
+ * num dia do plano, fora dele ou como treino livre, contra a meta do plano.
+ *
+ * Há duas fontes e nenhuma é completa sozinha. O servidor (`/dashboard`) conta
+ * tudo o que já recebeu, mas não sabe da fila do aparelho. O histórico local
+ * conta a fila, mas é uma cópia que pode estar atrasada (o pull é pulado com
+ * escrita pendente, em segundo plano ou sem rede). Daí:
+ *  - sem número do servidor, vale o local;
+ *  - com ele, vale o maior entre o local e servidor + fila — nunca menos do
+ *    que o servidor já confirmou, nunca contando a fila duas vezes.
+ */
+export function resolveWeekDone(input: { serverDone: number | null | undefined; localDone: number; pendingThisWeek: number }): number {
+  const { serverDone, localDone, pendingThisWeek } = input;
+  if (serverDone === null || serverDone === undefined) return localDone;
+  return Math.max(localDone, serverDone + pendingThisWeek);
+}
+
+/** Sessões concluídas (servidor + fila) a partir da segunda-feira local. */
+export function countWeekSessions(workouts: Workout[], pending: LocalCompletedWorkout[], now: Date = new Date()): number {
+  const weekStart = startOfWeek(now).getTime();
+  let count = pending.filter((local) => local.completedAt >= weekStart).length;
+  for (const workout of workouts) {
+    if (workout.status !== 'completed') continue;
+    const at = parseCalendarDate(workout.date);
+    if (at !== null && at >= weekStart) count += 1;
+  }
+  return count;
+}
+
 export interface PlanDayProgress {
   day: TrainingPlanDay;
   /** Epoch ms of the last time this day was trained, null when never. */
@@ -108,11 +139,13 @@ export interface PlanWeekProgressInput {
   workouts?: Workout[];
   /** Sessions finished offline whose writes are still queued. */
   pending?: LocalCompletedWorkout[];
+  /** Treinos da semana segundo o servidor (`/dashboard`), quando já chegou. */
+  serverDone?: number | null;
   now?: Date;
 }
 
 export function computePlanWeekProgress(input: PlanWeekProgressInput): PlanWeekProgress {
-  const { plan, workouts = [], pending = [], now = new Date() } = input;
+  const { plan, workouts = [], pending = [], serverDone = null, now = new Date() } = input;
   const weekStart = startOfWeek(now).getTime();
 
   // Every completed session, whichever side of the connection it came from. The
@@ -132,7 +165,11 @@ export function computePlanWeekProgress(input: PlanWeekProgressInput): PlanWeekP
   const pendingThisWeek = pending.filter((local) => local.completedAt >= weekStart).length;
   // Counted across every workout, plan day or free session — the same thing the
   // server's `weekly_performance` reports, so the two screens agree.
-  const done = sessions.filter((session) => session.at >= weekStart).length;
+  const done = resolveWeekDone({
+    serverDone,
+    localDone: sessions.filter((session) => session.at >= weekStart).length,
+    pendingThisWeek: pendingThisWeek,
+  });
 
   const days: PlanDayProgress[] = (plan.days ?? []).map((day) => {
     const serverLastDone = parseCalendarDate(day.last_done_at);

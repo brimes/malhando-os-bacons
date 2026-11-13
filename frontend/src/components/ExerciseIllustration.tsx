@@ -45,7 +45,7 @@ function sequencia(n: number): number[] {
  * opacidade (nada de layout animado). Pausa fora da tela e com o app em
  * segundo plano. Com "reduzir movimento", quadros parados lado a lado, numerados.
  */
-function QuadrosDoMovimento({ nome, quadros }: { nome: string; quadros: string[] }) {
+function QuadrosDoMovimento({ nome, quadros, fit }: { nome: string; quadros: string[]; fit?: boolean }) {
   const reduzido = usaMovimentoReduzido();
   const [passo, setPasso] = useState(0);
   const [naTela, setNaTela] = useState(true);
@@ -99,7 +99,7 @@ function QuadrosDoMovimento({ nome, quadros }: { nome: string; quadros: string[]
       ref={palco}
       role="img"
       aria-label={rotulo}
-      className="relative mx-auto max-h-[52vh] w-full overflow-hidden rounded-lg bg-white"
+      className={`relative mx-auto w-full overflow-hidden rounded-lg bg-white ${fit ? 'max-h-full min-h-0' : 'max-h-[52vh]'}`}
       style={{ aspectRatio: proporcao }}
     >
       {quadros.map((q, i) => (
@@ -126,7 +126,7 @@ function QuadrosDoMovimento({ nome, quadros }: { nome: string; quadros: string[]
  * "Ainda não associado" (sem `video_status`), "offline sem a imagem" e "vídeo
  * ainda baixando" não passam por aqui: esses estados não são "não localizamos".
  */
-export function ExerciseIllustration({ exercise, className = '' }: { exercise: TrainingPlanExercise; className?: string }) {
+export function ExerciseIllustration({ exercise, className = '', fit }: { exercise: TrainingPlanExercise; className?: string; fit?: boolean }) {
   const nome = exercise.exercise_name;
   const naoLocalizado = exercise.video_status === 'not_found';
   const desatualizadaNoServidor = exercise.illustration?.status === 'outdated';
@@ -283,8 +283,8 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
       return <div className={`min-h-[160px] animate-pulse rounded-lg bg-surface-2 ${className}`} />;
     }
     return (
-      <figure className={`flex flex-col items-center ${className}`}>
-        <QuadrosDoMovimento nome={nome} quadros={quadros} />
+      <figure className={`flex flex-col items-center ${fit ? 'h-full min-h-0 justify-center' : ''} ${className}`}>
+        <QuadrosDoMovimento nome={nome} quadros={quadros} fit={fit} />
         <figcaption className="mt-1 text-[12px] text-dim">Ilustração do movimento</figcaption>
         {isNetworkOnline() && (confirmando ? (
           <div className="mt-1 flex w-full flex-col items-center gap-1 text-center">
@@ -308,9 +308,9 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
   // vaza por cima e por baixo. Assim o contêiner cresce com o conteúdo e o
   // botão fica sempre inteiro; o `min-h` só dá respiro quando há pouco texto.
   return (
-    <div className={`relative flex min-h-[176px] items-center justify-center rounded-lg p-2 ${className}`}>
+    <div className={`relative flex items-center justify-center rounded-lg ${fit ? 'p-1.5' : 'min-h-[176px] p-2'} ${className}`}>
       <div className="stripes absolute inset-0 rounded-lg" aria-hidden="true" />
-      <div className="relative flex w-full flex-col items-center rounded-md bg-surface p-3 text-center shadow-card">
+      <div className={`relative flex w-full flex-col items-center rounded-md bg-surface text-center shadow-card ${fit ? 'p-2.5' : 'p-3'}`}>
         {fase === 'gerando' ? (
           <>
             <div className="h-1.5 w-full overflow-hidden rounded-chip bg-surface-2" role="progressbar" aria-label="Gerando ilustração">
@@ -321,9 +321,9 @@ export function ExerciseIllustration({ exercise, className = '' }: { exercise: T
         ) : (
           <>
             <p className="text-[16px] font-semibold leading-snug text-fg">Não encontramos o vídeo deste exercício</p>
-            <p className="mt-1 text-[15px] leading-[1.45] text-muted">Podemos criar uma ilustração do movimento para você.</p>
+            <p className={`mt-1 text-[15px] leading-[1.45] text-muted ${fit ? '[@media(max-height:600px)]:hidden' : ''}`}>Podemos criar uma ilustração do movimento para você.</p>
             {fase === 'falhou' && erro && <p role="alert" className="mt-2 text-[15px] leading-[1.45] text-danger">{erro}</p>}
-            <Button size="md" variant="secondary" className="mt-3 !px-3 [overflow-wrap:normal]" onClick={() => void gerar()} disabled={offline}>
+            <Button size="md" variant="secondary" className={`${fit ? 'mt-2' : 'mt-3'} !px-3 [overflow-wrap:normal]`} onClick={() => void gerar()} disabled={offline}>
               <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
                 <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" />
