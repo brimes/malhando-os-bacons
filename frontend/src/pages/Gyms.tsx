@@ -51,7 +51,7 @@ export function GymsPage() {
               <Card onClick={() => navigate(`/gyms/${gym.id}`)} className="flex min-h-[72px] items-center gap-4">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-brand-soft text-brand-fg"><Pin className="h-6 w-6" /></span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{gym.name}</h2>
+                  <h2 className="break-anywhere text-[17px] font-bold leading-[1.3] text-fg">{gym.name}</h2>
                   {gym.notes && <p className="mt-0.5 line-clamp-2 text-[15px] leading-[1.4] text-muted">{gym.notes}</p>}
                 </div>
                 <div className="shrink-0 text-right">

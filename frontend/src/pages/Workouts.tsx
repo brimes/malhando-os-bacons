@@ -157,7 +157,7 @@ export function WorkoutsPage() {
                 return (
                   <Card key={plan.id} tint={isTracked ? 'brand' : undefined} onClick={() => goPlan(plan.id)} className="flex min-h-[72px] items-center gap-4">
                     <div className="min-w-0 flex-1">
-                      <h3 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{plan.name}</h3>
+                      <h3 className="break-anywhere text-[17px] font-bold leading-[1.3] text-fg">{plan.name}</h3>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {plan.creation_method === 'automatic' && <Chip tone="brand" icon={<Spark />}>IA</Chip>}
                         {plan.kind === 'dynamic' && <Chip tone="teal">Dinâmico</Chip>}

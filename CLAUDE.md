@@ -30,6 +30,8 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 - **O backup automático do Android (allowBackup) restaura a fila após reinstalar**, sem token e possivelmente de outra conta — por isso os itens sem dono nunca saem sozinhos.
 - **Insets vêm do nativo** (`MainActivity`). Do SDK 35 em diante a plataforma força borda a borda, e o WebView do Android devolve `env(safe-area-inset-*)` zerado mesmo com `viewport-fit=cover` — medido no aparelho. Correção em CSS não resolve.
 - **Provider de LLM resolvido por usuário** (`services.GeneratorResolver`): chave própria quando existe, crédito compartilhado quando não. A chave nunca volta em JSON nem entra em log, e nunca é enfileirada offline (a fila é localStorage em texto puro).
+- **`overflow-wrap: anywhere` só em texto do usuário** (`.break-anywhere`: e-mail, nomes, notas, chat), nunca no `body`. Global, ele reduz o min-content de tudo e quebra rótulos no meio da palavra ("Descreve/r"). O body usa `break-word`; filho de flex com texto livre precisa de `min-w-0`. Conferir com `CHROME_PATH=... node frontend/scripts/measure-overflow.mjs` (overflow e palavra partida).
+- **Padding global de input em `:where()`**: o seletor com `:not()` somava especificidade e anulava `pl-12`/`px-2`, deixando a lupa por cima do texto.
 - **Aviso de IA só no termo de aceite.** Repetir em cada tela vira ruído que se para de ler.
 
 ## Vídeos de exercício

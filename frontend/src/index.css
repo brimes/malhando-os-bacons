@@ -72,12 +72,13 @@
   }
 
   body {
-    /* Texto do usuário (e-mail, nome de exercício, observação) sem ponto de
-       quebra não pode alargar a página: `anywhere`, ao contrário de
-       `break-word`, também reduz o min-content, então filhos de flex deixam de
-       empurrar o contêiner. Medido: sem isso o layout viewport passava de 320
-       para 478-753 px e o iOS "zoomava para fora" a página inteira. */
-    overflow-wrap: anywhere;
+    /* `break-word` só quebra a palavra que não cabe sozinha numa linha. O
+       `anywhere` global quebrava rótulos curtos no meio ("Descreve/r") porque
+       também reduz o min-content: ele fica na classe `.break-anywhere`, só
+       para texto do usuário sem ponto de quebra (e-mail, nomes, notas, chat),
+       que sem isso alargava o layout viewport de 320 para 478-753 px e o iOS
+       "zoomava para fora" a página inteira. */
+    overflow-wrap: break-word;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: touch;
     accent-color: rgb(var(--brand-fg));
@@ -120,11 +121,16 @@
     border: 2px solid transparent;
     border-radius: 16px;
     min-height: 52px;
-    padding-left: 16px;
-    padding-right: 16px;
     transition: border-color 120ms var(--ease);
   }
-  textarea { padding-top: 14px; padding-bottom: 14px; }
+  /* Padding em `:where()` (especificidade 0): o seletor acima soma 4 `:not()`
+     e vencia `pl-12`/`px-2` das utilities, então a lupa dos campos de busca
+     ficava por cima do texto. Aqui só vale o padrão; a classe do campo manda. */
+  :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']), select, textarea) {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  :where(textarea) { padding-top: 14px; padding-bottom: 14px; }
   input::placeholder, textarea::placeholder { color: rgb(var(--dim)); }
   /* `!important`: muitos campos trazem `focus:outline-none` e `border-line` de
      utilidade, que venceriam esta regra e deixariam o foco invisível. */
@@ -150,6 +156,12 @@
 }
 
 @layer utilities {
+  /* Texto do usuário potencialmente gigante e sem espaços. Use junto de
+     `min-w-0` nos filhos de flex. */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+  }
+
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }

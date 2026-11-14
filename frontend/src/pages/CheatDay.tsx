@@ -130,7 +130,7 @@ export function CheatDayPage() {
           {messages.map((message, index) => (
             <div
               key={`${message.id}-${index}`}
-              className={`max-w-[88%] whitespace-pre-wrap break-words rounded-lg px-4 py-3 text-base leading-[1.5] ${
+              className={`max-w-[88%] whitespace-pre-wrap break-anywhere rounded-lg px-4 py-3 text-base leading-[1.5] ${
                 message.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface text-fg shadow-card'
               }`}
             >

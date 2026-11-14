@@ -250,7 +250,7 @@ function PostponeSheet({ exercises, remainingFor, currentId, onPick, onClose }: 
               onClick={() => exercise.id && onPick(exercise.id)}
               className={`press w-full rounded-md p-4 text-left ${exercise.id === currentId ? 'bg-brand-soft' : 'bg-surface-2'}`}
             >
-              <p className="text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</p>
+              <p className="break-anywhere text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</p>
               <p className="mt-1 text-[15px] leading-[1.45] text-muted">
                 {remainingFor(exercise)} de {exercise.sets} séries restantes
                 {exercise.id === currentId && ' · atual'}
@@ -792,7 +792,7 @@ export function WorkoutSessionPage() {
               const feitas = doneCountFor(exercise.id);
               return (
                 <Card key={exercise.id} className="enter flex items-center justify-between gap-3 !py-3">
-                  <span className="min-w-0 text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</span>
+                  <span className="break-anywhere min-w-0 text-[16px] font-semibold leading-snug text-fg">{exercise.exercise_name}</span>
                   <span className={`num shrink-0 text-[20px] ${feitas >= exercise.sets ? 'text-ok' : 'text-muted'}`}>{feitas}/{exercise.sets}</span>
                 </Card>
               );
@@ -835,7 +835,7 @@ export function WorkoutSessionPage() {
           {finished && (
             <Card tint="ok" className="enter">
               <p className={`text-ok ${EYEBROW}`}>Exercício concluído</p>
-              <h2 className="num mt-1 text-[28px] leading-[1.05] text-fg">{finished.exercise_name}</h2>
+              <h2 className="break-anywhere num mt-1 text-[28px] leading-[1.05] text-fg">{finished.exercise_name}</h2>
               <div className="mt-3 space-y-2">
                 {finishedSets.map((set, index) => (
                   <div key={set.id} className="flex items-center justify-between gap-3 rounded-sm bg-surface-2 px-3 py-2.5 text-[15px]">
@@ -874,7 +874,7 @@ export function WorkoutSessionPage() {
             <p className={`text-brand-fg ${EYEBROW}`}>
               Exercício {exercises.length - pendingExercises.length + 1} de {exercises.length}
             </p>
-            <h2 className="num mt-1 text-[28px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
+            <h2 className="break-anywhere num mt-1 text-[28px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
             {currentExercise.substituted_from && (
               <p className="mt-1 text-[13px] text-muted">no lugar de {currentExercise.substituted_from}</p>
             )}
@@ -995,7 +995,7 @@ export function WorkoutSessionPage() {
             <p className={`${phaseTone[phase].text} ${EYEBROW}`}>
               Série {currentSetNumber} de {currentExercise.sets}
             </p>
-            <h2 className="num mt-0.5 line-clamp-2 text-[24px] [@media(max-height:600px)]:text-[20px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
+            <h2 className="break-anywhere num mt-0.5 line-clamp-2 text-[24px] [@media(max-height:600px)]:text-[20px] leading-[1.05] text-fg">{currentExercise.exercise_name}</h2>
             {currentExercise.substituted_from && (
               <p className="mt-0.5 text-[13px] text-muted">no lugar de {currentExercise.substituted_from}</p>
             )}

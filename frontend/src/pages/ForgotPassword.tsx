@@ -58,10 +58,10 @@ export function ForgotPasswordPage() {
         </div>
 
         {error && (
-          <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-words">{error}</div>
+          <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-anywhere">{error}</div>
         )}
         {info && !error && (
-          <div className="enter bg-surface-2 rounded-md p-3 text-muted text-sm text-center break-words">{info}</div>
+          <div className="enter bg-surface-2 rounded-md p-3 text-muted text-sm text-center break-anywhere">{info}</div>
         )}
 
         <Card>

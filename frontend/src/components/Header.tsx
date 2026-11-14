@@ -28,12 +28,12 @@ export function Header({ title, showBack, rightAction }: HeaderProps) {
           <h1
             title={title}
             aria-label={title}
-            className={`num line-clamp-2 min-w-0 text-fg [overflow-wrap:break-word] [hyphens:none] [word-break:normal] ${
+            className={`num line-clamp-2 min-w-0 text-fg break-anywhere [hyphens:none] [word-break:normal] ${
               title.length > 32
                 ? 'text-[22px] leading-[1.1]'
                 : title.length > 18
-                  ? 'text-[28px] leading-[1.05]'
-                  : 'text-[34px] leading-[1.02]'
+                  ? 'text-[24px] leading-[1.05] min-[360px]:text-[28px]'
+                  : 'text-[28px] leading-[1.02] min-[360px]:text-[34px]'
             }`}
           >{title}</h1>
         </div>

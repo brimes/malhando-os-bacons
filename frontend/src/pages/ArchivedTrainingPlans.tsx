@@ -45,7 +45,7 @@ export function ArchivedTrainingPlansPage() {
               <Card onClick={() => navigate(`/training-plans/${plan.id}`)} className="flex min-h-[72px] items-center gap-4">
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-surface-2 text-muted"><Archive className="h-6 w-6" /></span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{plan.name}</h2>
+                  <h2 className="break-anywhere text-[17px] font-bold leading-[1.3] text-fg">{plan.name}</h2>
                   <div className="mt-2">
                     <Chip icon={<Calendar />}>Encerrado em {plan.archived_at ? new Date(plan.archived_at).toLocaleDateString('pt-BR') : 'sem data'}</Chip>
                   </div>

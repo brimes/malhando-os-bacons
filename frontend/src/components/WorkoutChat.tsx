@@ -189,7 +189,7 @@ export function WorkoutChat({ workoutId, open = true, onClose, exerciseName, exe
           {messages.map((message, index) => (
             <div
               key={`${message.created_at}-${index}`}
-              className={`max-w-[88%] whitespace-pre-wrap rounded-md px-4 py-3 text-[15px] leading-[1.45] ${
+              className={`max-w-[88%] whitespace-pre-wrap break-anywhere rounded-md px-4 py-3 text-[15px] leading-[1.45] ${
                 message.role === 'user'
                   ? 'ml-auto bg-brand text-white'
                   : 'bg-surface-2 text-fg'

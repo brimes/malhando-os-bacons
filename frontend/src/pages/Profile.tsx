@@ -80,8 +80,8 @@ export function ProfilePage() {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="num break-words text-[28px] leading-[1.05] text-fg">{user?.name}</p>
-              <p className="mt-1 text-[15px] leading-[1.35] text-muted">{user?.email}</p>
+              <p className="num break-anywhere text-[28px] leading-[1.05] text-fg">{user?.name}</p>
+              <p className="mt-1 break-anywhere text-[15px] leading-[1.35] text-muted">{user?.email}</p>
               {user?.created_at && (
                 <div className="mt-2">
                   <Chip>Desde {new Date(user.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}</Chip>
@@ -96,7 +96,7 @@ export function ProfilePage() {
         {!statsLoading && stats && (
           <div className="enter grid grid-cols-3 gap-3" style={stagger(1)}>
             {statItems.map((s) => (
-              <Card key={s.label} className="min-w-0 !px-3 !py-4 text-center">
+              <Card key={s.label} className="min-w-0 !px-2 !py-4 text-center">
                 <p className={`num text-[32px] leading-[1.05] ${s.tone}`}><CountUp value={s.value} format={(n) => n.toLocaleString('pt-BR')} /></p>
                 <p className="mt-1 text-[13px] font-semibold text-muted">{s.label}</p>
               </Card>

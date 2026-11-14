@@ -204,7 +204,7 @@ export function TrainingPlanDayPage() {
       <div className="space-y-[14px] px-5 pb-8 pt-2">
         <div className="enter bg-hero rounded-xl p-5 text-white shadow-card">
           <p className="text-[13px] font-bold uppercase tracking-[0.06em] text-white/90">{session ? 'Treino em andamento' : 'Hoje'}</p>
-          {day.focus && <h2 className="num mt-1 break-words text-[32px] leading-[1.05]">{day.focus}</h2>}
+          {day.focus && <h2 className="num mt-1 break-anywhere text-[32px] leading-[1.05]">{day.focus}</h2>}
           <div className="mt-5 flex items-end justify-between gap-4">
             <p className="num text-[56px] leading-none">
               <CountUp key={markedSets} value={markedSets} />

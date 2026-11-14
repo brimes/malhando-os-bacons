@@ -97,7 +97,7 @@ export function FoodLogAssistant({ onRegistrar }: FoodLogAssistantProps) {
       {messages.map((m, i) => (
         <div
           key={i}
- className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-[15px] leading-relaxed ${
+ className={`max-w-[88%] whitespace-pre-wrap break-anywhere rounded-lg px-4 py-3 text-[15px] leading-relaxed ${
             m.role === 'user' ? 'ml-auto bg-brand text-white' : 'shadow-card bg-surface text-fg'
           }`}
         >

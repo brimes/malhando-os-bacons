@@ -237,7 +237,7 @@ export function TrainingPlanDetailPage() {
         }
       />
       <div className="space-y-[14px] px-5 pb-28 pt-1">
-        <h2 className="num break-words text-[32px] leading-[1.05] text-fg">{plan.name}</h2>
+        <h2 className="num break-anywhere text-[32px] leading-[1.05] text-fg">{plan.name}</h2>
         <div className="enter flex flex-wrap gap-2">
           <Chip tone="brand" icon={plan.creation_method === 'automatic' ? <Spark /> : <Pencil />}>{plan.creation_method === 'automatic' ? 'Assistente' : 'Manual'}</Chip>
           {plan.kind === 'dynamic' && <Chip tone="teal">Dinâmico</Chip>}
@@ -343,7 +343,7 @@ export function TrainingPlanDetailPage() {
                   <Card key={day.id} tint={entry.isNext ? 'brand' : undefined} onClick={() => navigate(`/training-plans/${plan.id}/days/${day.id}`)} className="flex min-h-[72px] items-center gap-4">
                     <span className={`num flex h-12 w-12 shrink-0 items-center justify-center rounded-md text-[26px] ${entry.isNext ? 'bg-brand text-white' : 'bg-surface-2 text-brand-fg'}`}>{day.day_number}</span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="break-words text-[17px] font-bold leading-[1.3] text-fg">{day.name}</h3>
+                      <h3 className="break-anywhere text-[17px] font-bold leading-[1.3] text-fg">{day.name}</h3>
                       <p className="mt-0.5 text-[15px] text-muted">{lastLabel(entry.lastDoneAt)}</p>
                       {(entry.isNext || entry.doneThisWeek > 0 || entry.fromPendingQueue) && (
                         <div className="mt-2 flex flex-wrap gap-2">

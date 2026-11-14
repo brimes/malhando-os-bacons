@@ -105,12 +105,12 @@ export function LoginPage() {
 
         <div className="space-y-5">
           {routeState.notice && !error && (
-            <div className="enter bg-ok-soft rounded-md p-3 text-ok text-sm text-center break-words" style={{ '--i': 1 } as React.CSSProperties}>
+            <div className="enter bg-ok-soft rounded-md p-3 text-ok text-sm text-center break-anywhere" style={{ '--i': 1 } as React.CSSProperties}>
               {routeState.notice}
             </div>
           )}
           {error && (
-            <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-words" style={{ '--i': 1 } as React.CSSProperties}>
+            <div role="alert" className="enter bg-danger-soft rounded-md p-3 text-danger text-sm text-center break-anywhere" style={{ '--i': 1 } as React.CSSProperties}>
               {error}
             </div>
           )}

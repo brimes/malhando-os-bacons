@@ -2,7 +2,8 @@
 // Mede overflow horizontal e risco de zoom (iOS) em todas as rotas, emulando iPhone.
 // Uso: BASE_URL=http://localhost:5173 node scripts/measure-overflow.mjs [--widths=320,375,390,430] [--routes=/a,/b]
 // Requer playwright (global ou local) + chromium. Não toca na API real: todo /api é mockado.
-// Sai com código 1 se achar overflow de documento ou input < 16px.
+// Sai com código 1 se achar overflow de documento, input < 16px ou palavra de rótulo partida no meio.
+// SHOTS_DIR=dir (e HEIGHT=px) salva um print escuro de cada rota. CHROME_PATH=... usa um Chrome do sistema no lugar do Chromium do Playwright.
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 
@@ -45,6 +46,7 @@ const mocks = {
   '/workouts/stats': { total_workouts: 12, workouts_this_week: 3, workouts_this_month: 9, total_sets: 200, total_volume_kg: 12345, streak_days: 4 },
   '/workouts': [workout],
   '/workouts/1': workout,
+  '/workouts/active': { workout: { ...workout, status: 'in_progress', sets: [] }, plan_id: 1, day_name: 'Treino ' + LONG.slice(0, 30), exercises: [ex(1), ex(2), ex(3)] },
   '/workouts/calendar': { month: today.slice(0, 7), days: [] },
   '/nutrition/calendar': { month: today.slice(0, 7), days: [] },
   '/nutrition/missing-days': { days: [] },
@@ -114,15 +116,35 @@ function probe(deviceWidth) {
     const fs = parseFloat(getComputedStyle(el).fontSize);
     if (fs < 16) out.smallInputs.push({ el: desc(el), fontSize: fs });
   }
+  // Palavra de rótulo partida no meio: o Range da palavra ocupa mais de uma linha.
+  // Palavras com 20+ caracteres são texto gigante dos mocks (quebrar é esperado).
+  out.wordBreaks = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const parent = n.parentElement;
+    if (!parent || /^(script|style|noscript)$/i.test(parent.tagName) || !n.textContent.trim()) continue;
+    const re = /\S+/g; let m;
+    while ((m = re.exec(n.textContent))) {
+      if (m[0].length >= 20 || m[0].length < 4 || m[0].includes('-')) continue;
+      const rg = document.createRange(); rg.setStart(n, m.index); rg.setEnd(n, m.index + m[0].length);
+      const rects = [...rg.getClientRects()].filter((r) => r.width > 0);
+      // Palavra cortada: passa da borda direita do botão/cartão que a contém (texto esmagado sem quebrar).
+      const box = parent.closest('button, a, li, [class*="rounded"]');
+      const last = rects[rects.length - 1];
+      if (box && last && getComputedStyle(parent).textOverflow !== 'ellipsis' && last.right > box.getBoundingClientRect().right + 1 && box !== parent) out.wordBreaks.push({ el: desc(parent), word: m[0] + ' (cortada)', rects: `right=${Math.round(last.right)} box=${Math.round(box.getBoundingClientRect().right)}` });
+      if (rects.length > 1 && Math.abs(rects[0].top - rects[rects.length - 1].top) > 4) out.wordBreaks.push({ el: desc(parent), word: m[0], rects: rects.map((r) => `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`).join(' | ') + ` boxW=${Math.round(parent.getBoundingClientRect().width)}` });
+    }
+  }
+  out.wordBreaks = out.wordBreaks.slice(0, 10);
   out.offenders = out.offenders.slice(0, 10);
   return out;
 }
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined }); // CHROME_PATH: usa o Chrome do sistema se o Chromium do Playwright não estiver instalado
 let bad = 0;
 for (const width of WIDTHS) {
   const ctx = await browser.newContext({
-    viewport: { width, height: 800 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true,
+    viewport: { width, height: Number(process.env.HEIGHT) || 800 }, colorScheme: 'dark', deviceScaleFactor: 3, isMobile: true, hasTouch: true,
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
   });
   await ctx.addInitScript((u) => {
@@ -136,14 +158,17 @@ for (const width of WIDTHS) {
     page.on('pageerror', (e) => errs.push(e.message.slice(0, 80)));
     await page.goto(BASE + route, { waitUntil: 'networkidle' }).catch(() => {});
     await page.waitForTimeout(600);
+    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/${width}${route.replace(/\//g, '_')}.png` });
     const r = await page.evaluate(probe, width);
     const overflow = r.innerWidth > width || r.scrollWidth > width || r.bodyScrollWidth > width;
     // iOS dá zoom ao focar campo < 16px; layout viewport maior que o aparelho = página "zoomada para fora"
     const tag = overflow ? 'OVERFLOW' : 'ok';
     const flags = [overflow && 'overflow', r.smallInputs.length && `inputs<16px:${r.smallInputs.length}`, errs.length && `erro-js:${errs[0]}`].filter(Boolean);
-    if (overflow || r.smallInputs.length) bad++;
+    if (r.wordBreaks.length) flags.push(`palavra-partida:${r.wordBreaks.length}`);
+    if (overflow || r.smallInputs.length || r.wordBreaks.length) bad++;
     console.log(`[${width}] ${route.padEnd(28)} ${tag.padEnd(8)} device=${width} inner=${r.innerWidth} scroll=${r.scrollWidth} ${flags.join(' ')}`);
     for (const o of r.offenders) console.log(`     -> ${o.el} left=${o.left} right=${o.right} "${o.text}"`);
+    for (const w of r.wordBreaks) console.log(`     -> palavra partida "${w.word}" em ${w.el} [${w.rects}]`);
     for (const s of r.smallInputs.slice(0, 3)) console.log(`     -> input ${s.el} font=${s.fontSize}px`);
     await page.close();
   }

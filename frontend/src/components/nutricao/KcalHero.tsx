@@ -31,9 +31,9 @@ export function KcalHero({ calories, caloriesTarget, protein, proteinTarget, car
   return (
     <Card tint="teal" className="!p-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">{eyebrow}</p>
+        <p className="min-w-0 break-anywhere text-[13px] font-semibold uppercase tracking-[0.06em] text-muted">{eyebrow}</p>
         {actionLabel && onAction && (
-          <button type="button" onClick={onAction} className="press -mr-2 min-h-[48px] px-2 text-[15px] font-semibold text-teal">{actionLabel}</button>
+          <button type="button" onClick={onAction} className="press -mr-2 min-h-[48px] shrink-0 px-2 text-[15px] font-semibold text-teal">{actionLabel}</button>
         )}
       </div>
       <div className="flex items-center gap-5">

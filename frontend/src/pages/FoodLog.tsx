@@ -450,13 +450,13 @@ export function FoodLogPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button type="button" onClick={() => { setSubmitError(null); setAiMode(true); }} className="press tint-teal flex min-h-[72px] items-center gap-3 rounded-lg bg-surface px-4 text-left shadow-card">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><ChatIcon /></span>
+            <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+              <button type="button" onClick={() => { setSubmitError(null); setAiMode(true); }} className="press tint-teal flex min-h-[72px] items-center gap-2.5 rounded-lg bg-surface px-3 text-left shadow-card">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-teal-soft text-teal"><ChatIcon /></span>
                 <span className="text-[15px] font-semibold leading-[1.25] text-fg">Descrever conversando</span>
               </button>
-              <button type="button" onClick={openManual} className="press flex min-h-[72px] items-center gap-3 rounded-lg bg-surface px-4 text-left shadow-card">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-muted"><PlusIcon /></span>
+              <button type="button" onClick={openManual} className="press flex min-h-[72px] items-center gap-2.5 rounded-lg bg-surface px-3 text-left shadow-card">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-muted"><PlusIcon /></span>
                 <span className="text-[15px] font-semibold leading-[1.25] text-fg">Criar do zero</span>
               </button>
             </div>
@@ -530,7 +530,7 @@ export function FoodLogPage() {
             {back}
 
             <Card tint="teal" className="enter !p-5">
-              <h2 className="num break-words text-[28px] leading-[1.05] text-fg">{selection.name}</h2>
+              <h2 className="num break-anywhere text-[28px] leading-[1.05] text-fg">{selection.name}</h2>
               {computedMacros && (
                 <>
                   <p className="num mt-3 text-[44px] leading-none text-teal"><CountUp value={Math.round(computedMacros.calories)} /><span className="font-sans text-[15px] font-medium text-muted"> kcal</span></p>

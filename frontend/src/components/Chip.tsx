@@ -17,9 +17,9 @@ export function Chip({ tone = 'neutral', icon, children, className = '' }: {
   className?: string;
 }) {
   return (
-    <span className={`inline-flex h-8 items-center gap-1.5 rounded-chip px-3 text-[13px] font-semibold leading-[1.3] ${tones[tone]} ${className}`}>
+    <span className={`inline-flex h-8 max-w-full items-center gap-1.5 rounded-chip px-3 text-[13px] font-semibold leading-[1.3] ${tones[tone]} ${className}`}>
       {icon && <span className="inline-flex h-[15px] w-[15px] items-center justify-center [&>svg]:h-[15px] [&>svg]:w-[15px]">{icon}</span>}
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

@@ -157,9 +157,9 @@ export function GymFormPage() {
                 <p className="mb-3 text-[13px] font-bold uppercase tracking-[0.06em] text-muted">Adicionados por você</p>
                 <div className="flex flex-wrap gap-2">
                   {customItems.map((item) => (
-                    <span key={item} className="inline-flex min-h-[44px] items-center gap-1 rounded-chip bg-brand-soft pl-4 pr-1 text-[15px] font-semibold text-brand-fg">
-                      {item}
-                      <button type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item}`} className="press flex h-11 w-11 items-center justify-center rounded-chip text-[20px] leading-none">×</button>
+                    <span key={item} className="inline-flex min-h-[44px] max-w-full items-center gap-1 rounded-chip bg-brand-soft pl-4 pr-1 text-[15px] font-semibold text-brand-fg">
+                      <span className="min-w-0 break-anywhere">{item}</span>
+                      <button type="button" onClick={() => removeItem(item)} aria-label={`Remover ${item}`} className="press flex h-11 shrink-0 w-11 items-center justify-center rounded-chip text-[20px] leading-none">×</button>
                     </span>
                   ))}
                 </div>

@@ -92,7 +92,7 @@ export function ProgressReviewChat({ reviewId }: ProgressReviewChatProps) {
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`max-w-[88%] whitespace-pre-wrap rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${
+              className={`max-w-[88%] whitespace-pre-wrap break-anywhere rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${
                 message.role === 'user'
                   ? 'ml-auto bg-brand text-white'
                   : 'bg-surface-2 text-fg'

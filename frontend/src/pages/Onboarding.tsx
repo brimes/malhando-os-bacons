@@ -56,7 +56,7 @@ export function OnboardingPage() {
       <div className="mx-auto max-w-lg">
         <header className="enter mb-8">
           <p className="mb-2 text-[13px] font-bold uppercase tracking-[0.06em] text-brand-fg">Etapa {profileComplete ? '2' : '1'} de 2</p>
-          <h1 className="num text-[34px] leading-[1.02] [overflow-wrap:break-word]">Vamos personalizar seu acompanhamento</h1>
+          <h1 className="num text-[28px] leading-[1.02] min-[360px]:text-[34px]">Vamos personalizar seu acompanhamento</h1>
           <div className="mt-5 grid grid-cols-2 gap-2" role="progressbar" aria-valuemin={1} aria-valuemax={2} aria-valuenow={profileComplete ? 2 : 1}>
             <div className="h-2 rounded-chip bg-brand-fg" />
             <div className={`h-2 rounded-chip ${profileComplete ? 'bg-brand-fg' : 'bg-surface-2'}`} />
@@ -139,7 +139,7 @@ export function OnboardingPage() {
 
             <div className="my-6 space-y-3">
               {state?.messages.map((item, index) => (
-                <div key={`${item.created_at}-${index}`} className={`max-w-[88%] rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${item.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface shadow-card text-fg'}`}>
+                <div key={`${item.created_at}-${index}`} className={`max-w-[88%] break-anywhere rounded-lg px-4 py-3 text-[15px] leading-[1.45] ${item.role === 'user' ? 'ml-auto bg-brand text-white' : 'bg-surface shadow-card text-fg'}`}>
                   {item.content}
                 </div>
               ))}
@@ -168,7 +168,7 @@ export function OnboardingPage() {
             {state.goal.feasibility_warning && <div className="mt-3 rounded-md bg-sun-soft p-3.5 text-[15px] leading-[1.45] text-sun">{state.goal.feasibility_warning}</div>}
             <div className="mt-5 grid grid-cols-2 gap-3 text-center">
               {goalMetrics.map((metric) => <div key={metric.label} className="rounded-md bg-surface-2 p-3"><p className="num text-[24px] leading-[1.1] text-brand-fg">{metric.value}</p><p className="mt-1 text-[13px] font-semibold text-muted">{metric.label}</p></div>)}
-              <div className="rounded-md bg-surface-2 p-3"><p className="num text-[24px] leading-[1.1] text-brand-fg">{state.goal.target_date ? new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '') : 'Definida'}</p><p className="mt-1 text-[13px] font-semibold text-muted">Data-meta</p></div>
+              <div className="rounded-md bg-surface-2 p-3"><p className="num text-[20px] leading-[1.1] text-brand-fg min-[360px]:text-[24px]">{state.goal.target_date ? new Date(`${state.goal.target_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '') : 'Definida'}</p><p className="mt-1 text-[13px] font-semibold text-muted">Data-meta</p></div>
             </div>
             <Button autoFocus size="lg" fullWidth onClick={() => navigate('/')} className="mt-6">Ir para o início</Button>
             <p className="mt-3 text-center text-[13px] text-muted">Você pode redefinir este objetivo pelo perfil.</p>
