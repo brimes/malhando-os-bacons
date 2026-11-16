@@ -336,7 +336,7 @@ func (h *WorkoutHandler) UpdateDate(w http.ResponseWriter, r *http.Request) {
 		   finished_at = CASE WHEN finished_at IS NULL THEN NULL ELSE LEAST(finished_at + ($3::timestamptz - date), $4::timestamptz) END,
 		   date = $3
 		 WHERE id = $1 AND user_id = $2 AND status = 'completed'
-		 RETURNING id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
+		 RETURNING id, user_id, name, date, COALESCE(notes, ''), training_plan_day_id, duration_minutes,
 		 status, started_at, finished_at, client_session_id, created_at`,
 		id, userID, newDate, now,
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
