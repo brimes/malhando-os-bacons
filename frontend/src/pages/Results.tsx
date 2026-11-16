@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -7,9 +7,10 @@ import { Button } from '../components/Button';
 import { CountUp } from '../components/CountUp';
 import { resultsApi } from '../api/results';
 import { getErrorMessage } from '../api/client';
+import { useCachedResource } from '../lib/useCachedResource';
 import { TrendChart } from '../components/perfil/TrendChart';
 import { Chevron, ErrorState, Icon, Notice, SectionTitle, Skeleton, fieldLabel, stagger } from '../components/perfil/ui';
-import type { MeasurementField, MetricSeries, ResultsData, SaveBodyMeasurementInput } from '../types';
+import type { BodyMeasurement, MeasurementField, MetricSeries, ResultsData, SaveBodyMeasurementInput } from '../types';
 
 const FIELDS: { key: MeasurementField; label: string; unit: string; step: number }[] = [
   { key: 'weight_kg', label: 'Peso', unit: 'kg', step: 0.1 },
@@ -115,9 +116,11 @@ function EmptyIllustration() {
 
 export function ResultsPage() {
   const navigate = useNavigate();
-  const [data, setData] = useState<ResultsData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Cache primeiro: a tela abre com o que o aparelho já tem e as escritas não esperam a rede.
+  const resource = useCachedResource<ResultsData>('/results', { fetcher: resultsApi.get });
+  const data = resource.data ?? null;
+  const isLoading = resource.isLoading;
+  const loadError = resource.error ?? (!isLoading && !data ? 'Ainda não há resultados salvos neste aparelho. Conecte-se uma vez para carregar.' : null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -125,15 +128,7 @@ export function ResultsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
 
-  const load = () => resultsApi.get()
-    .then((d) => { setData(d); setLoadError(null); })
-    .catch((e) => setLoadError(getErrorMessage(e)));
-
-  const reload = () => { setIsLoading(true); void load().finally(() => setIsLoading(false)); };
-
-  useEffect(() => {
-    load().finally(() => setIsLoading(false));
-  }, []);
+  const reload = () => { void resource.reload(); };
 
   // Pre-fills with the latest reading so only what changed has to be retyped.
   const latest = data?.measurements[0];
@@ -163,8 +158,7 @@ export function ResultsPage() {
     try {
       const input: SaveBodyMeasurementInput = { measured_at: date, notes };
       for (const { key } of FIELDS) input[key] = parseValue(values[key] ?? '');
-      await resultsApi.save(input);
-      await load();
+      resultsApi.save(input);
       setShowForm(false);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -173,14 +167,9 @@ export function ResultsPage() {
     }
   };
 
-  const remove = async (id: number) => {
+  const remove = (measurement: BodyMeasurement) => {
     if (!window.confirm('Apagar este registro?')) return;
-    try {
-      await resultsApi.delete(id);
-      await load();
-    } catch (requestError) {
-      setLoadError(getErrorMessage(requestError));
-    }
+    resultsApi.delete(measurement);
   };
 
   const series = data?.series ?? [];
@@ -285,7 +274,7 @@ export function ResultsPage() {
                         </div>
                         {measurement.notes && <p className="mt-2 text-[15px] leading-[1.45] text-muted">{measurement.notes}</p>}
                       </div>
-                      <button type="button" onClick={() => remove(measurement.id)}
+                      <button type="button" onClick={() => remove(measurement)}
                         className="press -mr-2 -mt-1 min-h-[48px] shrink-0 px-2 text-[15px] font-semibold text-danger">
                         Apagar
                       </button>

@@ -123,7 +123,8 @@ export function TrainingPlanDetailPage() {
     if (!window.confirm(`Excluir completamente o plano "${plan.name}"? Os treinos já realizados continuarão no histórico.`)) return;
     setIsDeleting(true);
     try {
-      await trainingPlansApi.delete(plan.id);
+      trainingPlansApi.delete(plan.id);
+      void trainingPlansCache.remove(plan.id);
       navigate('/workouts', { replace: true });
     } finally {
       setIsDeleting(false);
@@ -171,7 +172,7 @@ export function TrainingPlanDetailPage() {
       // Offline a resposta vem vazia (a mutação foi enfileirada): o fechamento
       // é aplicado no plano que já está em mãos, senão a lista principal
       // continuaria mostrando um plano que a pessoa acabou de fechar.
-      const archived = await trainingPlansApi.archive(plan.id);
+      const archived = trainingPlansApi.archive(plan.id);
       await rememberPlan(archived ?? { ...plan, archived_at: new Date().toISOString(), active: false });
       navigate('/workouts', { replace: true });
     } catch (requestError) {
@@ -184,7 +185,7 @@ export function TrainingPlanDetailPage() {
     setIsArchiving(true);
     setArchiveError(null);
     try {
-      const reopened = await trainingPlansApi.unarchive(plan.id) ?? { ...plan, archived_at: null, active: true };
+      const reopened = trainingPlansApi.unarchive(plan.id) ?? { ...plan, archived_at: null, active: true };
       await rememberPlan(reopened);
       setPlan(reopened);
     } catch (requestError) {

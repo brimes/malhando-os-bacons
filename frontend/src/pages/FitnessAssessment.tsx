@@ -6,12 +6,17 @@ import { Chip } from '../components/Chip';
 import { Ring } from '../components/Ring';
 import { Notice, SectionTitle, fieldLabel, stagger } from '../components/perfil/ui';
 import { apiClient, getErrorMessage } from '../api/client';
-import { useOnboardingStore } from '../stores/useOnboardingStore';
-import type { FitnessAssessment, SaveFitnessAssessmentInput } from '../types';
+import { enqueueWrite, resourceKeyForRequest } from '../lib/offline';
+import { useCachedResource } from '../lib/useCachedResource';
+import type { FitnessAssessment, OnboardingState, ResultsData, SaveFitnessAssessmentInput } from '../types';
+
+const clientId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
 export function FitnessAssessmentPage() {
-  const { fetchState } = useOnboardingStore();
-  const [assessments, setAssessments] = useState<FitnessAssessment[]>([]);
+  const history = useCachedResource<FitnessAssessment[]>('/onboarding/fitness-assessments', {
+    fetcher: async () => (await apiClient.get<FitnessAssessment[]>('/onboarding/fitness-assessments')).data,
+  });
+  const assessments = history.data ?? [];
   const [seconds, setSeconds] = useState(360);
   const [isRunning, setIsRunning] = useState(false);
   const [distance, setDistance] = useState('');
@@ -21,9 +26,6 @@ export function FitnessAssessmentPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadHistory = () => apiClient.get<FitnessAssessment[]>('/onboarding/fitness-assessments').then(({ data }) => setAssessments(data));
-
-  useEffect(() => { loadHistory(); }, []);
   useEffect(() => {
     if (!isRunning || seconds === 0) return;
     const timer = window.setInterval(() => setSeconds((value) => value - 1), 1000);
@@ -45,8 +47,25 @@ export function FitnessAssessmentPage() {
       perceived_exertion: Number(exertion),
     };
     try {
-      await apiClient.post('/onboarding/fitness-assessments', input);
-      await Promise.all([loadHistory(), fetchState()]);
+      // Grava no aparelho e envia em segundo plano; a tela não espera a rede.
+      const record: FitnessAssessment = {
+        distance_meters: input.distance_meters,
+        average_heart_rate: input.average_heart_rate ?? undefined,
+        post_heart_rate: input.post_heart_rate ?? undefined,
+        perceived_exertion: input.perceived_exertion,
+        performed_at: new Date().toISOString(),
+      };
+      enqueueWrite({
+        method: 'POST',
+        url: '/onboarding/fitness-assessments',
+        body: { ...input, client_id: clientId() },
+        idempotent: true,
+        optimistic: [
+          { key: resourceKeyForRequest('/onboarding/fitness-assessments'), apply: (cur?: FitnessAssessment[]) => [record, ...(cur ?? [])] },
+          { key: resourceKeyForRequest('/onboarding'), apply: (cur?: OnboardingState) => (cur ? { ...cur, fitness_assessment: record } : undefined) },
+          { key: resourceKeyForRequest('/results'), apply: (cur?: ResultsData) => (cur ? { ...cur, conditioning: [record, ...(cur.conditioning ?? [])] } : undefined) },
+        ],
+      });
       setDistance('');
       setAverageHeartRate('');
       setPostHeartRate('');

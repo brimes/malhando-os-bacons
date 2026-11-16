@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { nutritionApi } from '../api/nutrition';
 import { getErrorMessage } from '../api/client';
-import { hasCache, isNetworkOnline, newClientSessionId, patchCacheLocally, readThrough, resourceKeyForRequest } from '../lib/offline';
+import { dropQueuedMutations, enqueueWrite, hasCache, isNetworkOnline, newClientSessionId, patchCacheLocally, readCache, readThrough, resourceKeyForRequest } from '../lib/offline';
+import { normalizeRoute } from '../lib/requestPath';
+import { hasPendingMutationsFor } from '../lib/local/repo/shared';
+import { nutritionPlansCache } from '../lib/local/repo/nutritionPlans';
+import { queuedMutationsReferencingLocalId, registerLocalIdReconciler, remapQueuedRoute, routeIdPattern } from '../lib/local/remap';
 import type {
   CreateFoodItemInput,
   CreateFoodLogInput,
@@ -37,6 +41,8 @@ interface NutritionState {
 
   fetchPlans: () => Promise<void>;
   createPlan: (input: CreateNutritionPlanInput) => Promise<void>;
+  /** Ativa um plano: grava no aparelho e envia em segundo plano. */
+  activatePlan: (id: number) => Promise<void>;
   fetchTodayLogs: (date?: string) => Promise<void>;
   logFood: (input: CreateFoodLogInput) => Promise<FoodLog>;
   updateLog: (id: number, input: UpdateFoodLogInput, date?: string) => Promise<void>;
@@ -94,6 +100,12 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
 
   fetchPlans: async () => {
     set({ isLoading: !hasCache(plansKey()), error: null });
+    // Plano criado/ativado e ainda na fila: a lista do servidor está atrás.
+    const local = readCache<NutritionPlan[]>(plansKey());
+    if (local && hasPendingMutationsFor('/nutrition/plans')) {
+      set({ plans: local, activePlan: local.find((plan) => plan.active) ?? null, isLoading: false });
+      return;
+    }
     await readThrough<NutritionPlan[]>({
       resourceKey: plansKey(),
       fetcher: () => nutritionApi.listPlans(),
@@ -107,16 +119,40 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   },
 
   createPlan: async (input: CreateNutritionPlanInput) => {
-    set({ isLoading: true, error: null });
-    try {
-      const plan = await nutritionApi.createPlan(input);
-      const plans = [plan, ...get().plans.map((current) => ({ ...current, active: false }))];
-      set({ plans, activePlan: plan, isLoading: false });
-      patchCacheLocally(plansKey(), plans);
-    } catch (err) {
-      set({ error: getErrorMessage(err), isLoading: false });
-      throw err;
-    }
+    const base: NutritionPlan = {
+      id: 0,
+      user_id: 0,
+      name: input.name,
+      calories_target: input.calories_target,
+      protein_target: input.protein_target,
+      carbs_target: input.carbs_target,
+      fat_target: input.fat_target,
+      creation_method: 'manual',
+      active: true,
+      created_at: new Date().toISOString(),
+      meals: [],
+    };
+    const { entityId } = enqueueWrite({
+      method: 'POST',
+      url: '/nutrition/plans',
+      body: { ...input, client_id: newClientSessionId() },
+      idempotent: true,
+      createsEntity: true,
+    });
+    const plan = { ...base, id: entityId as number };
+    const known = get().plans.length ? get().plans : readCache<NutritionPlan[]>(plansKey()) ?? [];
+    const plans = [plan, ...known.map((current) => ({ ...current, active: false }))];
+    set({ plans, activePlan: plan, isLoading: false, error: null });
+    patchCacheLocally(plansKey(), plans);
+    for (const item of plans) void nutritionPlansCache.put(item);
+  },
+
+  activatePlan: async (id: number) => {
+    const plans = get().plans.map((plan) => ({ ...plan, active: plan.id === id }));
+    enqueueWrite({ method: 'PUT', url: `/nutrition/plans/${id}/activate`, idempotent: true });
+    set({ plans, activePlan: plans.find((plan) => plan.active) ?? null });
+    patchCacheLocally(plansKey(), plans);
+    for (const item of plans) void nutritionPlansCache.put(item);
   },
 
   fetchTodayLogs: async (date?: string) => {
@@ -293,35 +329,51 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     });
   },
 
+  // Favoritar nunca espera a rede: grava no aparelho (estrela muda na hora) e
+  // envia em segundo plano. Um favorito criado offline tem id negativo até o
+  // envio; desfavoritar antes disso apenas retira o envio da fila.
   toggleFavorite: async (entry: FoodLogHistoryEntry) => {
-    if (entry.favorite_id) {
-      await nutritionApi.deleteFavorite(entry.favorite_id);
+    const apply = (favoriteId: number | undefined) => {
       const logHistory = get()
         .logHistory
-        // A row that only existed because it was favorited (its own log
-        // history is gone) has nothing left to show once unfavorited.
-        .filter((item) => item.group_key !== entry.group_key || item.times_logged > 0)
-        .map((item) => (item.group_key === entry.group_key ? { ...item, favorite_id: undefined } : item));
+        // Linha que só existia por estar favoritada some ao desfavoritar.
+        .filter((item) => item.group_key !== entry.group_key || favoriteId !== undefined || item.times_logged > 0)
+        .map((item) => (item.group_key === entry.group_key ? { ...item, favorite_id: favoriteId } : item));
       set({ logHistory });
       patchCacheLocally(logHistoryKey(), logHistory);
+    };
+    if (entry.favorite_id) {
+      const id = entry.favorite_id;
+      if (id < 0) {
+        const pattern = routeIdPattern('nutrition/favorites', id);
+        dropQueuedMutations((m) => (
+          (m.method === 'POST' && normalizeRoute(m.url) === '/nutrition/favorites' && m.localEntityId === id) || pattern.test(normalizeRoute(m.url))
+        ));
+      } else {
+        enqueueWrite({ method: 'DELETE', url: `/nutrition/favorites/${id}`, idempotent: true });
+      }
+      apply(undefined);
       return;
     }
-    const favorite = await nutritionApi.createFavorite({
-      group_key: entry.group_key,
-      food_item_id: entry.food_item_id,
-      food_name: entry.food_name,
-      quantity_g: entry.quantity_g,
-      meal_type: entry.meal_type,
-      calories: entry.calories,
-      protein_g: entry.protein_g,
-      carbs_g: entry.carbs_g,
-      fat_g: entry.fat_g,
+    const { entityId } = enqueueWrite({
+      method: 'POST',
+      url: '/nutrition/favorites',
+      body: {
+        group_key: entry.group_key,
+        food_item_id: entry.food_item_id,
+        food_name: entry.food_name,
+        quantity_g: entry.quantity_g,
+        meal_type: entry.meal_type,
+        calories: entry.calories,
+        protein_g: entry.protein_g,
+        carbs_g: entry.carbs_g,
+        fat_g: entry.fat_g,
+      },
+      // O servidor grava por group_key: reenviar converge para o mesmo favorito.
+      idempotent: true,
+      createsEntity: true,
     });
-    const logHistory = get().logHistory.map((item) =>
-      item.group_key === entry.group_key ? { ...item, favorite_id: favorite.id } : item
-    );
-    set({ logHistory });
-    patchCacheLocally(logHistoryKey(), logHistory);
+    apply(entityId);
   },
 
   fetchRoutine: async () => {
@@ -350,3 +402,51 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     patchCacheLocally(missingDaysKey(), { days: missingDays });
   },
 }));
+
+// Quando o POST do favorito chega, o id real substitui o local: nos envios
+// ainda na fila (um DELETE feito depois) e na lista que a tela está mostrando.
+registerLocalIdReconciler({
+  matches: (mutation) => mutation.method === 'POST' && normalizeRoute(mutation.url) === '/nutrition/favorites',
+  reconcile: (mutation, response) => {
+    const localId = mutation.localEntityId;
+    const created = response as { id?: number } | undefined;
+    if (typeof localId !== 'number' || localId >= 0 || typeof created?.id !== 'number' || created.id <= 0) return;
+    const realId = created.id;
+    remapQueuedRoute('nutrition/favorites', localId, realId);
+    const swap = (list: FoodLogHistoryEntry[]) => list.map((item) => (item.favorite_id === localId ? { ...item, favorite_id: realId } : item));
+    useNutritionStore.setState((state) => ({ logHistory: swap(state.logHistory) }));
+    const cached = readCache<FoodLogHistoryEntry[]>(logHistoryKey());
+    if (cached) patchCacheLocally(logHistoryKey(), swap(cached));
+  },
+  dependents: (mutation, queue) => {
+    const localId = mutation.localEntityId;
+    if (typeof localId !== 'number' || localId >= 0) return [];
+    return queuedMutationsReferencingLocalId('nutrition/favorites', localId, queue);
+  },
+});
+
+// Plano manual criado offline: o id real troca o local nos envios pendentes
+// (ex.: ativar) e a cópia do servidor substitui a otimista.
+registerLocalIdReconciler({
+  matches: (mutation) => mutation.method === 'POST' && normalizeRoute(mutation.url) === '/nutrition/plans',
+  reconcile: (mutation, response) => {
+    const localId = mutation.localEntityId;
+    const created = response as NutritionPlan | undefined;
+    if (typeof localId !== 'number' || localId >= 0 || typeof created?.id !== 'number' || created.id <= 0) return;
+    remapQueuedRoute('nutrition/plans', localId, created.id);
+    const swap = (list: NutritionPlan[]) => list.map((item) => (item.id === localId ? { ...created, active: item.active } : item));
+    useNutritionStore.setState((state) => {
+      const plans = swap(state.plans);
+      return { plans, activePlan: plans.find((plan) => plan.active) ?? null };
+    });
+    const cached = readCache<NutritionPlan[]>(plansKey());
+    if (cached) patchCacheLocally(plansKey(), swap(cached));
+    void nutritionPlansCache.remove(localId);
+    void nutritionPlansCache.put(created);
+  },
+  dependents: (mutation, queue) => {
+    const localId = mutation.localEntityId;
+    if (typeof localId !== 'number' || localId >= 0) return [];
+    return queuedMutationsReferencingLocalId('nutrition/plans', localId, queue);
+  },
+});

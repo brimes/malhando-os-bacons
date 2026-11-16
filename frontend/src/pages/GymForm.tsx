@@ -8,6 +8,8 @@ import { Field, Skel, stagger } from '../components/treinos/states';
 import { Check, Trash } from '../components/treinos/icons';
 import { gymsApi } from '../api/gyms';
 import { getErrorMessage } from '../api/client';
+import { readCache, resourceKeyForRequest } from '../lib/offline';
+import type { Gym } from '../types';
 
 // Lista pronta para marcar com um toque — o texto livre abaixo dela cobre o
 // que faltar. Marcado e digitado viram a mesma lista de strings no servidor,
@@ -37,6 +39,16 @@ export function GymFormPage() {
   useEffect(() => {
     if (!id) return;
     let alive = true;
+    // Cache primeiro: a academia (inclusive uma criada offline) abre na hora.
+    const cached = readCache<Gym>(resourceKeyForRequest(`/gyms/${id}`))
+      ?? readCache<Gym[]>(resourceKeyForRequest('/gyms'))?.find((g) => g.id === Number(id));
+    if (cached) {
+      setName(cached.name);
+      setNotes(cached.notes);
+      setEquipment(cached.equipment);
+      setIsLoading(false);
+      return () => { alive = false; };
+    }
     gymsApi.get(Number(id)).then((gym) => {
       if (!alive) return;
       setName(gym.name);
@@ -71,8 +83,8 @@ export function GymFormPage() {
     setError(null);
     try {
       const input = { name: name.trim(), notes: notes.trim(), equipment };
-      if (isEditing) await gymsApi.update(Number(id), input);
-      else await gymsApi.create(input);
+      if (isEditing) gymsApi.update(Number(id), input);
+      else gymsApi.create(input);
       navigate('/gyms');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
@@ -86,7 +98,7 @@ export function GymFormPage() {
     if (!window.confirm(`Excluir a academia "${name}"? Planos que já a usam continuam como estão.`)) return;
     setIsDeleting(true);
     try {
-      await gymsApi.delete(Number(id));
+      gymsApi.delete(Number(id));
       navigate('/gyms', { replace: true });
     } catch (requestError) {
       setError(getErrorMessage(requestError));
