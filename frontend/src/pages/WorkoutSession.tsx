@@ -15,10 +15,11 @@ import { ExerciseVideoPlayer } from '../components/ExerciseVideoPlayer';
 import { ExerciseIllustration } from '../components/ExerciseIllustration';
 import { getErrorMessage } from '../api/client';
 import {
-  dropQueuedMutations,
   isLocalId,
-  isNetworkOnline,
+  onSetIdRemap,
   onWorkoutIdRemap,
+  readCache,
+  resourceKeyForRequest,
   storeLocalActiveWorkout,
 } from '../lib/offline';
 import {
@@ -206,14 +207,6 @@ function byOldestFirst(a: WorkoutSet, b: WorkoutSet) {
   return isLocalId(a.id) ? b.id - a.id : a.id - b.id;
 }
 
-/** Matches the queued POST that created a series, so undoing it drops the request. */
-function isQueuedSetFor(body: unknown, set: WorkoutSet) {
-  if (typeof body !== 'object' || body === null) return false;
-  const payload = body as { set_number?: unknown; training_plan_exercise_id?: unknown };
-  return payload.set_number === set.set_number
-    && payload.training_plan_exercise_id === set.training_plan_exercise_id;
-}
-
 function vibrate(pattern: number | number[], enabled: boolean) {
   if (!enabled) return;
   // Not available on desktop or iOS Safari; the visual cue carries it there.
@@ -358,8 +351,14 @@ export function WorkoutSessionPage() {
   // Load the open session plus the user's timing preferences, then pick the
   // phase timer up wherever it was when the app was last closed.
   useEffect(() => {
-    Promise.all([workoutsApi.active(), settingsApi.get().catch(() => DEFAULT_SETTINGS)])
+    // Settings: what is on the device now (or the defaults); the network copy,
+    // if it ever arrives, only affects the next phase. The screen never waits for it.
+    const cachedSettings = readCache<TrainingSettings>(resourceKeyForRequest('/settings'));
+    let settingsUpdate: ((value: TrainingSettings) => void) | null = null;
+    void settingsApi.get().then((fresh) => settingsUpdate?.(fresh)).catch(() => undefined);
+    Promise.all([workoutsApi.active(), Promise.resolve(cachedSettings ?? DEFAULT_SETTINGS)])
       .then(([session, loadedSettings]) => {
+        settingsUpdate = setSettings;
         if (!session) {
           setError('Nenhum treino em andamento.');
           // No open workout means whatever is stored belongs to a session that
@@ -414,6 +413,16 @@ export function WorkoutSessionPage() {
     ));
   }), []);
 
+  // Same for a series: once its queued POST reaches the server, the real id
+  // replaces the local one so undoing it later targets the right row.
+  useEffect(() => onSetIdRemap((localId, realId) => {
+    setActive((current) => (
+      current && current.workout.sets?.some((set) => set.id === localId)
+        ? { ...current, workout: { ...current.workout, sets: current.workout.sets.map((set) => (set.id === localId ? { ...set, id: realId } : set)) } }
+        : current
+    ));
+  }), []);
+
   // Mirrors the phase state to localStorage on every change, so closing the app
   // — or the system killing it in the background — costs nothing.
   useEffect(() => {
@@ -440,12 +449,6 @@ export function WorkoutSessionPage() {
   const restSeconds = currentExercise?.rest_seconds ?? 0;
   const plannedDuration = currentExercise?.duration_seconds ?? 0;
   const isTimed = currentExercise?.tracking_type === 'time';
-
-  const refresh = useCallback(async () => {
-    const session = await workoutsApi.active();
-    if (session) setActive(session);
-    return session;
-  }, []);
 
   // Applies a change to the running session in memory and to the cached snapshot
   // of /workouts/active. Offline the server cannot confirm anything, so this is
@@ -495,11 +498,9 @@ export function WorkoutSessionPage() {
         tracking_type: currentExercise.tracking_type,
         duration_seconds: secondsSpent > 0 ? secondsSpent : undefined,
       });
-      // A negative id means the POST is sitting in the offline queue. Re-reading
-      // the session would hand back a snapshot that predates this series and the
-      // screen would ask for the same one again, so it is applied locally.
-      if (isLocalId(recorded.id)) applySessionLocally([...completedSets, recorded]);
-      else await refresh();
+      // Local-first: the series is already in the slot and the POST is queued.
+      // Re-reading the session from the server would predate it.
+      applySessionLocally([...completedSets, recorded]);
       const wasLastSet = currentSetNumber >= currentExercise.sets;
       if (wasLastSet) {
         // Straight to the handover. Staying in the plain rest phase would show
@@ -515,14 +516,12 @@ export function WorkoutSessionPage() {
         startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');
       }
     } catch (requestError) {
-      // A rejected extra series means the screen was behind — resync and move on.
-      await refresh().catch(() => undefined);
       setError(getErrorMessage(requestError));
     } finally {
       isRecording.current = false;
       setIsBusy(false);
     }
-  }, [active, currentExercise, currentSetNumber, isTimed, weights, refresh, restSeconds, startPhase, settings]);
+  }, [active, currentExercise, currentSetNumber, isTimed, weights, restSeconds, startPhase, settings]);
 
   // Automatic transitions: end of the preparation countdown, end of a timed
   // execution, and end of the rest period.
@@ -598,21 +597,8 @@ export function WorkoutSessionPage() {
     if (!last) return;
     setIsBusy(true);
     try {
-      if (isLocalId(last.id)) {
-        // The series never reached the server, so undoing it means dropping the
-        // POST that is still queued — a DELETE would carry an id the server has
-        // never seen.
-        dropQueuedMutations((mutation) => (
-          mutation.method === 'POST'
-          && mutation.url === `/workouts/${active.workout.id}/sets`
-          && isQueuedSetFor(mutation.body, last)
-        ));
-        applySessionLocally(completedSets.filter((set) => set.id !== last.id));
-      } else {
-        await workoutsApi.deleteSet(active.workout.id, last.id);
-        if (isNetworkOnline()) await refresh();
-        else applySessionLocally(completedSets.filter((set) => set.id !== last.id));
-      }
+      await workoutsApi.deleteSet(active.workout.id, last);
+      applySessionLocally(completedSets.filter((set) => set.id !== last.id));
       if (last.training_plan_exercise_id) setCurrentExerciseId(last.training_plan_exercise_id);
       setFinishedExerciseId(null);
       startPhase(settings.countdown_seconds > 0 ? 'countdown' : 'executing');

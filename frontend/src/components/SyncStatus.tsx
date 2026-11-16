@@ -5,28 +5,14 @@ import { useOfflineStatus } from '../lib/offline';
  * synced — it only speaks up when there is something the person should know.
  */
 export function SyncBanner() {
-  const { isOnline, pendingCount, failedCount, isSyncing } = useOfflineStatus();
-  if (isOnline && pendingCount === 0 && failedCount === 0) return null;
-
-  const tone = !isOnline
-    ? 'bg-sun-soft text-sun'
-    : failedCount > 0
-      ? 'bg-danger-soft text-danger'
-      : 'bg-brand-soft text-brand-fg';
-
-  const message = !isOnline
-    ? pendingCount > 0
-      ? `Sem internet · ${pendingCount} ${pendingCount === 1 ? 'alteração aguardando' : 'alterações aguardando'}`
-      : 'Sem internet · você continua treinando normalmente'
-    : isSyncing
-      ? 'Sincronizando...'
-      : failedCount > 0
-        ? `${failedCount} ${failedCount === 1 ? 'alteração não enviada' : 'alterações não enviadas'} · veja em Configurações`
-        : `${pendingCount} ${pendingCount === 1 ? 'alteração pendente' : 'alterações pendentes'}`;
-
+  // Offline e pendências são invisíveis de propósito: o app funciona igual, e a
+  // fila só aparece em Configurações → Sincronização. Só o que FALHOU de vez
+  // (e precisa de uma decisão da pessoa) merece aviso aqui.
+  const { failedCount } = useOfflineStatus();
+  if (failedCount === 0) return null;
   return (
-    <div className={`mx-4 mt-3 rounded-sm px-3 py-2 text-[13px] font-medium ${tone}`}>
-      {message}
+    <div className="mx-4 mt-3 rounded-sm bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger">
+      {failedCount} {failedCount === 1 ? 'alteração não enviada' : 'alterações não enviadas'} · veja em Configurações
     </div>
   );
 }

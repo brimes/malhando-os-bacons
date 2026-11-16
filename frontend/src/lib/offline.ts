@@ -40,6 +40,9 @@ export {
   syncNow,
   flushQueue,
   flushQueueIfPending,
+  requestFlush,
+  isMutationInFlight,
+  cancelScheduledRetry,
   enqueueMutation,
   registerMutationExecutor,
   isConnectivityError,
@@ -58,7 +61,11 @@ export {
 export type { ReadThroughOptions, MutationExecutor } from './offlineSync';
 
 export {
+  appendLocalSet,
   applyChecklistLocally,
+  onSetIdRemap,
+  prepareLocalSession,
+  removeLocalSet,
   dayIdForActiveWorkout,
   dependentMutationsOf,
   findCachedPlanDay,
@@ -77,6 +84,9 @@ export {
 } from './workoutSession';
 
 export type { LocalCompletedWorkout } from './workoutSession';
+
+export { enqueueWrite } from './offlineWrite';
+export type { EnqueueWriteInput, EnqueueWriteResult, OptimisticUpdate } from './offlineWrite';
 
 export { useOfflineStatus, getOfflineStatus } from './useOfflineStatus';
 

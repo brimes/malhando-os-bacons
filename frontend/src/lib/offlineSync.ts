@@ -25,13 +25,60 @@ import {
   dependentMutationsOf,
   forgetLocalSessionIfMatches,
   isIdempotentRetryable,
+  isSessionRoute,
   parseSessionEndRoute,
+  parseSetDeleteRoute,
+  reconcileWorkoutSet,
   reconcileWorkoutStart,
   WorkoutStartConflictError,
 } from './workoutSession';
 
 /** A mutation that keeps failing on the server is dropped instead of blocking the queue forever. */
 const MAX_MUTATION_ATTEMPTS = 5;
+/**
+ * The workout session's own writes are local-first: the person already moved on
+ * and the app is the only place that data exists. A server that is down for a
+ * few minutes must not turn into a parked (failed) start with every series
+ * behind it, so these get many more tries — spaced by the backoff below.
+ */
+const MAX_SESSION_MUTATION_ATTEMPTS = 25;
+
+function maxAttemptsFor(mutation: PendingMutation): number {
+  return mutation.idempotent || isSessionRoute(mutation.url) ? MAX_SESSION_MUTATION_ATTEMPTS : MAX_MUTATION_ATTEMPTS;
+}
+
+// --- background retry -------------------------------------------------------
+// Nothing else wakes the queue after a failed attempt on a link that never
+// dropped (no `online` event, no response to piggyback on), so a failure
+// schedules its own retry with exponential backoff. Invisible to the screen.
+const RETRY_BASE_MS = 2_000;
+const RETRY_MAX_MS = 60_000;
+let retryAttempt = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+/** Mutation being sent right now, so an undo knows it can no longer just be dropped. */
+let inFlightLocalId: string | undefined;
+
+export function isMutationInFlight(localId: string): boolean {
+  return inFlightLocalId === localId;
+}
+
+export function cancelScheduledRetry(): void {
+  if (retryTimer !== undefined) clearTimeout(retryTimer);
+  retryTimer = undefined;
+  retryAttempt = 0;
+}
+
+function scheduleRetry(): void {
+  if (retryTimer !== undefined) return;
+  const delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** retryAttempt);
+  retryAttempt += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined;
+    // Forced: the attempt itself is the best probe there is. `isNetworkOnline`
+    // only says when it is worth trying, never whether the write is kept.
+    void flushQueue({ force: true });
+  }, delay);
+}
 /** Cap on how many resources `syncNow()` refreshes, newest first. */
 const MAX_TRACKED_RESOURCES = 24;
 /** Key used only to timestamp a successful queue flush. */
@@ -250,6 +297,8 @@ export function enqueueMutation(input: {
   params?: Record<string, unknown>;
   localEntityId?: number;
   trainingPlanDayId?: number;
+  dedupeKey?: string;
+  idempotent?: boolean;
 }): PendingMutation {
   localIdCounter += 1;
   const mutation: PendingMutation = {
@@ -262,6 +311,8 @@ export function enqueueMutation(input: {
     attempts: 0,
     localEntityId: input.localEntityId,
     trainingPlanDayId: input.trainingPlanDayId,
+    dedupeKey: input.dedupeKey,
+    idempotent: input.idempotent,
     userId: currentUserId() ?? undefined,
   };
   pushToQueue(mutation);
@@ -269,6 +320,8 @@ export function enqueueMutation(input: {
 }
 
 let runningFlush: Promise<void> | null = null;
+/** A write was queued while a flush was already running: run once more when it ends. */
+let flushAgain = false;
 
 /** Primeiro item da fila que pertence à conta logada agora. */
 function nextEligible(): PendingMutation | undefined {
@@ -282,12 +335,36 @@ function nextEligible(): PendingMutation | undefined {
  * mutation may depend on an earlier one (finishing a workout after its sets),
  * so the first failure stops the run and leaves the rest for the next attempt.
  */
-export function flushQueue(): Promise<void> {
+export function flushQueue(options: { force?: boolean } = {}): Promise<void> {
   if (runningFlush) return runningFlush;
-  runningFlush = runFlush().finally(() => {
+  runningFlush = runFlush(options.force === true).finally(() => {
     runningFlush = null;
+    if (flushAgain) {
+      flushAgain = false;
+      if (nextEligible() !== undefined) void flushQueue();
+    }
   });
   return runningFlush;
+}
+
+/**
+ * What a local-first action calls right after queueing its write. Never awaited
+ * by the screen: it returns immediately and the send happens in the background.
+ * `isNetworkOnline` only decides whether trying now is worthwhile; when it says
+ * no (or the attempt fails) a backoff timer keeps trying, so a "network that
+ * lies" costs nothing visible.
+ */
+export function requestFlush(): void {
+  if (runningFlush) {
+    flushAgain = true;
+    return;
+  }
+  if (nextEligible() === undefined) return;
+  if (!isNetworkOnline()) {
+    scheduleRetry();
+    return;
+  }
+  void flushQueue();
 }
 
 /**
@@ -325,20 +402,24 @@ function failMutationAndDependents(mutation: PendingMutation, reason: string): v
   for (const dependent of dependents) moveToFailed(dependent, explanation);
 }
 
-async function runFlush(): Promise<void> {
-  if (!executeMutation || !isNetworkOnline()) return;
+async function runFlush(force: boolean): Promise<void> {
+  if (!executeMutation || (!force && !isNetworkOnline())) return;
   if (nextEligible() === undefined) return;
 
   setSyncing(true);
   let replayed = 0;
+  let stalled = false;
   try {
     // Re-read the queue on every step: a screen may have appended to it while
     // the previous replay was in flight.
     for (let mutation = nextEligible(); mutation !== undefined; mutation = nextEligible()) {
       try {
+        inFlightLocalId = mutation.localId;
         const result = await executeMutation(mutation);
+        inFlightLocalId = undefined;
         removeFromQueue(mutation.localId);
         replayed += 1;
+        retryAttempt = 0;
         try {
           // Must happen before the next iteration: everything queued behind a
           // session start still addresses `/workouts/-1/...` and would 404
@@ -360,13 +441,15 @@ async function runFlush(): Promise<void> {
         // everywhere it was written" treatment, before the next queued
         // mutation (an edit or delete still addressing the local id) is replayed.
         runLocalIdReconcilers(mutation, result);
+        reconcileWorkoutSet(mutation, result);
       } catch (error) {
+        inFlightLocalId = undefined;
         if (isConnectivityError(error)) {
           // A timeout is not proof the write failed — the server may well have
           // applied it. Retrying would duplicate the series; parking it lets the
           // person decide. Anything else is a real disconnection: keep the queue.
           if (isTimeoutError(error)) {
-            if (!isIdempotentRetryable(mutation.url, mutation.body)) {
+            if (!mutation.idempotent && !isIdempotentRetryable(mutation.url, mutation.body)) {
               failMutationAndDependents(mutation, 'A resposta do servidor demorou demais. Não dá para saber se foi salvo, então não reenviamos automaticamente.');
               continue;
             }
@@ -374,7 +457,7 @@ async function runFlush(): Promise<void> {
             // counted so a server that always times out cannot wedge the queue —
             // and stopping here keeps the session's own writes behind it in order.
             const timedOutAttempts = mutation.attempts + 1;
-            if (timedOutAttempts >= MAX_MUTATION_ATTEMPTS) {
+            if (timedOutAttempts >= maxAttemptsFor(mutation)) {
               failMutationAndDependents(mutation, 'O servidor não respondeu depois de várias tentativas.');
               continue;
             }
@@ -382,9 +465,11 @@ async function runFlush(): Promise<void> {
               attempts: timedOutAttempts,
               lastError: 'O servidor demorou a responder. Vamos tentar de novo.',
             });
+            stalled = true;
             break;
           }
           reportNetworkFailure();
+          stalled = true;
           break;
         }
         const attempts = mutation.attempts + 1;
@@ -405,6 +490,7 @@ async function runFlush(): Promise<void> {
             attempts,
             lastError: 'O servidor recusou a sessão. Vamos tentar de novo depois.',
           });
+          stalled = true;
           break;
         }
         // Closing a session the server no longer has open is not a failure:
@@ -419,21 +505,31 @@ async function runFlush(): Promise<void> {
           replayed += 1;
           continue;
         }
+        // Undoing a series the server no longer has: the wanted end state
+        // ("that series is gone") already holds.
+        if (parseSetDeleteRoute(mutation.url) && status === 404) {
+          removeFromQueue(mutation.localId);
+          replayed += 1;
+          continue;
+        }
         // A 4xx will never succeed on replay (duplicate, stale, refused), so it
         // is parked as failed — along with anything that only made sense once
         // this one went through. A 5xx may be temporary and gets a few retries
         // before it is parked too — either way the queue never deadlocks.
-        if ((status >= 400 && status < 500) || attempts >= MAX_MUTATION_ATTEMPTS) {
+        if ((status >= 400 && status < 500) || attempts >= maxAttemptsFor(mutation)) {
           failMutationAndDependents(mutation, reason);
           continue;
         }
         patchQueuedMutation(mutation.localId, { attempts, lastError: reason });
+        stalled = true;
         break;
       }
     }
   } finally {
+    inFlightLocalId = undefined;
     setSyncing(false);
   }
+  if (stalled) scheduleRetry();
 
   if (replayed > 0) {
     markSynced(QUEUE_SYNC_KEY);

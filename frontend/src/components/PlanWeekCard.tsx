@@ -9,7 +9,6 @@ import type { PlanWeekProgress } from '../lib/planProgress';
 const WEEKDAY_INITIALS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 const WEEKDAY_NAMES = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
 
-const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 export function PlanWeekCard({ progress }: { progress: PlanWeekProgress }) {
   // Índice 0 é segunda, igual a `weekDays`; getDay() devolve 0 no domingo.
@@ -47,12 +46,6 @@ export function PlanWeekCard({ progress }: { progress: PlanWeekProgress }) {
           );
         })}
       </div>
-
-      {progress.pendingCount > 0 && (
-        <p className="mt-3 text-[13px] leading-[1.4] text-teal">
-          {progress.pendingCount} {plural(progress.pendingCount, 'treino contado aqui ainda não foi enviado', 'treinos contados aqui ainda não foram enviados')} ao servidor.
-        </p>
-      )}
     </Card>
   );
 }
