@@ -30,7 +30,7 @@ const ADJUST_EXAMPLES = [
 ];
 
 export function NutritionPlanPage() {
-  const { plans: storePlans, activePlan, isLoading, error: loadError, fetchPlans, createPlan } = useNutritionStore();
+  const { plans: storePlans, activePlan, isLoading, error: loadError, fetchPlans, createPlan, activatePlan } = useNutritionStore();
   const plans = storePlans ?? [];
 
   const [method, setMethod] = useState<'automatic' | 'manual'>('automatic');
@@ -99,8 +99,7 @@ export function NutritionPlanPage() {
   };
 
   const activate = async (id: number) => {
-    await nutritionApi.activate(id);
-    await fetchPlans();
+    await activatePlan(id);
   };
 
   const submitAdjust = async () => {

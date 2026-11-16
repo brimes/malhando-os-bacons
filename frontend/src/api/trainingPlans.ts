@@ -1,6 +1,32 @@
 import { apiClient } from './client';
-import { persistPlanDaysDurable } from '../lib/offline';
+import { enqueueWrite, persistPlanDaysDurable, readCache, resourceKeyForRequest } from '../lib/offline';
 import type { AutomaticTrainingPlanInput, DynamicTrainingPlanInput, TrainingPlan, TrainingPlanInput, TrainingPlanJob } from '../types';
+
+const LIST_KEY = resourceKeyForRequest('/training-plans');
+const ARCHIVED_KEY = resourceKeyForRequest('/training-plans', { archived: true });
+const detailKey = (id: number) => resourceKeyForRequest(`/training-plans/${id}`);
+
+function setArchived(id: number, archived: boolean): TrainingPlan | null {
+  const known = readCache<TrainingPlan>(detailKey(id))
+    ?? readCache<TrainingPlan[]>(LIST_KEY)?.find((p) => p.id === id)
+    ?? readCache<TrainingPlan[]>(ARCHIVED_KEY)?.find((p) => p.id === id);
+  const changed = known
+    ? { ...known, archived_at: archived ? new Date().toISOString() : null, active: !archived }
+    : null;
+  const without = (cur?: TrainingPlan[]) => (cur ? cur.filter((p) => p.id !== id) : undefined);
+  const withPlan = (cur?: TrainingPlan[]) => (cur && changed ? [changed, ...cur.filter((p) => p.id !== id)] : undefined);
+  enqueueWrite({
+    method: 'POST',
+    url: `/training-plans/${id}/${archived ? 'archive' : 'unarchive'}`,
+    idempotent: true,
+    optimistic: [
+      { key: LIST_KEY, apply: archived ? without : withPlan },
+      { key: ARCHIVED_KEY, apply: archived ? withPlan : without },
+      ...(changed ? [{ key: detailKey(id), apply: () => changed }] : []),
+    ],
+  });
+  return changed;
+}
 
 export const trainingPlansApi = {
   // Sem `archived`, o servidor já devolve só os não arquivados.
@@ -45,13 +71,21 @@ export const trainingPlansApi = {
   // Offline o POST vai para a fila e a resposta é 202 sem corpo (não há corpo
   // para o cliente inventar um plano otimista a partir dele), daí o `| null`:
   // quem chama aplica a mudança no plano que já tem em mãos.
-  archive: async (id: number): Promise<TrainingPlan | null> => (
-    await apiClient.post<TrainingPlan | null>(`/training-plans/${id}/archive`)
-  ).data,
-  unarchive: async (id: number): Promise<TrainingPlan | null> => (
-    await apiClient.post<TrainingPlan | null>(`/training-plans/${id}/unarchive`)
-  ).data,
-  delete: async (id: number) => {
-    await apiClient.delete(`/training-plans/${id}`);
+  // Local-first: o fechamento vale na hora (planos, arquivados e detalhe no
+  // cache) e o envio é em segundo plano — nunca espera a rede. Devolve o plano
+  // já alterado, ou `null` quando o aparelho não conhece o plano (quem chama
+  // aplica a mudança no plano que já tem em mãos).
+  archive: (id: number): TrainingPlan | null => setArchived(id, true),
+  unarchive: (id: number): TrainingPlan | null => setArchived(id, false),
+  delete: (id: number): void => {
+    enqueueWrite({
+      method: 'DELETE',
+      url: `/training-plans/${id}`,
+      idempotent: true,
+      optimistic: [
+        { key: LIST_KEY, apply: (cur?: TrainingPlan[]) => (cur ? cur.filter((p) => p.id !== id) : undefined) },
+        { key: ARCHIVED_KEY, apply: (cur?: TrainingPlan[]) => (cur ? cur.filter((p) => p.id !== id) : undefined) },
+      ],
+    });
   },
 };

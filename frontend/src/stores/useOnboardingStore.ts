@@ -1,9 +1,24 @@
 import { create } from 'zustand';
 import { apiClient, getErrorMessage } from '../api/client';
-import { hasCache, patchCacheLocally, readThrough, resourceKeyForRequest } from '../lib/offline';
-import type { OnboardingState, SaveProfileInput, ObjectiveMessageResponse } from '../types';
+import { enqueueWrite, hasCache, readCache, readThrough, resourceKeyForRequest } from '../lib/offline';
+import { hasPendingMutationsFor } from '../lib/local/repo/shared';
+import type { OnboardingState, SaveProfileInput, ObjectiveMessageResponse, UserProfile } from '../types';
 
 const ONBOARDING_KEY = resourceKeyForRequest('/onboarding');
+
+function ageFrom(birthDate: string): number | undefined {
+  const born = new Date(`${birthDate.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(born.getTime())) return undefined;
+  const now = new Date();
+  let age = now.getFullYear() - born.getFullYear();
+  if (now.getMonth() < born.getMonth() || (now.getMonth() === born.getMonth() && now.getDate() < born.getDate())) age -= 1;
+  return age;
+}
+
+/** O que o servidor devolveria: o corpo enviado sobre o perfil atual, com a idade recalculada. */
+function mergeProfile(current: UserProfile | undefined, input: SaveProfileInput): UserProfile {
+  return { ...current, ...input, age: ageFrom(input.birth_date) ?? current?.age } as UserProfile;
+}
 
 interface OnboardingStore {
   state: OnboardingState | null;
@@ -28,6 +43,12 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
   // of hanging on "Carregando...".
   fetchState: async () => {
     set({ isLoading: !hasCache(ONBOARDING_KEY), error: null });
+    // Perfil salvo e ainda na fila: a cópia do servidor está atrás e pisaria
+    // no que a pessoa acabou de gravar. Fica só a cópia local até a fila esvaziar.
+    if (hasCache(ONBOARDING_KEY) && hasPendingMutationsFor('/onboarding')) {
+      set({ state: readCache<OnboardingState>(ONBOARDING_KEY) ?? null, isLoading: false });
+      return;
+    }
     await readThrough<OnboardingState>({
       resourceKey: ONBOARDING_KEY,
       fetcher: async () => (await apiClient.get<OnboardingState>('/onboarding')).data,
@@ -37,15 +58,24 @@ export const useOnboardingStore = create<OnboardingStore>((set) => ({
     });
   },
 
+  // Grava no aparelho e envia em segundo plano: salvar o perfil nunca espera a
+  // rede. "Último vence": uma segunda gravação ainda na fila substitui a primeira.
   saveProfile: async (input) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
-      // Offline the PUT is queued and echoed back, so the profile on screen is
-      // the one that was just typed either way.
-      const { data } = await apiClient.put('/onboarding/profile', input);
+      enqueueWrite({
+        method: 'PUT',
+        url: '/onboarding/profile',
+        body: input,
+        dedupeKey: 'profile',
+        idempotent: true,
+        optimistic: [{
+          key: ONBOARDING_KEY,
+          apply: (cur?: OnboardingState) => (cur ? { ...cur, profile: mergeProfile(cur.profile, input) } : undefined),
+        }],
+      });
       set((current) => {
-        const state = current.state ? { ...current.state, profile: data } : null;
-        if (state) patchCacheLocally(ONBOARDING_KEY, state);
+        const state = current.state ? { ...current.state, profile: mergeProfile(current.state.profile, input) } : null;
         return { state, isLoading: false };
       });
     } catch (error) {

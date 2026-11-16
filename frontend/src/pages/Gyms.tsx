@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -6,25 +5,16 @@ import { Button } from '../components/Button';
 import { EmptyState, ErrorState, SkelRows, stagger } from '../components/treinos/states';
 import { Pin, Plus } from '../components/treinos/icons';
 import { gymsApi } from '../api/gyms';
-import { getErrorMessage } from '../api/client';
+import { useCachedResource } from '../lib/useCachedResource';
 import type { Gym } from '../types';
 
 export function GymsPage() {
   const navigate = useNavigate();
-  const [gyms, setGyms] = useState<Gym[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    setIsLoading(true);
-    setError(null);
-    gymsApi.list()
-      .then(setGyms)
-      .catch((requestError) => setError(getErrorMessage(requestError)))
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const resource = useCachedResource<Gym[]>('/gyms', { fetcher: gymsApi.list });
+  const gyms = resource.data ?? [];
+  const isLoading = resource.isLoading;
+  const error = resource.error;
+  const load = () => { void resource.reload(); };
 
   return (
     <>

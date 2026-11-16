@@ -6,7 +6,7 @@
 //   503     — servidor fora do ar
 // Em todos: a UI atualiza na hora, nenhuma mensagem de rede aparece, e após
 // religar a API cada POST/PUT/DELETE chega UMA vez e na ordem.
-//   BASE_URL=http://localhost:5173 node e2e/resto.spec.mjs [filtro-de-nome]
+//   BASE_URL=http://localhost:5173 node e2e/resto.e2e.mjs [filtro-de-nome]
 import { launch, newServer, newSession, setNetwork, waitFor, today, BASE, NETWORK_ERROR_RE } from './harness.mjs';
 
 const MODES = (process.env.MODES ?? 'offline,hang,503').split(',');
@@ -135,6 +135,8 @@ const FLOWS = [
   },
   {
     name: 'configurações: salvar',
+    // A seção "Chave de IA" da mesma tela avisa "precisa de internet": é IA, pode.
+    allowNetworkText: true,
     start: '/settings',
     ready: (p) => p.getByRole('button', { name: 'Salvar configurações' }).waitFor({ timeout: 8000 }).then(() => true, () => false),
     act: async (p) => {
@@ -147,9 +149,10 @@ const FLOWS = [
   },
   {
     name: 'academia: criar',
-    start: '/gyms/new',
-    ready: (p) => p.getByPlaceholder('Ex: Academia perto de casa').waitFor({ timeout: 8000 }).then(() => true, () => false),
+    start: '/gyms',
+    ready: (p) => visible(p, 'Academia Velha', 8000),
     act: async (p) => {
+      await p.getByRole('button', { name: 'Cadastrar academia' }).first().click();
       await p.getByPlaceholder('Ex: Academia perto de casa').fill('Academia Nova');
       await p.getByRole('button', { name: 'Cadastrar academia' }).click();
     },
@@ -159,9 +162,11 @@ const FLOWS = [
   },
   {
     name: 'academia: editar',
-    start: '/gyms/1',
-    ready: (p) => p.getByRole('button', { name: 'Salvar alterações' }).waitFor({ timeout: 8000 }).then(() => true, () => false),
+    start: '/gyms',
+    ready: (p) => visible(p, 'Academia Velha', 8000),
     act: async (p) => {
+      await p.getByText('Academia Velha').first().click();
+      await p.getByRole('button', { name: 'Salvar alterações' }).waitFor({ timeout: 3000 });
       await p.getByPlaceholder('Ex: Academia perto de casa').fill('Academia Renomeada');
       await p.getByRole('button', { name: 'Salvar alterações' }).click();
     },
@@ -221,7 +226,7 @@ async function runOne(browser, flow, mode) {
     await page.waitForTimeout(1500);
     const text = await page.locator('body').innerText();
     const m = text.match(NETWORK_ERROR_RE);
-    if (m) fails.push(`mensagem de rede visível: "${m[0]}"`);
+    if (m && !flow.allowNetworkText) fails.push(`mensagem de rede visível: "${m[0]}"`);
     if (errors.length) fails.push(`erro JS: ${errors[0].slice(0, 80)}`);
     await setNetwork(session, server, 'online');
     await page.evaluate(() => window.dispatchEvent(new Event('online'))).catch(() => {});

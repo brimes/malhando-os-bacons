@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { enqueueWrite, resourceKeyForRequest } from '../lib/offline';
 import type { TrainingSettings } from '../types';
 
 export const DEFAULT_SETTINGS: TrainingSettings = {
@@ -9,7 +10,16 @@ export const DEFAULT_SETTINGS: TrainingSettings = {
 
 export const settingsApi = {
   get: async (): Promise<TrainingSettings> => (await apiClient.get<TrainingSettings>('/settings')).data,
-  update: async (input: TrainingSettings): Promise<TrainingSettings> => (
-    await apiClient.put<TrainingSettings>('/settings', input)
-  ).data,
+  /** Estado atual, não evento: a última gravação na fila vence (dedupeKey) e reenviar converge. */
+  update: (input: TrainingSettings): TrainingSettings => {
+    enqueueWrite({
+      method: 'PUT',
+      url: '/settings',
+      body: input,
+      dedupeKey: 'settings',
+      idempotent: true,
+      optimistic: [{ key: resourceKeyForRequest('/settings'), apply: () => input }],
+    });
+    return input;
+  },
 };

@@ -8,25 +8,39 @@ import { ErrorState, Group, Notice, SectionTitle, Segmented, Skeleton, Toggle, s
 import { ExerciseVideoSettings } from '../components/ExerciseVideoSettings';
 import { DEFAULT_SETTINGS, settingsApi } from '../api/settings';
 import { getErrorMessage } from '../api/client';
+import { isConnectivityError, isNetworkOnline, readCache, resourceKeyForRequest } from '../lib/offline';
+import { hasPendingMutationsFor } from '../lib/local/repo/shared';
 import type { TrainingSettings } from '../types';
 
 const COUNTDOWN_OPTIONS = [0, 3, 5, 10, 15].map((value) => ({ value, label: value === 0 ? 'Sem' : `${value}s` }));
 
 export function SettingsPage() {
   const { hash } = useLocation();
-  const [settings, setSettings] = useState<TrainingSettings>(DEFAULT_SETTINGS);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedSettings = readCache<TrainingSettings>(resourceKeyForRequest('/settings'));
+  const [settings, setSettings] = useState<TrainingSettings>(cachedSettings ?? DEFAULT_SETTINGS);
+  const [isLoading, setIsLoading] = useState(cachedSettings === undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   const load = () => {
-    setIsLoading(true);
     setLoadError(null);
+    // Com cópia local a tela já está pronta: a rede só atualiza o cache, em
+    // segundo plano, e nunca pisa no que a pessoa está editando (nem numa
+    // gravação ainda na fila).
+    if (cachedSettings !== undefined) {
+      if (isNetworkOnline() && !hasPendingMutationsFor('/settings')) void settingsApi.get().catch(() => undefined);
+      return;
+    }
+    setIsLoading(true);
     settingsApi.get()
       .then(setSettings)
-      .catch((requestError) => setLoadError(getErrorMessage(requestError)))
+      .catch((requestError) => {
+        // Sem rede e sem cópia: usa o padrão em vez de travar a tela.
+        if (isConnectivityError(requestError)) return;
+        setLoadError(getErrorMessage(requestError));
+      })
       .finally(() => setIsLoading(false));
   };
   useEffect(load, []);
@@ -47,7 +61,7 @@ export function SettingsPage() {
     setIsSaving(true);
     setError(null);
     try {
-      setSettings(await settingsApi.update(settings));
+      setSettings(settingsApi.update(settings));
       setSaved(true);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
