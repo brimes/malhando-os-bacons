@@ -60,6 +60,29 @@ interface ArquivoLocal {
 /** nome do catálogo -> arquivo em disco. Montado do disco, no boot. */
 let indice = new Map<string, ArquivoLocal>();
 let indiceCarregado = false;
+let carregandoIndice: Promise<void> | null = null;
+
+// Quem depende do índice (o player, as Configurações) precisa saber quando ele
+// ficou pronto e quando um download o ampliou. `fonteLocal` é síncrona e lê
+// memória: sem este aviso, quem a chamou antes do readdir terminar fica com
+// "não há arquivo" para sempre.
+const ouvintes = new Set<() => void>();
+
+export function aoMudarIndice(ouvinte: () => void): () => void {
+  ouvintes.add(ouvinte);
+  return () => {
+    ouvintes.delete(ouvinte);
+  };
+}
+
+function avisarIndice(): void {
+  for (const ouvinte of [...ouvintes]) ouvinte();
+}
+
+/** Se o readdir inicial já terminou. Antes disso, "sem arquivo" não é resposta. */
+export function indiceEstaCarregado(): boolean {
+  return indiceCarregado;
+}
 
 /**
  * iOS leva mp4, Android leva webm.
@@ -113,8 +136,15 @@ async function garantirPasta(): Promise<void> {
  * vez de entrarem no índice: arquivo de 0 byte é pior que arquivo ausente,
  * porque o app acha que tem o vídeo e só descobre que não na hora de tocar.
  */
-export async function carregarIndice(): Promise<void> {
-  if (indiceCarregado) return;
+export function carregarIndice(): Promise<void> {
+  if (indiceCarregado) return Promise.resolve();
+  carregandoIndice ??= montarIndice().finally(() => {
+    carregandoIndice = null;
+  });
+  return carregandoIndice;
+}
+
+async function montarIndice(): Promise<void> {
   await garantirPasta();
   const novo = new Map<string, ArquivoLocal>();
   try {
@@ -132,8 +162,12 @@ export async function carregarIndice(): Promise<void> {
   } catch {
     // Pasta inacessível: segue com índice vazio. Sem vídeo o app funciona.
   }
+  // Download que terminou durante o readdir já está em `indice`: mescla em vez
+  // de sobrescrever, senão o arquivo some do índice até o próximo boot.
+  for (const [nome, arquivo] of indice) if (!novo.has(nome)) novo.set(nome, arquivo);
   indice = novo;
   indiceCarregado = true;
+  avisarIndice();
 }
 
 async function removerArquivo(nomeArquivo: string): Promise<void> {
@@ -303,6 +337,7 @@ async function baixarUm(nomeCatalogo: string, url: string, formato: 'webm' | 'mp
       return false;
     }
     indice.set(nomeCatalogo, { uri: info.uri, tamanho: info.size });
+    avisarIndice();
     return true;
   } catch {
     await removerArquivo(arquivo);
@@ -368,4 +403,5 @@ export async function limparVideos(): Promise<void> {
     await removerArquivo(nomeDeArquivo(nome, formato));
   }
   indice = new Map();
+  avisarIndice();
 }

@@ -5,6 +5,7 @@ import { SectionTitle, Toggle } from './perfil/ui';
 import {
   baixarAcervo,
   espacoOcupado,
+  aoMudarIndice,
   limparVideos,
   obterCatalogo,
   ErroDiscoCheio,
@@ -40,6 +41,8 @@ export function ExerciseVideoSettings() {
 
   useEffect(() => {
     void atualizar();
+    // O download em segundo plano amplia o índice: mantém o contador vivo.
+    return aoMudarIndice(() => void atualizar());
   }, [atualizar]);
 
   const baixar = async () => {
@@ -76,14 +79,14 @@ export function ExerciseVideoSettings() {
       <Card className="space-y-4">
         <div>
           <p className="num text-[32px] leading-[1.05] text-fg">
-            {uso === null ? '...' : uso.arquivos}
+            {uso === null ? '...' : total ? `${uso.arquivos} de ${total}` : uso.arquivos}
             <span className="ml-2 font-sans text-[15px] font-semibold text-muted">
               {uso === null ? 'calculando' : `vídeo${uso.arquivos === 1 ? '' : 's'} no aparelho, ${formatarBytes(uso.bytes)}`}
             </span>
           </p>
           <p className="mt-2 text-[15px] leading-[1.45] text-muted">
             Ficam guardados no aparelho para tocar sem internet, inclusive em modo avião.
-            {faltam ? ` Faltam ${faltam}.` : ''}
+            {faltam ? ` Faltam ${faltam}: com internet, o download continua sozinho em segundo plano.` : ''}
           </p>
         </div>
       </Card>

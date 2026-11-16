@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiClient } from '../api/client';
-import { formatoDaPlataforma, fonteLocal } from '../lib/videos/videoStore';
+import { aoMudarIndice, carregarIndice, formatoDaPlataforma, fonteLocal, indiceEstaCarregado } from '../lib/videos/videoStore';
 import { isNetworkOnline } from '../lib/offline';
 import type { ExerciseVideo } from '../types';
 
 const TENTATIVAS_MAX = 3;
 const ESPERA_ENTRE_TENTATIVAS_MS = 5000;
+/** "Rede que mente": conectado no sistema, mas a assinatura não volta. */
+export const LIMITE_ASSINATURA_MS = 5000;
 
 /**
  * O vídeo em loop demonstrando o movimento.
@@ -21,6 +23,13 @@ const ESPERA_ENTRE_TENTATIVAS_MS = 5000;
 export function ExerciseVideoPlayer({ video, className = '' }: { video?: ExerciseVideo; className?: string }) {
   const [fonte, setFonte] = useState<string | null>(() => fonteLocal(video));
   const [falhou, setFalhou] = useState(false);
+  // O índice vem de um readdir assíncrono. Enquanto ele não termina, "sem
+  // arquivo" não é resposta: mostra esqueleto, nunca "indisponível".
+  const [indicePronto, setIndicePronto] = useState(() => indiceEstaCarregado());
+  // Muda a cada alteração do índice (pronto, download concluído) para
+  // re-resolver a fonte.
+  const [versaoIndice, setVersaoIndice] = useState(0);
+  const [assinaturaLenta, setAssinaturaLenta] = useState(false);
   // Acompanha a rede para o estado "indisponível offline" aparecer e sumir sozinho.
   const [online, setOnline] = useState(() => isNetworkOnline());
   // Falha de assinatura ou de reprodução com rede: tenta de novo algumas vezes
@@ -39,6 +48,17 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
   }, []);
 
   useEffect(() => {
+    const atualizar = () => {
+      setIndicePronto(indiceEstaCarregado());
+      setVersaoIndice((n) => n + 1);
+    };
+    const parar = aoMudarIndice(atualizar);
+    // Idempotente: garante o índice mesmo se a sincronização não o iniciou.
+    void carregarIndice().then(atualizar);
+    return parar;
+  }, []);
+
+  useEffect(() => {
     const atualizar = () => setOnline(isNetworkOnline());
     window.addEventListener('online', atualizar);
     window.addEventListener('offline', atualizar);
@@ -50,21 +70,28 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
 
   useEffect(() => {
     setFalhou(false);
+    setAssinaturaLenta(false);
     const local = fonteLocal(video);
     setFonte(local);
-    if (local || !video || !isNetworkOnline()) return;
+    if (local || !video || !indicePronto || !isNetworkOnline()) return;
 
     // Ainda não baixado: pede uma URL assinada só para este. O download em
     // segundo plano segue no seu ritmo e, na próxima vez, o arquivo já está
     // aqui e este caminho não roda.
     const objeto = formatoDaPlataforma() === 'mp4' ? video.mp4 : video.webm;
     let cancelado = false;
+    const prazo = window.setTimeout(() => {
+      if (!cancelado && montado.current) setAssinaturaLenta(true);
+    }, LIMITE_ASSINATURA_MS);
     apiClient
       .post<{ urls: Record<string, string> }>('/exercise-videos/urls', { objetos: [objeto] })
       .then(({ data }) => {
         if (cancelado || !montado.current) return;
         const url = data.urls?.[objeto];
-        if (url) setFonte(url);
+        if (url) {
+          setAssinaturaLenta(false);
+          setFonte(url);
+        }
         else setFalhou(true);
       })
       .catch(() => {
@@ -72,8 +99,11 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
       });
     return () => {
       cancelado = true;
+      window.clearTimeout(prazo);
     };
-  }, [video, online, tentativa]);
+    // `fonteLocal` é lida de memória; a versão do índice é o que a invalida.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [video, online, tentativa, indicePronto, versaoIndice]);
 
   useEffect(() => setTentativa(0), [video]);
 
@@ -91,7 +121,8 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
   // encontramos o vídeo" (recusa gravada, `video_status`), que é decidido pelo
   // servidor e tratado em `ExerciseIllustration`: aqui a área nunca fica vazia.
   if (falhou || !fonte) {
-    const semRede = !online && !fonte;
+    const semRede = indicePronto && !fonte && (!online || assinaturaLenta);
+    const aguardandoIndice = !indicePronto && !fonte;
     return (
       <div
         role="status"
@@ -103,7 +134,7 @@ export function ExerciseVideoPlayer({ video, className = '' }: { video?: Exercis
             : <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M10 9.5v5l4.5-2.5z" /></>}
         </svg>
         <p className="text-[13px] font-semibold leading-tight text-muted">
-          {semRede ? 'Vídeo indisponível offline' : falhou && tentativa >= TENTATIVAS_MAX ? 'Vídeo indisponível no momento' : 'Carregando vídeo…'}
+          {semRede ? 'Conecte-se à internet para baixar este vídeo' : aguardandoIndice ? 'Carregando vídeo…' : falhou && tentativa >= TENTATIVAS_MAX ? 'Vídeo indisponível no momento' : 'Carregando vídeo…'}
         </p>
       </div>
     );

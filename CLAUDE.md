@@ -60,6 +60,11 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
   paralela do que foi baixado, porque ela poderia discordar do disco. Arquivo
   abaixo de 1 KB é apagado em vez de indexado: um 403 vira arquivo pequeno
   gravado com sucesso, e o app acharia que tem o vídeo.
+- **O player espera o índice do disco.** `fonteLocal` é síncrona e lê memória, e o
+  índice vem de um `readdir` assíncrono: "indisponível" só pode ser decidido com
+  o índice carregado E arquivo ausente E sem rede (ou assinatura >5s). Antes
+  disso é esqueleto. O player assina `aoMudarIndice` para re-resolver. Só se
+  apaga arquivo <1KB ou por "Apagar vídeos" em Configurações; logout não toca.
 - **Assina uma vez, no download; nunca na reprodução.** Assinatura V4 escrita
   sobre a stdlib (`gcs_signer.go`) — é RSA-SHA256 sobre uma string montada por
   regra pública, e `cloud.google.com/go/storage` traria uma árvore enorme para
