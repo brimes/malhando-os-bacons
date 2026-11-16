@@ -12,6 +12,7 @@ import { workoutsApi } from '../../../api/workouts';
 import type { Workout } from '../../../types';
 import { todayLocalDate } from '../../date';
 import { isNetworkOnline } from '../../offline';
+import { localDay } from '../../workoutDateMath';
 import { offlineReady } from '../../offlineBoot';
 import { EntityCache } from '../entityStore';
 import { applyPendingToWindow, applyPendingWorkoutDates, dayWindow, rangeWindow, registerWorkoutPool } from '../../pendingWorkoutDates';
@@ -44,12 +45,21 @@ export function listWorkouts(): Workout[] {
   return applyPendingWorkoutDates(workoutsCache.getAll());
 }
 
+// O filtro por dia é feito AQUI, sempre, pelo dia LOCAL do aparelho:
+// `applyPendingToWindow` só filtra quando há troca de data pendente (sem
+// nenhuma, devolve a lista como veio, que para a resposta do servidor já
+// filtrada é o certo, mas para a base local inteira devolveria tudo).
 export function listByDate(date: string): Workout[] {
-  return applyPendingToWindow(workoutsCache.getAll(), dayWindow(date));
+  return applyPendingToWindow(workoutsCache.getAll(), dayWindow(date))
+    .filter((workout) => localDay(workout.date) === date);
 }
 
 export function listByRange(from: string, to: string): Workout[] {
   return applyPendingToWindow(workoutsCache.getAll(), rangeWindow(from, to))
+    .filter((workout) => {
+      const day = localDay(workout.date);
+      return day >= from && day <= to;
+    })
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
@@ -79,7 +89,7 @@ export async function pullWorkouts(windowDays = WORKOUTS_WINDOW_DAYS): Promise<v
   try {
     const workouts = await workoutsApi.listRange(from, to, controller?.signal);
     await workoutsCache.replaceWindow(workouts, (workout) => {
-      const day = String(workout.date).slice(0, 10);
+      const day = localDay(workout.date);
       return day >= from && day <= to;
     });
   } catch {

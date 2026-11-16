@@ -16,7 +16,7 @@ import type { DashboardData, TrainingPlan, Workout, WorkoutCalendarData, Workout
 import type { FailedMutation, PendingMutation } from '../types/offline';
 import { useMemo } from 'react';
 import { useOfflineStore } from './offlineStore';
-import { adjustStats, lastDone, monthKey, shiftWorkout } from './workoutDateMath';
+import { adjustStats, lastDone, localDay, monthKey, shiftWorkout } from './workoutDateMath';
 import { startOfWeek } from './planProgress';
 
 export interface PendingDateChange {
@@ -70,9 +70,13 @@ export function registerWorkoutPool(source: () => Workout[]): void {
   poolSource = source;
 }
 
-// O dia "do calendário" é o do servidor (`date::date`) e o de `listByDate`: os
-// 10 primeiros caracteres do timestamp, nunca o dia local do aparelho.
-const calendarDay = (value: string | Date): string => (typeof value === 'string' ? value : value.toISOString()).slice(0, 10);
+// O dia "do calendário" é o dia LOCAL do aparelho — o mesmo em que o servidor
+// agrupa (header X-Timezone). Nunca `slice(0, 10)` de um timestamp: isso é o dia
+// em UTC e, após 21h em Brasília, cai no dia seguinte. Uma data pura
+// (`YYYY-MM-DD`) já é um dia e passa como está.
+const BARE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const calendarDay = (value: string | Date): string =>
+  typeof value === 'string' && BARE_DAY.test(value) ? value : localDay(value);
 const dayOf = (workout: Workout): string => calendarDay(workout.date);
 
 function bySeenDate(a: Workout, b: Workout): number {

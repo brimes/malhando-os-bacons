@@ -72,20 +72,24 @@ func (h *WorkoutHandler) List(w http.ResponseWriter, r *http.Request) {
 		from, to = &parsedFrom, &parsedTo
 	}
 
+	// O dia de um treino é o dia no fuso do aparelho (X-Timezone), não o do
+	// Postgres (UTC): senão o treino das 22h de Brasília vira o dia seguinte.
+	tz, _ := requestTimeZone(r)
+
 	rows, err := h.db.Pool.Query(r.Context(),
 		`SELECT w.id, w.user_id, w.name, w.date, w.notes, w.training_plan_day_id, w.duration_minutes,
 		 w.status, w.started_at, w.finished_at, w.client_session_id, w.created_at,
 		 (SELECT COUNT(*) FROM workout_sets ws WHERE ws.workout_id = w.id) AS set_count
 		 FROM workouts w
 		 WHERE w.user_id = $1 AND w.status = 'completed'
-		   AND ($2::date IS NULL OR w.date::date = $2::date)
-		   AND ($3::date IS NULL OR w.date::date >= $3::date)
-		   AND ($4::date IS NULL OR w.date::date <= $4::date)
+		   AND ($2::date IS NULL OR (w.date AT TIME ZONE $5::text)::date = $2::date)
+		   AND ($3::date IS NULL OR (w.date AT TIME ZONE $5::text)::date >= $3::date)
+		   AND ($4::date IS NULL OR (w.date AT TIME ZONE $5::text)::date <= $4::date)
 		 ORDER BY w.date DESC
 		 LIMIT CASE WHEN $3::date IS NOT NULL THEN 500
 		             WHEN $2::date IS NULL THEN 50
 		             ELSE 100 END`,
-		userID, day, from, to,
+		userID, day, from, to, tz,
 	)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch workouts"})
@@ -380,6 +384,7 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var stats models.WorkoutStats
+	tz, loc := requestTimeZone(r)
 
 	// Total workouts
 	h.db.Pool.QueryRow(r.Context(),
@@ -388,12 +393,12 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	// This week
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $2::text)::date >= date_trunc('week', (NOW() AT TIME ZONE $2::text)::date::timestamp)::date`, userID, tz,
 	).Scan(&stats.WorkoutsThisWeek)
 
 	// This month
 	h.db.Pool.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('month', CURRENT_DATE)`, userID,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $2::text)::date >= date_trunc('month', (NOW() AT TIME ZONE $2::text)::date::timestamp)::date`, userID, tz,
 	).Scan(&stats.WorkoutsThisMonth)
 
 	// Total sets and volume
@@ -406,19 +411,19 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 	// Current streak
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT DISTINCT date::date FROM workouts WHERE user_id = $1 AND status = 'completed' ORDER BY date::date DESC`,
-		userID,
+		`SELECT DISTINCT (date AT TIME ZONE $2::text)::date AS dia FROM workouts
+		 WHERE user_id = $1 AND status = 'completed' ORDER BY dia DESC`,
+		userID, tz,
 	)
 	if err == nil {
 		defer rows.Close()
 		streak := 0
-		expectedDate := time.Now().Truncate(24 * time.Hour)
+		expectedDate := localDate(time.Now(), loc)
 		for rows.Next() {
 			var d time.Time
 			if err := rows.Scan(&d); err != nil {
 				break
 			}
-			d = d.Truncate(24 * time.Hour)
 			if d.Equal(expectedDate) || d.Equal(expectedDate.AddDate(0, 0, -1)) {
 				streak++
 				expectedDate = d.AddDate(0, 0, -1)
@@ -434,16 +439,26 @@ func (h *WorkoutHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 func (h *WorkoutHandler) Calendar(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.GetUserID(r.Context())
-	start, end, err := parseMonth(r.URL.Query().Get("month"))
+	tz, loc := requestTimeZone(r)
+	month := r.URL.Query().Get("month")
+	if month == "" {
+		month = time.Now().In(loc).Format("2006-01")
+	}
+	start, end, err := parseMonth(month)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid month format, use YYYY-MM"})
 		return
 	}
 
+	// Mês e dia no fuso do aparelho: o mesmo critério da lista do dia, para o
+	// calendário nunca marcar um dia que a lista não mostra.
 	rows, err := h.db.Pool.Query(r.Context(),
-		`SELECT date::date, COUNT(*) FROM workouts
-		 WHERE user_id = $1 AND status = 'completed' AND date >= $2 AND date < $3
-		 GROUP BY date::date ORDER BY date::date`, userID, start, end)
+		`SELECT dia, COUNT(*) FROM (
+		   SELECT (date AT TIME ZONE $4::text)::date AS dia FROM workouts
+		   WHERE user_id = $1 AND status = 'completed'
+		 ) t
+		 WHERE dia >= $2::date AND dia < $3::date
+		 GROUP BY dia ORDER BY dia`, userID, start, end, tz)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to fetch workout calendar"})
 		return

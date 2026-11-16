@@ -136,12 +136,24 @@ function buildOptimisticPayload(config: OfflineAwareConfig, method: MutationMeth
   return payload;
 }
 
+function deviceTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Attach JWT token to every request
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('mob_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // O dia de um treino é o dia LOCAL do aparelho: o servidor agrupa no fuso
+  // informado aqui. Header (e não query) para não mexer nas chaves de cache.
+  const timeZone = deviceTimeZone();
+  if (timeZone && config.headers) config.headers['X-Timezone'] = timeZone;
   return config;
 });
 

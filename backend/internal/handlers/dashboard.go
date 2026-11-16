@@ -25,7 +25,9 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	today := time.Now()
+	tz, loc := requestTimeZone(r)
+	// Sem ?date=, "hoje" é o dia no fuso do aparelho, nunca o do servidor.
+	today := localDate(time.Now(), loc)
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
 		parsed, err := time.Parse("2006-01-02", dateStr)
 		if err != nil {
@@ -46,8 +48,8 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	var workout models.Workout
 	err := h.db.Pool.QueryRow(ctx,
 		`SELECT id, user_id, name, date, notes, created_at FROM workouts
-		 WHERE user_id = $1 AND status = 'completed' AND date::date = $2::date ORDER BY created_at DESC LIMIT 1`,
-		userID, today,
+		 WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $3::text)::date = $2::date ORDER BY created_at DESC LIMIT 1`,
+		userID, today, tz,
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes, &workout.CreatedAt)
 	if err == nil {
 		resp.TodayWorkout = &workout
@@ -59,8 +61,8 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	).Scan(&resp.WorkoutStats.TotalWorkouts)
 
 	h.db.Pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', $2::date)`,
-		userID, today,
+		`SELECT COUNT(*) FROM workouts WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $3::text)::date >= date_trunc('week', $2::date)::date`,
+		userID, today, tz,
 	).Scan(&resp.WorkoutStats.WorkoutsThisWeek)
 
 	h.db.Pool.QueryRow(ctx,
@@ -80,8 +82,8 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	// dias forem consecutivos, e é isso que o GROUP BY agrupa.
 	h.db.Pool.QueryRow(ctx,
 		`WITH dias AS (
-		   SELECT DISTINCT date::date AS dia FROM workouts
-		   WHERE user_id = $1 AND status = 'completed' AND date::date <= $2::date
+		   SELECT DISTINCT (date AT TIME ZONE $3::text)::date AS dia FROM workouts
+		   WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $3::text)::date <= $2::date
 		 ), blocos AS (
 		   SELECT dia, dia - (ROW_NUMBER() OVER (ORDER BY dia))::int AS bloco FROM dias
 		 ), atual AS (
@@ -89,14 +91,14 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		 )
 		 SELECT COALESCE((SELECT tamanho FROM atual
 		   WHERE fim >= $2::date - 1 ORDER BY fim DESC LIMIT 1), 0)`,
-		userID, today,
+		userID, today, tz,
 	).Scan(&resp.WorkoutStats.Streak)
 
 	// Weekly workouts
 	wRows, err := h.db.Pool.Query(ctx,
 		`SELECT id, user_id, name, date, notes, created_at FROM workouts
-		 WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', CURRENT_DATE) ORDER BY date DESC`,
-		userID,
+		 WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $3::text)::date >= date_trunc('week', $2::date)::date ORDER BY date DESC`,
+		userID, today, tz,
 	)
 	if err == nil {
 		defer wRows.Close()
@@ -143,7 +145,7 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		resp.TodaySteps = &steps
 	}
 
-	h.fillTrainingSummary(r, userID, today, resp.TodayWorkout != nil, &resp)
+	h.fillTrainingSummary(r, userID, today, tz, loc, resp.TodayWorkout != nil, &resp)
 
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -152,14 +154,16 @@ func (h *DashboardHandler) Get(w http.ResponseWriter, r *http.Request) {
 // which workout is due, how long since the last one, and how the week is going.
 // today is the caller's local date (see the ?date= handling in Get), not the
 // server's clock, so this must be consistent through midnight UTC.
-func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, today time.Time, trainedToday bool, resp *models.DashboardResponse) {
+func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, today time.Time, tz string, loc *time.Location, trainedToday bool, resp *models.DashboardResponse) {
 	ctx := r.Context()
 
 	var lastDone time.Time
 	if err := h.db.Pool.QueryRow(ctx,
 		`SELECT MAX(date) FROM workouts WHERE user_id = $1 AND status = 'completed'`,
 		userID).Scan(&lastDone); err == nil && !lastDone.IsZero() {
-		days := int(time.Since(lastDone).Hours() / 24)
+		// Dias de calendário no fuso do aparelho, não blocos de 24h: treinar
+		// às 22h e abrir o app às 8h do dia seguinte é "1 dia", não "0".
+		days := int(today.Sub(localDate(lastDone, loc)).Hours() / 24)
 		if days < 0 {
 			days = 0
 		}
@@ -214,8 +218,8 @@ func (h *DashboardHandler) fillTrainingSummary(r *http.Request, userID int64, to
 	var doneThisWeek int
 	_ = h.db.Pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM workouts
-		 WHERE user_id = $1 AND status = 'completed' AND date >= date_trunc('week', $2::date)`,
-		userID, today).Scan(&doneThisWeek)
+		 WHERE user_id = $1 AND status = 'completed' AND (date AT TIME ZONE $3::text)::date >= date_trunc('week', $2::date)::date`,
+		userID, today, tz).Scan(&doneThisWeek)
 
 	remaining := targetPerWeek - doneThisWeek
 	if remaining < 0 {

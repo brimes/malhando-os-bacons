@@ -37,6 +37,7 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 - **Mudar a data de um treino é `PUT /workouts/{id}/date`** (não PATCH: o CORS só libera GET/POST/PUT/DELETE; e o PUT `/workouts/{id}` sobrescreve nome e notas). Tudo que deriva da data (semana, sequência, `last_done_at`, calendário) é calculado de `workouts.date`: mover a data basta, não há nada materializado.
 - **Auto-fim de treino esquecido** (`lib/autoFinish.ts`): sessão aberta há mais de 3× o estimado (`session_duration_minutes` do plano; sem ele, séries×(45 s+descanso), mínimo 30 min) é fechada pelo app via `enqueueWrite` em `/complete`, com as séries restantes na última carga e `finished_at` = início + estimado (nunca a hora da reabertura, que jogava o treino para o dia seguinte). O aviso aparece uma vez (flag em localStorage).
 - **"Hoje" é sempre a data local do aparelho**; o servidor nunca decide o dia do usuário pelo próprio relógio (UTC). O app manda `today`; sem ele, o servidor usa Brasília.
+- **O dia de um treino é o dia local do aparelho.** O app manda `X-Timezone` (IANA) e o servidor agrupa/filtra por `(date AT TIME ZONE $tz)::date` (`handlers/timezone.go`), nunca `date::date` (UTC): treino das 22h em Brasília caía no dia seguinte e o calendário discordava da lista do dia. No cliente, o dia sai de `localDay()`, nunca de `slice(0, 10)`.
 - **Aviso de IA só no termo de aceite.** Repetir em cada tela vira ruído que se para de ler.
 
 ## Vídeos de exercício
