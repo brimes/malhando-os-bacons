@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useWorkoutStore } from '../stores/useWorkoutStore';
 import { Header } from '../components/Header';
+import { Button } from '../components/Button';
+import { WorkoutDateSheet } from '../components/treinos/WorkoutDateSheet';
+import { changeWorkoutDate } from '../lib/workoutDate';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { CountUp } from '../components/CountUp';
@@ -12,6 +15,7 @@ export function WorkoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { selectedWorkout, isLoading, error, fetchWorkout, deleteWorkout } = useWorkoutStore();
+  const [editingDate, setEditingDate] = useState(false);
 
   useEffect(() => {
     if (id) fetchWorkout(Number(id));
@@ -84,6 +88,12 @@ export function WorkoutDetailPage() {
           </div>
         </div>
 
+        {workout.status === 'completed' && (
+          <Button fullWidth size="md" variant="secondary" onClick={() => setEditingDate(true)}>
+            <Calendar className="mr-2 h-5 w-5" />Alterar data
+          </Button>
+        )}
+
         {workout.notes && (
           <div className="enter" style={stagger(1)}>
             <Card>
@@ -117,6 +127,18 @@ export function WorkoutDetailPage() {
           )}
         </div>
       </div>
+      {editingDate && (
+        <WorkoutDateSheet
+          current={date}
+          onClose={() => setEditingDate(false)}
+          onSave={(chosen) => {
+            // Local-first: o cache já muda aqui e a tela relê dele; a requisição sai em segundo plano.
+            const updated = changeWorkoutDate(workout, chosen);
+            useWorkoutStore.setState({ selectedWorkout: { ...workout, ...updated } });
+            setEditingDate(false);
+          }}
+        />
+      )}
     </>
   );
 }

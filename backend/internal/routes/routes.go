@@ -80,6 +80,7 @@ func Setup(database *db.DB, resolver services.GeneratorResolver, videoSigner *se
 	mux.HandleFunc("GET /api/workouts/calendar", chain(workoutHandler.Calendar, auth))
 	mux.HandleFunc("GET /api/workouts/{id}", chain(workoutHandler.Get, auth))
 	mux.HandleFunc("PUT /api/workouts/{id}", chain(workoutHandler.Update, auth))
+	mux.HandleFunc("PUT /api/workouts/{id}/date", chain(workoutHandler.UpdateDate, auth))
 	mux.HandleFunc("DELETE /api/workouts/{id}", chain(workoutHandler.Delete, auth))
 
 	// Guided workout session

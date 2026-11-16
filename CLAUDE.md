@@ -34,6 +34,8 @@ Rodam no boot (`backend/internal/db/migrate.go`), em ordem de nome, registradas 
 - **Provider de LLM resolvido por usuário** (`services.GeneratorResolver`): chave própria quando existe, crédito compartilhado quando não. A chave nunca volta em JSON nem entra em log, e nunca é enfileirada offline (a fila é localStorage em texto puro).
 - **`overflow-wrap: anywhere` só em texto do usuário** (`.break-anywhere`: e-mail, nomes, notas, chat), nunca no `body`. Global, ele reduz o min-content de tudo e quebra rótulos no meio da palavra ("Descreve/r"). O body usa `break-word`; filho de flex com texto livre precisa de `min-w-0`. Conferir com `CHROME_PATH=... node frontend/scripts/measure-overflow.mjs` (overflow e palavra partida).
 - **Padding global de input em `:where()`**: o seletor com `:not()` somava especificidade e anulava `pl-12`/`px-2`, deixando a lupa por cima do texto.
+- **Mudar a data de um treino é `PUT /workouts/{id}/date`** (não PATCH: o CORS só libera GET/POST/PUT/DELETE; e o PUT `/workouts/{id}` sobrescreve nome e notas). Tudo que deriva da data (semana, sequência, `last_done_at`, calendário) é calculado de `workouts.date`: mover a data basta, não há nada materializado.
+- **Auto-fim de treino esquecido** (`lib/autoFinish.ts`): sessão aberta há mais de 3× o estimado (`session_duration_minutes` do plano; sem ele, séries×(45 s+descanso), mínimo 30 min) é fechada pelo app via `enqueueWrite` em `/complete`, com as séries restantes na última carga e `finished_at` = início + estimado (nunca a hora da reabertura, que jogava o treino para o dia seguinte). O aviso aparece uma vez (flag em localStorage).
 - **Aviso de IA só no termo de aceite.** Repetir em cada tela vira ruído que se para de ler.
 
 ## Vídeos de exercício
