@@ -58,6 +58,8 @@ export interface EnqueueWriteInput {
   createsEntity?: boolean;
   /** Dia do plano a que um finish/complete pertence (conta a semana enquanto a fila não saiu). */
   trainingPlanDayId?: number;
+  /** Só em `PUT /workouts/{id}/date`: ver `PendingMutation.dateChange`. */
+  dateChange?: PendingMutation['dateChange'];
   optimistic?: OptimisticUpdate[];
 }
 
@@ -92,6 +94,7 @@ export function enqueueWrite(input: EnqueueWriteInput): EnqueueWriteResult {
     dedupeKey: input.dedupeKey,
     idempotent: input.idempotent,
     trainingPlanDayId: input.trainingPlanDayId,
+    dateChange: input.dateChange,
   });
 
   for (const update of input.optimistic ?? []) {

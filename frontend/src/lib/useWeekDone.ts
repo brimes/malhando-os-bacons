@@ -5,6 +5,7 @@ import { todayLocalDate } from './date';
 import { pendingCompletedWorkouts, readCache, resourceKeyForRequest, useOfflineStore } from './offline';
 import { useLocalAll } from './local/useLocal';
 import { workoutsCache } from './local/repo/workouts';
+import { applyPendingToDashboard, applyPendingWorkoutDates, usePendingDateChanges } from './pendingWorkoutDates';
 import { countWeekSessions, resolveWeekDone, startOfWeek } from './planProgress';
 
 /** O número da semana no `/dashboard`: o mesmo que o Início mostra. */
@@ -19,13 +20,15 @@ export function serverWeekDone(data: DashboardData | null | undefined): number |
  * com o cache dela desenhando enquanto a rede não responde. `null` até saber.
  */
 export function useServerWeekDone(): number | null {
-  const [done, setDone] = useState<number | null>(null);
+  const [raw, setDone] = useState<DashboardData | null>(null);
+  const changes = usePendingDateChanges();
+  const done = useMemo(() => serverWeekDone(raw ? applyPendingToDashboard(raw, changes) : null), [raw, changes]);
   useEffect(() => {
     let alive = true;
     const params = { date: todayLocalDate() };
-    setDone(serverWeekDone(readCache<DashboardData>(resourceKeyForRequest('/dashboard', params))));
+    setDone(readCache<DashboardData>(resourceKeyForRequest('/dashboard', params)) ?? null);
     apiClient.get<DashboardData>('/dashboard', { params })
-      .then((res) => { if (alive) setDone(serverWeekDone(res.data)); })
+      .then((res) => { if (alive) setDone(res.data); })
       .catch(() => undefined);
     return () => { alive = false; };
   }, []);
@@ -34,7 +37,9 @@ export function useServerWeekDone(): number | null {
 
 /** Treinos da semana pela definição única (`resolveWeekDone`), a partir do número do servidor. */
 export function useWeekDone(serverDone: number | null): number {
-  const history = useLocalAll(workoutsCache);
+  const stored = useLocalAll(workoutsCache);
+  const dateChanges = usePendingDateChanges();
+  const history = useMemo(() => applyPendingWorkoutDates(stored, dateChanges), [stored, dateChanges]);
   const queue = useOfflineStore((state) => state.queue);
   return useMemo(() => {
     const pending = pendingCompletedWorkouts(queue);

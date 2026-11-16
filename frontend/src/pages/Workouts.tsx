@@ -14,6 +14,7 @@ import { useServerWeekDone } from '../lib/useWeekDone';
 import { useLocalAll } from '../lib/local/useLocal';
 import { pullTrainingPlans, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import { pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
+import { applyPendingToPlan, applyPendingWorkoutDates, usePendingDateChanges } from '../lib/pendingWorkoutDates';
 
 function lastDoneLabel(lastDoneAt: number | null) {
   if (lastDoneAt === null) return 'Ainda não feito';
@@ -28,7 +29,10 @@ export function WorkoutsPage() {
   // esta tela esperava duas requisições em série para mostrar qualquer coisa, e
   // com internet lenta isso era o app "demorando para abrir".
   const plans = useLocalAll(trainingPlansCache);
-  const history = useLocalAll(workoutsCache);
+  const storedHistory = useLocalAll(workoutsCache);
+  const dateChanges = usePendingDateChanges();
+  // Troca de data ainda na fila vale mesmo que a base local tenha sido reescrita pelo servidor.
+  const history = useMemo(() => applyPendingWorkoutDates(storedHistory, dateChanges), [storedHistory, dateChanges]);
   const [isLoading, setIsLoading] = useState(!trainingPlansCache.isLoaded());
   // Sessions finished with no signal live only in the queue; re-render when it moves.
   const queue = useOfflineStore((state) => state.queue);
@@ -51,7 +55,7 @@ export function WorkoutsPage() {
   const trackedPlan = visiblePlans.find((plan) => plan.active) ?? null;
   // O detalhe (com os dias) e o resumo convivem no mesmo store — `rememberPlan`
   // preserva `days` quando a listagem, que não os traz, chega por cima.
-  const detail = trackedPlan?.days?.length ? trackedPlan : null;
+  const detail = trackedPlan?.days?.length ? applyPendingToPlan(trackedPlan, dateChanges) : null;
   const progress = useMemo(() => {
     // Plano dinâmico não tem semana planejada: os dias que ele acumula são
     // treinos já gerados, não uma rotina a cumprir. Calcular progresso sobre

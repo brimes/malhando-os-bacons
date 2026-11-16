@@ -14,6 +14,7 @@ import { todayLocalDate } from '../../date';
 import { isNetworkOnline } from '../../offline';
 import { offlineReady } from '../../offlineBoot';
 import { EntityCache } from '../entityStore';
+import { applyPendingToWindow, applyPendingWorkoutDates, dayWindow, rangeWindow, registerWorkoutPool } from '../../pendingWorkoutDates';
 import { hasPendingMutationsFor } from './shared';
 
 const PULL_TIMEOUT_MS = 10_000;
@@ -34,21 +35,21 @@ function daysAgo(days: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Toda leitura daqui passa pela sobreposição de datas pendentes: a base local
+// pode ter sido reescrita por um pull com a data antiga enquanto a troca ainda
+// espera na fila.
+registerWorkoutPool(() => workoutsCache.getAll());
+
 export function listWorkouts(): Workout[] {
-  return workoutsCache.getAll();
+  return applyPendingWorkoutDates(workoutsCache.getAll());
 }
 
 export function listByDate(date: string): Workout[] {
-  return workoutsCache.getAll().filter((workout) => String(workout.date).slice(0, 10) === date);
+  return applyPendingToWindow(workoutsCache.getAll(), dayWindow(date));
 }
 
 export function listByRange(from: string, to: string): Workout[] {
-  return workoutsCache
-    .getAll()
-    .filter((workout) => {
-      const day = String(workout.date).slice(0, 10);
-      return day >= from && day <= to;
-    })
+  return applyPendingToWindow(workoutsCache.getAll(), rangeWindow(from, to))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 

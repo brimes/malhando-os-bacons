@@ -11,6 +11,7 @@ import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
 import { findCachedPlanDay, onWorkoutIdRemap } from '../lib/offline';
+import { applyPendingToPlan, usePendingDateChanges } from '../lib/pendingWorkoutDates';
 import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
 
@@ -29,6 +30,7 @@ export function TrainingPlanDayPage() {
   // fall back to "Carregando treino..." forever whenever `trainingPlansApi.get`
   // rejected offline with nothing cached.
   const [notFound, setNotFound] = useState(false);
+  const dateChanges = usePendingDateChanges();
 
   useEffect(() => {
     if (!planId || !dayId) return;
@@ -145,6 +147,7 @@ export function TrainingPlanDayPage() {
     );
   }
 
+  const lastDoneAt = applyPendingToPlan({ days: [day] }, dateChanges).days?.[0]?.last_done_at;
   const exercises = day.exercises.filter((exercise) => exercise.id);
   const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
   const markedSets = exercises.reduce((sum, exercise) => sum + (checklist[exercise.id as number]?.setsDone ?? 0), 0);
@@ -207,7 +210,7 @@ export function TrainingPlanDayPage() {
           <div className="mt-4 flex flex-wrap gap-2">
             {[
               { icon: <Dumbbell />, text: `${exercises.length} ${exercises.length === 1 ? 'exercício' : 'exercícios'}` },
-              { icon: <Clock />, text: day.last_done_at ? `Última vez em ${new Date(day.last_done_at).toLocaleDateString('pt-BR')}` : 'Ainda não realizado' },
+              { icon: <Clock />, text: lastDoneAt ? `Última vez em ${new Date(lastDoneAt).toLocaleDateString('pt-BR')}` : 'Ainda não realizado' },
             ].map((c) => (
               <span key={c.text} className="inline-flex h-8 items-center gap-1.5 rounded-chip bg-white/20 px-3 text-[13px] font-semibold text-white [&>svg]:h-[15px] [&>svg]:w-[15px]">{c.icon}{c.text}</span>
             ))}

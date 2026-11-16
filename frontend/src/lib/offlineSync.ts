@@ -36,6 +36,21 @@ import {
 /** A mutation that keeps failing on the server is dropped instead of blocking the queue forever. */
 const MAX_MUTATION_ATTEMPTS = 5;
 /**
+ * Itens que o servidor recusou com "ainda não" (404/405 numa rota nova): só o
+ * timer de retry os reenvia, não cada resposta de leitura que chega — senão cada
+ * GET dispararia um PUT que se sabe recusado.
+ */
+const HOLD_MS = 30_000;
+const heldUntil = new Map<string, number>();
+function heldIds(): Set<string> {
+  const now = Date.now();
+  for (const [id, until] of heldUntil) if (until <= now) heldUntil.delete(id);
+  return new Set(heldUntil.keys());
+}
+/** Quanto tempo uma troca de data recusada com 404/405 continua sendo retentada. */
+const DATE_ROUTE_PATIENCE_MS = 30 * 24 * 3_600_000;
+const isWorkoutDateRoute = (url: string): boolean => /^\/workouts\/\d+\/date$/.test(normalizePath(url));
+/**
  * The workout session's own writes are local-first: the person already moved on
  * and the app is the only place that data exists. A server that is down for a
  * few minutes must not turn into a parked (failed) start with every series
@@ -299,6 +314,7 @@ export function enqueueMutation(input: {
   trainingPlanDayId?: number;
   dedupeKey?: string;
   idempotent?: boolean;
+  dateChange?: PendingMutation['dateChange'];
 }): PendingMutation {
   localIdCounter += 1;
   const mutation: PendingMutation = {
@@ -313,6 +329,7 @@ export function enqueueMutation(input: {
     trainingPlanDayId: input.trainingPlanDayId,
     dedupeKey: input.dedupeKey,
     idempotent: input.idempotent,
+    dateChange: input.dateChange,
     userId: currentUserId() ?? undefined,
   };
   pushToQueue(mutation);
@@ -324,10 +341,10 @@ let runningFlush: Promise<void> | null = null;
 let flushAgain = false;
 
 /** Primeiro item da fila que pertence à conta logada agora. */
-function nextEligible(): PendingMutation | undefined {
+function nextEligible(skip?: ReadonlySet<string>): PendingMutation | undefined {
   const userId = currentUserId();
   if (userId === null || !localStorage.getItem('mob_token')) return undefined;
-  return getQueue().find((mutation) => isOwnedBy(mutation, userId));
+  return getQueue().find((mutation) => isOwnedBy(mutation, userId) && !skip?.has(mutation.localId));
 }
 
 /**
@@ -376,7 +393,7 @@ export function requestFlush(): void {
  * queue until the app is reopened.
  */
 export function flushQueueIfPending(): void {
-  if (runningFlush || !isNetworkOnline() || nextEligible() === undefined) return;
+  if (runningFlush || !isNetworkOnline() || nextEligible(heldIds()) === undefined) return;
   void flushQueue();
 }
 
@@ -409,10 +426,13 @@ async function runFlush(force: boolean): Promise<void> {
   setSyncing(true);
   let replayed = 0;
   let stalled = false;
+  // Itens que o servidor ainda não sabe atender (rota nova num backend antigo):
+  // ficam para a próxima rodada sem travar o que vem atrás.
+  const deferred = new Set<string>();
   try {
     // Re-read the queue on every step: a screen may have appended to it while
     // the previous replay was in flight.
-    for (let mutation = nextEligible(); mutation !== undefined; mutation = nextEligible()) {
+    for (let mutation = nextEligible(deferred); mutation !== undefined; mutation = nextEligible(deferred)) {
       try {
         inFlightLocalId = mutation.localId;
         const result = await executeMutation(mutation);
@@ -492,6 +512,20 @@ async function runFlush(force: boolean): Promise<void> {
           });
           stalled = true;
           break;
+        }
+        // `PUT /workouts/{id}/date` num backend que ainda não tem a rota responde
+        // 404/405. Isso é "ainda não", não "nunca": a troca de data é do dono do
+        // aparelho e precisa sobreviver até o deploy. Fica na fila, retentada com
+        // backoff e sem gastar tentativas; só é desistida se o treino sumiu de
+        // vez (30 dias sem o servidor aceitar).
+        if ((status === 404 || status === 405) && isWorkoutDateRoute(mutation.url) && Date.now() - mutation.createdAt < DATE_ROUTE_PATIENCE_MS) {
+          patchQueuedMutation(mutation.localId, {
+            lastError: 'O servidor ainda não aceita a troca de data. Vamos tentar de novo depois.',
+          });
+          deferred.add(mutation.localId);
+          heldUntil.set(mutation.localId, Date.now() + HOLD_MS);
+          stalled = true;
+          continue;
         }
         // Closing a session the server no longer has open is not a failure:
         // finish, complete and cancel all ask for "no open session", and a 404

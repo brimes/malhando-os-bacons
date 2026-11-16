@@ -47,7 +47,7 @@ describe('mudar a data do treino', () => {
     expect(getQueue()).toHaveLength(0);
   });
 
-  it('offline: enfileira o PUT e atualiza detalhe, listas, calendário e dashboard na hora', () => {
+  it('offline: enfileira o PUT e atualiza detalhe e listas na hora', () => {
     const w = workout();
     const oldDay = w.date.slice(0, 10);
     const target = hoursAgo(72);
@@ -74,13 +74,9 @@ describe('mudar a data do treino', () => {
     const list = readCache<Workout[]>('get:/workouts')!;
     expect(list.map((x) => x.id)).toEqual([8, 7]);
     expect(list[1].date).toBe(iso(target));
-    const calendar = readCache<{ days: Array<{ date: string; count: number }> }>('get:/workouts/calendar?month=' + oldDay.slice(0, 7))!;
-    expect(calendar.days.find((d) => d.date === oldDay)).toBeUndefined();
+    // Calendário, dashboard e plano não são remendados no cache: a leitura aplica a troca pendente.
+    expect(readCache<any>('get:/workouts/calendar?month=' + oldDay.slice(0, 7))!.days).toEqual([{ date: oldDay, count: 1 }]); // eslint-disable-line @typescript-eslint/no-explicit-any
     void newDay;
-    const dash = readCache<any>('get:/dashboard?date=2026-01-01')!; // eslint-disable-line @typescript-eslint/no-explicit-any
-    expect(dash.weekly_workouts[0].date).toBe(iso(target));
-    expect(dash.next_workout.last_done_at).toBe(iso(target));
-    expect(readCache<any>('get:/training-plans/1')!.days[0].last_done_at).toBe(iso(target)); // eslint-disable-line @typescript-eslint/no-explicit-any
   });
 
   it('segunda escolha substitui a primeira na fila', () => {

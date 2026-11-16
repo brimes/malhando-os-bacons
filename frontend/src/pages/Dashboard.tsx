@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../api/client';
 import { useAuthStore } from '../stores/useAuthStore';
@@ -17,12 +17,17 @@ import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { todayLocalDate } from '../lib/date';
 import { useWeekDone, serverWeekDone } from '../lib/useWeekDone';
 import { readCache, resourceKeyForRequest } from '../lib/offline';
+import { applyPendingToDashboard, usePendingDateChanges } from '../lib/pendingWorkoutDates';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { state: onboarding } = useOnboardingStore();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [rawData, setData] = useState<DashboardData | null>(null);
+  // O servidor ainda responde com a data antiga de um treino cuja troca espera na
+  // fila; a troca é aplicada por cima, na leitura, e some quando a fila esvazia.
+  const dateChanges = usePendingDateChanges();
+  const data = useMemo(() => (rawData ? applyPendingToDashboard(rawData, dateChanges) : null), [rawData, dateChanges]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
 

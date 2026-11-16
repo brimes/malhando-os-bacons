@@ -31,6 +31,7 @@ const fullMutation: Required<PendingMutation> = {
   userId: 3,
   dedupeKey: 'perfil',
   idempotent: true,
+  dateChange: { previousDate: '2026-07-01T10:00:00.000Z', dayId: 4 },
 };
 
 const secondMutation: PendingMutation = {

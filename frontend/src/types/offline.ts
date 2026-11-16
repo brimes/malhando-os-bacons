@@ -59,6 +59,13 @@ export interface PendingMutation {
    */
   trainingPlanDayId?: number;
   /**
+   * Só em `PUT /workouts/{id}/date`: de onde o treino saiu (data original, antes
+   * de qualquer troca ainda pendente) e a qual dia de plano pertence. É o que
+   * permite à sobreposição de datas (`pendingWorkoutDates.ts`) mover a contagem
+   * do dia velho para o novo ao ler dados do servidor que ainda não sabem da troca.
+   */
+  dateChange?: { previousDate: string; dayId?: number };
+  /**
    * Conta que criou o item (de `mob_user` no enqueue). Ausente em itens de
    * versões anteriores ou restaurados por backup: esses ficam retidos até o
    * usuário decidir no painel de sincronização.
