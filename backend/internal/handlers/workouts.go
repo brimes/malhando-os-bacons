@@ -275,6 +275,73 @@ func (h *WorkoutHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, workout)
 }
 
+// dateSlack tolera relógio do aparelho ligeiramente adiantado em relação ao
+// servidor; além disso a data é futura e é recusada.
+const dateSlack = 5 * time.Minute
+
+type updateWorkoutDateRequest struct {
+	Date time.Time `json:"date"`
+}
+
+// UpdateDate muda o dia (e a hora) de um treino concluído — "esqueci de fechar
+// e fechei no dia seguinte". É um endpoint próprio, e não o PUT /workouts/{id},
+// porque aquele substitui nome, data e notas de uma vez: reenviar só a data por
+// ali apagaria o resto.
+//
+// Tudo o que depende da data (semana, mês, sequência, last_done_at do dia do
+// plano, calendário, dias desde o último treino) é calculado a partir de
+// workouts.date, então basta mover a data. Nada é materializado.
+//
+// started_at e finished_at andam junto, pelo mesmo deslocamento, para a duração
+// continuar a mesma. O fim é limitado a agora: um treino não termina no futuro
+// só porque o início foi escolhido perto de agora. As séries não são tocadas —
+// a ordem delas vem de created_at, que é do registro, não do dia do treino.
+func (h *WorkoutHandler) UpdateDate(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid workout id"})
+		return
+	}
+	var req updateWorkoutDateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Date.IsZero() {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "date is required (RFC 3339)"})
+		return
+	}
+	now := time.Now()
+	if req.Date.After(now.Add(dateSlack)) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "date cannot be in the future"})
+		return
+	}
+	newDate := req.Date
+	if newDate.After(now) {
+		newDate = now
+	}
+
+	var workout models.Workout
+	err = h.db.Pool.QueryRow(r.Context(),
+		`UPDATE workouts SET
+		   started_at  = CASE WHEN started_at  IS NULL THEN NULL ELSE started_at + ($3::timestamptz - date) END,
+		   finished_at = CASE WHEN finished_at IS NULL THEN NULL ELSE LEAST(finished_at + ($3::timestamptz - date), $4::timestamptz) END,
+		   date = $3
+		 WHERE id = $1 AND user_id = $2 AND status = 'completed'
+		 RETURNING id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
+		 status, started_at, finished_at, client_session_id, created_at`,
+		id, userID, newDate, now,
+	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
+		&workout.TrainingPlanDayID, &workout.DurationMinutes, &workout.Status,
+		&workout.StartedAt, &workout.FinishedAt, &workout.ClientSessionID, &workout.CreatedAt)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workout not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, workout)
+}
+
 func (h *WorkoutHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {

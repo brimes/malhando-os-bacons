@@ -56,6 +56,8 @@ export interface EnqueueWriteInput {
   idempotent?: boolean;
   dedupeKey?: string;
   createsEntity?: boolean;
+  /** Dia do plano a que um finish/complete pertence (conta a semana enquanto a fila não saiu). */
+  trainingPlanDayId?: number;
   optimistic?: OptimisticUpdate[];
 }
 
@@ -89,6 +91,7 @@ export function enqueueWrite(input: EnqueueWriteInput): EnqueueWriteResult {
     localEntityId: entityId,
     dedupeKey: input.dedupeKey,
     idempotent: input.idempotent,
+    trainingPlanDayId: input.trainingPlanDayId,
   });
 
   for (const update of input.optimistic ?? []) {

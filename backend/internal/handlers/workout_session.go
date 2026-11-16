@@ -399,7 +399,7 @@ func (h *WorkoutSessionHandler) Finish(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = json.NewDecoder(r.Body).Decode(&notes)
 
-	workout, err := closeWorkout(r.Context(), h.db.Pool, workoutID, userID, notes.Notes)
+	workout, err := closeWorkout(r.Context(), h.db.Pool, workoutID, userID, notes.Notes, nil)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "active workout not found"})
 		return
@@ -528,7 +528,7 @@ func (h *WorkoutSessionHandler) applyChecklistRequest(w http.ResponseWriter, r *
 		return
 	}
 
-	workout, err := closeWorkout(r.Context(), tx, workoutID, userID, req.Notes)
+	workout, err := closeWorkout(r.Context(), tx, workoutID, userID, req.Notes, req.FinishedAt)
 	if err == pgx.ErrNoRows {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "active workout not found"})
 		return
@@ -546,15 +546,27 @@ func (h *WorkoutSessionHandler) applyChecklistRequest(w http.ResponseWriter, r *
 
 // closeWorkout marks the open session as completed. Shared by Finish and
 // Complete so the duration is always derived the same way.
-func closeWorkout(ctx context.Context, q queryRower, workoutID, userID int64, notes string) (models.Workout, error) {
+//
+// finishedAt é opcional: o app fecha sozinho um treino esquecido e grava o fim
+// como início + duração estimada, não a hora em que o app foi reaberto. Nunca
+// vai para o futuro nem antes do início.
+func closeWorkout(ctx context.Context, q queryRower, workoutID, userID int64, notes string, finishedAt *time.Time) (models.Workout, error) {
 	var workout models.Workout
+	var finished any
+	if finishedAt != nil && !finishedAt.IsZero() {
+		at := *finishedAt
+		if now := time.Now(); at.After(now) {
+			at = now
+		}
+		finished = at
+	}
 	err := q.QueryRow(ctx,
-		`UPDATE workouts SET status='completed', finished_at=NOW(), notes=$3,
-		 duration_minutes=GREATEST(1, LEAST(600, ROUND(EXTRACT(EPOCH FROM (NOW() - COALESCE(started_at, date))) / 60)::int))
+		`UPDATE workouts SET status='completed', finished_at=COALESCE($4::timestamptz, NOW()), notes=$3,
+		 duration_minutes=GREATEST(1, LEAST(600, ROUND(EXTRACT(EPOCH FROM (COALESCE($4::timestamptz, NOW()) - COALESCE(started_at, date))) / 60)::int))
 		 WHERE id=$1 AND user_id=$2 AND status='in_progress'
 		 RETURNING id, user_id, name, date, notes, training_plan_day_id, duration_minutes,
 		 status, started_at, finished_at, client_session_id, created_at`,
-		workoutID, userID, strings.TrimSpace(notes),
+		workoutID, userID, strings.TrimSpace(notes), finished,
 	).Scan(&workout.ID, &workout.UserID, &workout.Name, &workout.Date, &workout.Notes,
 		&workout.TrainingPlanDayID, &workout.DurationMinutes, &workout.Status,
 		&workout.StartedAt, &workout.FinishedAt, &workout.ClientSessionID, &workout.CreatedAt)

@@ -14,6 +14,8 @@ import { WorkoutChat } from '../components/WorkoutChat';
 import { ExerciseVideoPlayer } from '../components/ExerciseVideoPlayer';
 import { ExerciseIllustration } from '../components/ExerciseIllustration';
 import { getErrorMessage } from '../api/client';
+import { FinishDateDialog } from '../components/treinos/FinishDateDialog';
+import { changeWorkoutDate, startedBeforeToday } from '../lib/workoutDate';
 import {
   dropQueuedMutations,
   isLocalId,
@@ -636,7 +638,31 @@ export function WorkoutSessionPage() {
     ));
   };
 
-  const confirmFinishSheet = async () => {
+  // Sessão que começou em dia anterior: pergunta o dia antes de concluir.
+  // `FinishDateDialog` + esta função são a única integração da data do treino.
+  const [askFinishDate, setAskFinishDate] = useState<((moveToToday: boolean) => void) | null>(null);
+  const guardFinishDate = (run: (moveToToday: boolean) => void) => {
+    if (active && startedBeforeToday(active.workout.started_at ?? active.workout.date)) setAskFinishDate(() => run);
+    else run(false);
+  };
+  const moveToTodayAfterFinish = (moveToToday: boolean) => {
+    if (moveToToday && active) changeWorkoutDate({ ...active.workout, status: 'completed' }, new Date());
+  };
+  const finishDateDialog = askFinishDate && active && (
+    <FinishDateDialog
+      startedAt={active.workout.started_at ?? active.workout.date}
+      onClose={() => setAskFinishDate(null)}
+      onChoose={(choice) => {
+        const run = askFinishDate;
+        setAskFinishDate(null);
+        run(choice === 'today');
+      }}
+    />
+  );
+
+  const confirmFinishSheet = () => guardFinishDate(runConfirmFinishSheet);
+
+  const runConfirmFinishSheet = async (moveToToday: boolean) => {
     if (!active || !finishSheet) return;
     setIsBusy(true);
     try {
@@ -649,6 +675,7 @@ export function WorkoutSessionPage() {
             weight_kg: Number((entry.weight || '0').replace(',', '.')) || 0,
           })),
       });
+      moveToTodayAfterFinish(moveToToday);
       forgetSessionLocally();
       navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
     } catch (requestError) {
@@ -657,11 +684,14 @@ export function WorkoutSessionPage() {
     }
   };
 
-  const finish = async () => {
+  const finish = () => guardFinishDate(runFinish);
+
+  const runFinish = async (moveToToday: boolean) => {
     if (!active) return;
     setIsBusy(true);
     try {
       await workoutsApi.finish(active.workout.id);
+      moveToTodayAfterFinish(moveToToday);
       forgetSessionLocally();
       navigate(active.plan_id ? `/training-plans/${active.plan_id}` : '/workouts');
     } catch (requestError) {
@@ -800,6 +830,7 @@ export function WorkoutSessionPage() {
           </div>
           {errorBox}
           <Button fullWidth size="lg" onClick={finish} isLoading={isBusy}>Finalizar treino</Button>
+          {finishDateDialog}
         </div>
       </>
     );
@@ -941,6 +972,7 @@ export function WorkoutSessionPage() {
           />
         )}
         {finishSheetNode}
+        {finishDateDialog}
         {chatNode}
       </>
     );
@@ -1138,6 +1170,7 @@ export function WorkoutSessionPage() {
         />
       )}
       {finishSheetNode}
+      {finishDateDialog}
       {chatNode}
     </>
   );

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/useAuthStore';
 import { useOnboardingStore } from './stores/useOnboardingStore';
@@ -8,6 +8,8 @@ import { useOfflineStore } from './lib/offlineStore';
 // timers — see that module's own comment for why this is imported from here
 // and not from `lib/offlineBoot.ts`).
 import './lib/local/nutritionSync';
+import { AutoFinishNotice } from './components/treinos/AutoFinishNotice';
+import { dismissAutoFinishNotice, readAutoFinishNotice, startAutoFinish, type AutoFinishNotice as AutoNotice } from './lib/autoFinish';
 import { registerAndroidBackButton } from './lib/androidBackButton';
 import { iniciarSincronizacaoDeVideos } from './lib/videos/videoSync';
 import { BottomNav } from './components/BottomNav';
@@ -70,6 +72,22 @@ export default function App() {
   // Carrega o índice dos vídeos já baixados (do disco, não da rede) e, em
   // Wi-Fi, completa o acervo em segundo plano. Só depois de haver sessão: os
   // endpoints de vídeo são autenticados, e um 401 aqui derrubaria a sessão.
+  // Treino esquecido: fecha sozinho passando de 3x o estimado (boot, volta do
+  // background e timer) e avisa uma vez. Espera o store offline hidratar, senão
+  // a sessão em andamento pareceria inexistente.
+  const [autoNotice, setAutoNotice] = useState<AutoNotice | null>(null);
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    void offlineReady.then(() => {
+      if (cancelled) return;
+      setAutoNotice(readAutoFinishNotice());
+      stop = startAutoFinish(setAutoNotice);
+    });
+    return () => { cancelled = true; stop?.(); };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (isAuthenticated) iniciarSincronizacaoDeVideos();
   }, [isAuthenticated]);
@@ -203,6 +221,9 @@ export default function App() {
 
           {isAuthenticated && onboarding?.completed && onboarding.profile?.training_experience && <BottomNav />}
         </ErrorBoundary>
+        {autoNotice && (
+          <AutoFinishNotice notice={autoNotice} onClose={() => { dismissAutoFinishNotice(); setAutoNotice(null); }} />
+        )}
       </TermsGate>
     </div>
   );
