@@ -63,7 +63,7 @@ const NON_CACHEABLE_GET_PATHS: RegExp[] = [
   /^\/workouts\/-?\d+\/chat(\/|$)/,
 ];
 
-const ONLINE_ONLY_MESSAGE = 'Esta ação precisa de internet. Conecte-se e tente novamente.';
+const ONLINE_ONLY_MESSAGE = 'Precisa de internet para isso. Tente de novo quando houver conexão.';
 
 /** Code on the synthetic error a captive-portal response is turned into, so it never gets mistaken for a real timeout. */
 const CAPTIVE_PORTAL_ERROR_CODE = 'ERR_CAPTIVE_PORTAL';
@@ -296,7 +296,7 @@ function translateApiError(message: string | undefined): string | undefined {
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     // "Network Error" says nothing to whoever is holding the phone.
-    if (isConnectivityError(error)) return 'Sem conexão com o servidor. Tente novamente quando estiver online.';
+    if (isConnectivityError(error)) return 'Precisa de internet para isso. Tente de novo quando houver conexão.';
     const data = error.response?.data as { error?: string } | undefined;
     return translateApiError(data?.error) ?? error.message;
   }

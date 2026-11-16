@@ -38,6 +38,18 @@ export interface PendingMutation {
    */
   localEntityId?: number;
   /**
+   * Chave de deduplicação da escrita (ver `enqueueWrite`): uma segunda escrita
+   * com a mesma chave, ainda na fila, substitui o corpo da primeira em vez de
+   * virar outra requisição (ex.: salvar o perfil três vezes seguidas).
+   */
+  dedupeKey?: string;
+  /**
+   * O servidor trata um reenvio como no-op (chave de idempotência no corpo, ou
+   * operação que converge sozinha). Só assim um timeout pode ser reenviado sem
+   * risco, e só assim a escrita ganha as muitas tentativas pacientes.
+   */
+  idempotent?: boolean;
+  /**
    * Training plan day this mutation's workout belongs to. Only ever set on a
    * queued `finish`/`complete` (see `dayIdForActiveWorkout` in
    * `workoutSession.ts`), captured at the moment it is enqueued because that

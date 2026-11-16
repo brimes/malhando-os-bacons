@@ -37,6 +37,8 @@ export interface WorkoutSet {
   weight_kg: number;
   training_plan_exercise_id?: number;
   set_number?: number;
+  /** Idempotency key of a series recorded on this device; lets the screen match it to its queued POST. */
+  client_set_id?: string;
   completed_at?: string;
   created_at: string;
 }

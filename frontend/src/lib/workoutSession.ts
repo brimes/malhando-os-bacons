@@ -30,6 +30,9 @@ const CLOSE_ROUTE = /^\/workouts\/(-?\d+)\/(finish|complete)$/;
 // Cancel ends the session too. It is kept apart from CLOSE_ROUTE because a
 // cancelled workout is not history — it must not count towards the week.
 const END_ROUTE = /^\/workouts\/(-?\d+)\/(finish|complete|cancel)$/;
+const SET_ROUTE = /^\/workouts\/-?\d+\/sets$/;
+const SET_DELETE_ROUTE = /^\/workouts\/(-?\d+)\/sets\/(-?\d+)$/;
+const PROGRESS_ROUTE = /^\/workouts\/-?\d+\/progress$/;
 /** Cached snapshots of a single plan — the only place the days and exercises live. */
 const PLAN_DETAIL_KEY = /^get:\/training-plans\/\d+$/;
 
@@ -82,7 +85,28 @@ function clientSessionIdOf(body: unknown): string | undefined {
  * resending a write that may already have been applied.
  */
 export function isIdempotentRetryable(url: string, body: unknown): boolean {
-  return isWorkoutStartRequest(url) && clientSessionIdOf(body) !== undefined;
+  if (isWorkoutStartRequest(url)) return clientSessionIdOf(body) !== undefined;
+  const route = normalizeRoute(url);
+  // A series carries `client_set_id`: the server answers a repeat with the one
+  // it already saved instead of inserting another.
+  if (SET_ROUTE.test(route)) return typeof (body as { client_set_id?: unknown } | undefined)?.client_set_id === 'string';
+  // Closing, cancelling, topping up the checklist and undoing a series all
+  // converge on the same end state when repeated (the server answers 404/409
+  // once it already holds, and the queue reads that as done).
+  return END_ROUTE.test(route) || PROGRESS_ROUTE.test(route) || SET_DELETE_ROUTE.test(route);
+}
+
+/** Every write the guided session makes — these are local-first and retried patiently. */
+export function isSessionRoute(url: string): boolean {
+  const route = normalizeRoute(url);
+  return route === START_ROUTE || SET_ROUTE.test(route) || END_ROUTE.test(route)
+    || PROGRESS_ROUTE.test(route) || SET_DELETE_ROUTE.test(route);
+}
+
+/** `DELETE /workouts/{id}/sets/{setId}` — undoing a series that already left the device. */
+export function parseSetDeleteRoute(url: string): { workoutId: number; setId: number } | null {
+  const match = normalizeRoute(url).match(SET_DELETE_ROUTE);
+  return match ? { workoutId: Number(match[1]), setId: Number(match[2]) } : null;
 }
 
 // --- building a session from the cache --------------------------------------
@@ -195,48 +219,38 @@ function buildLocalActiveWorkout(input: {
   };
 }
 
-function dropQueuedStart(clientSessionId: string): void {
-  dropQueuedMutations((mutation) => (
-    mutation.method === 'POST'
-    && isWorkoutStartRequest(mutation.url)
-    && clientSessionIdOf(mutation.body) === clientSessionId
-  ));
-}
-
 /**
- * Assembles the session the server could not hand us. Called right after the
- * queue accepted the start, so the POST is already pending — every path that
- * cannot produce a session drops it again, otherwise the replay would create a
- * workout on the server that nobody on this device is tracking.
+ * Builds the session the person is about to see, entirely from what is on the
+ * device — it never waits for the server. `source` is the plan day the screen
+ * is already showing; without it the durable per-day slot and the plan
+ * snapshots are searched. Returns the new local session together with the keys
+ * the caller must queue the start under, or the session that is already open
+ * when it is the same day (starting it again just resumes it, the same rule the
+ * server applies).
  */
-export function openOfflineSession(input: {
+export function prepareLocalSession(input: {
   trainingPlanDayId: number;
-  clientSessionId: string;
-  workoutId: number;
-}): ActiveWorkout {
+  source?: { plan: TrainingPlan; day: TrainingPlanDay };
+}): { session: ActiveWorkout; clientSessionId: string; workoutId: number; resumed: boolean } {
   const open = readCachedActiveWorkout();
   if (open && open.workout.status === 'in_progress') {
-    // Same rule the server applies: one session at a time, and starting the day
-    // that is already open just resumes it.
-    dropQueuedStart(input.clientSessionId);
-    if (open.workout.training_plan_day_id === input.trainingPlanDayId) return open;
+    if (open.workout.training_plan_day_id === input.trainingPlanDayId) {
+      return { session: open, clientSessionId: open.workout.client_session_id ?? '', workoutId: open.workout.id, resumed: true };
+    }
     throw new OfflineSessionConflictError();
   }
 
-  const found = findCachedPlanDay(input.trainingPlanDayId);
-  if (!found) {
-    dropQueuedStart(input.clientSessionId);
-    throw new OfflineSessionUnavailableError();
-  }
+  const found = input.source ?? findCachedPlanDay(input.trainingPlanDayId);
+  if (!found) throw new OfflineSessionUnavailableError();
+  // The day the screen holds is also kept in the durable slot, so the next
+  // start does not depend on the generic cache that may be pruned.
+  if (input.source) persistPlanDaysDurable({ ...input.source.plan, days: [input.source.day] });
 
-  const session = buildLocalActiveWorkout({
-    workoutId: input.workoutId,
-    clientSessionId: input.clientSessionId,
-    plan: found.plan,
-    day: found.day,
-  });
+  const clientSessionId = newClientSessionId();
+  const workoutId = takeLocalId();
+  const session = buildLocalActiveWorkout({ workoutId, clientSessionId, plan: found.plan, day: found.day });
   storeLocalActiveWorkout(session);
-  return session;
+  return { session, clientSessionId, workoutId, resumed: false };
 }
 
 /**
@@ -277,6 +291,56 @@ export function applyChecklistLocally(workoutId: number, entries: CompleteWorkou
   const updated: ActiveWorkout = { ...cached, workout: { ...cached.workout, sets } };
   storeLocalActiveWorkout(updated);
   return updated;
+}
+
+/** Appends a series to the local session slot (the screen's own copy follows through its own state). */
+export function appendLocalSet(workoutId: number, set: WorkoutSet): ActiveWorkout | null {
+  const cached = readCachedActiveWorkout();
+  if (!cached || cached.workout.id !== workoutId) return null;
+  const updated: ActiveWorkout = { ...cached, workout: { ...cached.workout, sets: [...(cached.workout.sets ?? []), set] } };
+  storeLocalActiveWorkout(updated);
+  return updated;
+}
+
+/** Removes a series from the local session slot. */
+export function removeLocalSet(workoutId: number, setId: number): ActiveWorkout | null {
+  const cached = readCachedActiveWorkout();
+  if (!cached || cached.workout.id !== workoutId) return null;
+  const updated: ActiveWorkout = { ...cached, workout: { ...cached.workout, sets: (cached.workout.sets ?? []).filter((set) => set.id !== setId) } };
+  storeLocalActiveWorkout(updated);
+  return updated;
+}
+
+type SetIdRemapListener = (localId: number, realId: number) => void;
+const setRemapListeners = new Set<SetIdRemapListener>();
+
+/** Same purpose as `onWorkoutIdRemap`, for a series: an open screen keeps the real id to undo it later. */
+export function onSetIdRemap(listener: SetIdRemapListener): () => void {
+  setRemapListeners.add(listener);
+  return () => {
+    setRemapListeners.delete(listener);
+  };
+}
+
+/**
+ * Called by the queue after a mutation replays. When it was a queued series, the
+ * server's id replaces the local one in the session slot and in anything still
+ * queued behind it (an undo made before the series reached the server).
+ */
+export function reconcileWorkoutSet(mutation: PendingMutation, response: unknown): void {
+  if (mutation.method !== 'POST' || !SET_ROUTE.test(normalizeRoute(mutation.url))) return;
+  const localId = mutation.localEntityId;
+  const realId = (response as { id?: unknown } | undefined)?.id;
+  if (typeof localId !== 'number' || localId >= 0 || typeof realId !== 'number' || realId <= 0) return;
+  remapQueuedRoute('sets', localId, realId);
+  const cached = readCachedActiveWorkout();
+  if (cached?.workout.sets?.some((set) => set.id === localId)) {
+    storeLocalActiveWorkout({
+      ...cached,
+      workout: { ...cached.workout, sets: cached.workout.sets.map((set) => (set.id === localId ? { ...set, id: realId } : set)) },
+    });
+  }
+  setRemapListeners.forEach((listener) => listener(localId, realId));
 }
 
 // --- id reconciliation ------------------------------------------------------
