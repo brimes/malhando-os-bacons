@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/mob/backend/internal/db"
 	"github.com/mob/backend/internal/middleware"
 	"github.com/mob/backend/internal/models"
@@ -340,6 +343,11 @@ func (h *WorkoutHandler) UpdateDate(w http.ResponseWriter, r *http.Request) {
 		&workout.TrainingPlanDayID, &workout.DurationMinutes, &workout.Status,
 		&workout.StartedAt, &workout.FinishedAt, &workout.ClientSessionID, &workout.CreatedAt)
 	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			slog.Error("update workout date failed", "workout_id", id, "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to update workout date"})
+			return
+		}
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workout not found"})
 		return
 	}
