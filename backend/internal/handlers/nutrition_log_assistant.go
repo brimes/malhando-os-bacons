@@ -66,7 +66,7 @@ func (h *NutritionHandler) LogAssistant(w http.ResponseWriter, r *http.Request) 
 		userContext = fmt.Sprintf("metas diárias: %d kcal e %.0fg de proteína", caloriesTarget, proteinTarget)
 	}
 
-	hoje := time.Now().Format("2006-01-02")
+	hoje := resolveToday(req.Today, time.Now())
 	ctx, cancel := context.WithTimeout(r.Context(), nutritionLogAssistantTimeout)
 	defer cancel()
 
@@ -85,8 +85,8 @@ func (h *NutritionHandler) LogAssistant(w http.ResponseWriter, r *http.Request) 
 	// futuro cai para hoje; o app mostra a data de cada item antes de gravar.
 	for i := range draft.Entries {
 		entry := &draft.Entries[i]
-		parsed, parseErr := time.Parse("2006-01-02", entry.Date)
-		if parseErr != nil || parsed.After(time.Now()) {
+		_, parseErr := time.Parse("2006-01-02", entry.Date)
+		if parseErr != nil || entry.Date > hoje {
 			entry.Date = hoje
 		}
 		if entry.QuantityG <= 0 {
@@ -95,4 +95,28 @@ func (h *NutritionHandler) LogAssistant(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, draft)
+}
+
+// userFallbackLocation é o fuso do produto quando o app não manda "today".
+func userFallbackLocation() *time.Location {
+	loc, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+// resolveToday devolve o "hoje" do usuário. O app manda a data local do
+// aparelho; só é aceita se for YYYY-MM-DD válida e a até 1 dia do UTC do
+// servidor (cobre todos os fusos reais). Senão, usa Brasília — nunca o UTC
+// do pod, que à noite já está no dia seguinte.
+func resolveToday(client string, now time.Time) string {
+	if parsed, err := time.Parse("2006-01-02", client); err == nil {
+		utcDay, _ := time.Parse("2006-01-02", now.UTC().Format("2006-01-02"))
+		diff := parsed.Sub(utcDay)
+		if diff >= -24*time.Hour && diff <= 24*time.Hour {
+			return client
+		}
+	}
+	return now.In(userFallbackLocation()).Format("2006-01-02")
 }

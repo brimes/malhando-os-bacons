@@ -6,6 +6,7 @@ import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Field, SectionTitle, stagger } from '../components/treinos/states';
 import { Plus, Trash } from '../components/treinos/icons';
+import { todayLocalDate } from '../lib/date';
 import type { TrainingPlanDay, WorkoutSetInput } from '../types';
 
 export function NewWorkoutPage() {
@@ -16,7 +17,7 @@ export function NewWorkoutPage() {
 
   const [name, setName] = useState(planState?.planDay?.name ?? '');
   const [notes, setNotes] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalDate());
   const [duration, setDuration] = useState(planState?.duration?.toString() ?? '');
   const [sets, setSets] = useState<WorkoutSetInput[]>(planState?.planDay?.exercises.map((exercise) => ({
     exercise_name: exercise.exercise_name, sets: exercise.sets, reps: exercise.reps, weight_kg: 0,

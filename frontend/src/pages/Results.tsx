@@ -10,6 +10,7 @@ import { getErrorMessage } from '../api/client';
 import { useCachedResource } from '../lib/useCachedResource';
 import { TrendChart } from '../components/perfil/TrendChart';
 import { Chevron, ErrorState, Icon, Notice, SectionTitle, Skeleton, fieldLabel, stagger } from '../components/perfil/ui';
+import { todayLocalDate } from '../lib/date';
 import type { BodyMeasurement, MeasurementField, MetricSeries, ResultsData, SaveBodyMeasurementInput } from '../types';
 
 const FIELDS: { key: MeasurementField; label: string; unit: string; step: number }[] = [
@@ -124,7 +125,7 @@ export function ResultsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => todayLocalDate());
   const [values, setValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState('');
 
@@ -137,7 +138,7 @@ export function ResultsPage() {
       FIELDS.map(({ key }) => [key, latest?.[key] != null ? String(latest[key]) : '']),
     ));
     setNotes('');
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayLocalDate());
     setError(null);
     setShowForm(true);
   };
@@ -301,7 +302,7 @@ export function ResultsPage() {
 
             <label className={`mt-5 ${fieldLabel}`}>
               Data
-              <input type="date" value={date} max={new Date().toISOString().slice(0, 10)}
+              <input type="date" value={date} max={todayLocalDate()}
                 onChange={(event) => setDate(event.target.value)}
                 className="mt-1.5 w-full min-w-0 text-fg" />
             </label>

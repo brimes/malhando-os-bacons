@@ -34,6 +34,9 @@ type NutritionLogDraftEntry struct {
 // banco de conversa que ninguém relê.
 type NutritionLogAssistantRequest struct {
 	Messages []NutritionLogAssistantMessage `json:"messages"`
+	// Today é o "hoje" do aparelho (YYYY-MM-DD). O relógio do servidor é UTC e
+	// à noite no Brasil já é o dia seguinte.
+	Today string `json:"today"`
 }
 
 type NutritionLogAssistantMessage struct {

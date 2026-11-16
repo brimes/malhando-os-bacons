@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/useAuthStore';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { getErrorMessage } from '../api/client';
 import { Notice, Segmented, SectionTitle, fieldLabel, stagger } from '../components/perfil/ui';
+import { todayLocalDate } from '../lib/date';
 import type { BiologicalSex, TrainingExperience } from '../types';
 
 // Os dados que o onboarding coletou ficavam só lá dentro: para revê-los ou
@@ -105,7 +106,7 @@ export function ProfileDataPage() {
           <Card className="space-y-4">
             <label className="block">
               <span className={fieldLabel}>Data de nascimento</span>
-              <input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)}
+              <input type="date" value={birthDate} max={todayLocalDate()}
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="mt-1.5 w-full min-w-0" />
             </label>

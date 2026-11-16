@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { clampToToday, todayLocalDate } from '../lib/date';
 import type {
   AutomaticNutritionPlanInput,
   CreateFoodItemInput,
@@ -163,10 +164,12 @@ export const nutritionApi = {
   logAssistant: async (
     messages: NutritionLogAssistantMessage[],
   ): Promise<NutritionLogDraft> => {
+    const today = todayLocalDate();
     const { data } = await apiClient.post<NutritionLogDraft>(
-      '/nutrition/logs/assistant', { messages }, { timeout: 65000 },
+      '/nutrition/logs/assistant', { messages, today }, { timeout: 65000 },
     );
-    return data;
+    // O servidor roda em UTC e pode propor "amanhã" à noite no Brasil.
+    return { ...data, entries: (data.entries ?? []).map((e) => ({ ...e, date: clampToToday(e.date, today) })) };
   },
 
   // Multipart, never base64-in-JSON: that would inflate the payload by a

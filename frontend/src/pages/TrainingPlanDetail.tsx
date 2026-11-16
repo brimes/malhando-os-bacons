@@ -16,6 +16,7 @@ import { computePlanWeekProgress } from '../lib/planProgress';
 import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
 import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import { listWorkouts, pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
+import { todayLocalDate } from '../lib/date';
 import type { TrainingPlan, Workout } from '../types';
 
 // Mesmo intervalo/prazo para ajuste e para gerar o dia de um plano dinâmico:
@@ -161,7 +162,7 @@ export function TrainingPlanDetailPage() {
 
   // Comparação por string (AAAA-MM-DD) em vez de `Date`: evita o fuso horário
   // fazer a data-alvo do dia parecer "já passada" horas antes de acabar.
-  const isPastTargetDate = plan.target_date.slice(0, 10) < new Date().toISOString().slice(0, 10);
+  const isPastTargetDate = plan.target_date.slice(0, 10) < todayLocalDate();
   const isArchived = Boolean(plan.archived_at);
 
   const closePlan = async () => {

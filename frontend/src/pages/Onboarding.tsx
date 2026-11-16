@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { Button } from '../components/Button';
 import { Icon, Segmented, fieldLabel } from '../components/perfil/ui';
+import { todayLocalDate } from '../lib/date';
 import type { BiologicalSex, TrainingExperience } from '../types';
 
 export function OnboardingPage() {
@@ -74,7 +75,7 @@ export function OnboardingPage() {
 
             <label className={`block ${fieldLabel}`}>
               Data de nascimento
-              <input type="date" required max={new Date().toISOString().slice(0, 10)} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className="mt-2 w-full min-w-0" />
+              <input type="date" required max={todayLocalDate()} value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className="mt-2 w-full min-w-0" />
             </label>
 
             <div className="grid grid-cols-2 gap-3">

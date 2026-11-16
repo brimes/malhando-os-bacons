@@ -10,6 +10,7 @@ import { trainingPlansApi } from '../api/trainingPlans';
 import { gymsApi } from '../api/gyms';
 import { useOnboardingStore } from '../stores/useOnboardingStore';
 import { getErrorMessage } from '../api/client';
+import { tomorrowLocalDate } from '../lib/date';
 import type { Gym, TrainingPlanDay, TrainingPlanExercise } from '../types';
 
 const newExercise = (): TrainingPlanExercise => ({ exercise_name: '', sets: 3, reps: 10, tracking_type: 'reps', rest_seconds: 60, notes: '' });
@@ -147,7 +148,7 @@ export function NewTrainingPlanPage() {
               </Field>
             )}
             <Field label="Data-alvo">
-              <input required type="date" min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} value={targetDate} onChange={(event) => setTargetDate(event.target.value)} className="w-full" />
+              <input required type="date" min={tomorrowLocalDate()} value={targetDate} onChange={(event) => setTargetDate(event.target.value)} className="w-full" />
             </Field>
 
             <div>
