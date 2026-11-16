@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -9,6 +9,7 @@ import { ErrorState, Skel, stagger } from '../components/treinos/states';
 import { Clock, Layers, Trash } from '../components/treinos/icons';
 import { workoutsApi } from '../api/workouts';
 import { invalidateCacheByPrefix } from '../lib/offline';
+import { usePendingDateChanges } from '../lib/pendingWorkoutDates';
 import { listByDate, workoutsCache } from '../lib/local/repo/workouts';
 import { getErrorMessage } from '../api/client';
 import type { Workout, WorkoutCalendarData } from '../types';
@@ -30,6 +31,8 @@ export function WorkoutHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
 
+  // A fila de trocas de data mudou (nova troca, ou uma saiu): calendário e dia aberto relêem.
+  const dateChanges = usePendingDateChanges();
   const loadMonth = useCallback(() => workoutsApi.calendar(monthKey).then(setData), [monthKey]);
 
   useEffect(() => {
@@ -40,6 +43,14 @@ export function WorkoutHistoryPage() {
     setError(null);
     loadMonth().catch((requestError) => setError(getErrorMessage(requestError))).finally(() => setIsLoading(false));
   }, [loadMonth]);
+
+  const firstChangesRun = useRef(true);
+  useEffect(() => {
+    if (firstChangesRun.current) { firstChangesRun.current = false; return; }
+    void loadMonth().catch(() => undefined);
+    if (selectedDate) void workoutsCache.ensureLoaded().then(() => setDayWorkouts(listByDate(selectedDate)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateChanges]);
 
   const openDay = async (date: string) => {
     if (selectedDate === date) {

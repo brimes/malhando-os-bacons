@@ -4,7 +4,10 @@
 // Em cada um: abre o plano com a API boa (o aparelho "baixa" o plano), corta a
 // rede, Iniciar treino -> 3 séries -> Finalizar, confere que a tela nunca mostra
 // erro de rede e que, religada a API, start/séries/finish chegam uma vez só.
-// Mais um cenário de escrita genérica (enqueueWrite) fora do treino.
+// Mais um cenário de escrita genérica (enqueueWrite) fora do treino, e um de
+// troca de data de treino concluído com o servidor ainda na data antiga (e o PUT
+// em 404, como o backend antigo): o Histórico mostra a data nova e a troca fica
+// na fila.
 // Uso: CHROME_PATH=... npm run test:offline   (BASE_URL=... para usar um servidor já de pé)
 import { createRequire } from 'node:module';
 import { execSync, spawn } from 'node:child_process';
@@ -42,7 +45,22 @@ const READS = {
 /** Servidor falso com a mesma deduplicação do real. */
 function makeServer() {
   const s = { mode: 'up', workouts: new Map(), log: [], bodyWeights: new Map(), nextId: 100 };
-  s.handle = (method, path, body) => {
+  s.hist = null; // treino concluído no servidor, quando um cenário o define
+  s.handle = (method, path, body, query = new URLSearchParams()) => {
+    if (s.hist) {
+      const day = s.hist.date.slice(0, 10);
+      if (method === 'GET' && path === '/workouts') {
+        const date = query.get('date'); const from = query.get('from'); const to = query.get('to');
+        const fits = date ? date === day : from && to ? day >= from && day <= to : true;
+        return { status: 200, body: fits ? [s.hist] : [] };
+      }
+      if (method === 'GET' && path === '/workouts/calendar') {
+        const month = query.get('month');
+        return { status: 200, body: { month, days: day.slice(0, 7) === month ? [{ date: day, count: 1 }] : [] } };
+      }
+      if (method === 'GET' && path === `/workouts/${s.hist.id}`) return { status: 200, body: s.hist };
+      if (method === 'PUT' && path === `/workouts/${s.hist.id}/date`) { s.log.push('put-date'); return { status: s.putDateStatus ?? 404, body: { error: 'not found' } }; }
+    }
     if (method === 'GET') return path === '/workouts/active' ? { status: 204 } : { status: 200, body: READS[path] ?? [] };
     if (path === '/workouts/start') {
       let w = s.workouts.get(body.client_session_id);
@@ -86,7 +104,7 @@ async function newPage(browser, server) {
       return route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"indisponível"}' });
     }
     const body = req.postData() ? JSON.parse(req.postData()) : {};
-    const out = server.handle(req.method(), path, body);
+    const out = server.handle(req.method(), path, body, new URL(req.url()).searchParams);
     if (isWrite) server.requests = (server.requests ?? 0) + 1;
     return route.fulfill({ status: out.status, contentType: 'application/json', body: out.body === undefined ? '' : JSON.stringify(out.body) });
   });
@@ -176,6 +194,46 @@ async function escritaGenerica(browser) {
   await ctx.close();
 }
 
+async function trocaDeData(browser) {
+  const server = makeServer();
+  const dia = (atras) => { const d = new Date(); d.setUTCDate(d.getUTCDate() - atras); d.setUTCHours(12, 0, 0, 0); return d; };
+  const velha = dia(2);
+  const nova = dia(5);
+  server.hist = { id: 55, user_id: 999, name: 'Treino E2E', date: velha.toISOString(), status: 'completed', started_at: velha.toISOString(), finished_at: new Date(velha.getTime() + 3000000).toISOString(), duration_minutes: 50, created_at: velha.toISOString() };
+  const { ctx, page } = await newPage(browser, server);
+  await page.goto(`${BASE}/workouts/55`, { waitUntil: 'networkidle' });
+  // O servidor segue com a data antiga e recusa o PUT (backend sem a rota).
+  await page.evaluate(async (iso) => {
+    const { changeWorkoutDate } = await import('/src/lib/workoutDate.ts');
+    const { workoutsApi } = await import('/src/api/workouts.ts');
+    changeWorkoutDate(await workoutsApi.get(55), new Date(iso));
+  }, nova.toISOString());
+  await page.evaluate(async () => { const m = await import('/src/lib/offline.ts'); await m.flushQueue({ force: true }); });
+  await page.waitForTimeout(300);
+  assert(server.log.includes('put-date'), 'o PUT da troca de data nunca saiu');
+
+  const abrirDia = async (d) => {
+    await page.goto(`${BASE}/workouts/history`, { waitUntil: 'load' });
+    await page.getByRole('heading', { name: 'Histórico' }).waitFor({ timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(800);
+    const hoje = new Date();
+    if (d.getUTCMonth() !== hoje.getMonth()) await page.getByRole('button', { name: 'Mês anterior' }).click();
+    const botao = page.getByRole('button', { name: new RegExp(`^${d.getUTCDate()}, \\d+ trein`) });
+    return botao;
+  };
+  const noNovo = await abrirDia(nova);
+  await noNovo.waitFor({ timeout: 5000 });
+  await noNovo.click();
+  await page.getByText('Treino E2E').waitFor({ timeout: 5000 });
+  const noVelho = await abrirDia(velha);
+  assert(await noVelho.count() === 0, 'o dia antigo ainda aparece no calendário com treino');
+
+  const fila = await page.evaluate(async () => { const m = await import('/src/lib/offlineStore.ts'); return { queue: m.getQueue().map((x) => x.url), failed: m.useOfflineStore.getState().failed.length }; });
+  assert(fila.queue.join() === '/workouts/55/date' && fila.failed === 0, `a troca não ficou na fila após 404: ${JSON.stringify(fila)}`);
+  console.log('ok  troca de data (servidor com data antiga, PUT 404): Histórico mostra o dia novo, some do antigo e a troca segue na fila');
+  await ctx.close();
+}
+
 let dev;
 if (!process.env.BASE_URL) {
   dev = spawn('npx', ['vite', '--port', PORT, '--strictPort'], { stdio: 'ignore' });
@@ -190,6 +248,7 @@ for (const [nome, mode] of [['offline (setOffline)', 'offline'], ['API pendurada
   try { await cenario(browser, nome, mode); } catch (e) { falhou += 1; console.error(`FALHOU ${nome}: ${e.message}`); }
 }
 try { await escritaGenerica(browser); } catch (e) { falhou += 1; console.error(`FALHOU escrita genérica: ${e.message}`); }
+try { await trocaDeData(browser); } catch (e) { falhou += 1; console.error(`FALHOU troca de data: ${e.message}`); }
 await browser.close();
 dev?.kill();
 console.log(falhou ? `\n${falhou} cenário(s) falharam` : '\ntodos os cenários passaram');

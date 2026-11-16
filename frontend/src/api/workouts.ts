@@ -21,6 +21,15 @@ import {
   storeLocalActiveWorkout,
   takeLocalId,
 } from '../lib/offline';
+import {
+  applyPendingToCalendar,
+  applyPendingToStats,
+  applyPendingToWindow,
+  applyPendingWorkoutDates,
+  dayWindow,
+  pendingDateChanges,
+  rangeWindow,
+} from '../lib/pendingWorkoutDates';
 import type { MutationMethod } from '../types/offline';
 import type {
   TrainingPlan, TrainingPlanDay,
@@ -72,19 +81,23 @@ export const workoutsApi = {
   // Sem date traz os treinos recentes; com date (YYYY-MM-DD) traz só aquele dia.
   list: async (date?: string): Promise<Workout[]> => {
     const { data } = await apiClient.get<Workout[]>('/workouts', date ? { params: { date } } : undefined);
-    return data;
+    // Troca de data ainda na fila: o servidor devolve a data antiga. O treino sai
+    // do dia velho e entra no novo mesmo que a resposta do dia novo não o traga.
+    const changes = pendingDateChanges();
+    if (changes.length === 0) return data;
+    return date ? applyPendingToWindow(data, dayWindow(date), changes) : applyPendingWorkoutDates(data, changes);
   },
 
   // A janela inteira numa requisição. Sem isto, manter 60 dias no aparelho
   // seriam 60 chamadas — uma por dia. Teto de 90 dias no servidor.
   listRange: async (from: string, to: string, signal?: AbortSignal): Promise<Workout[]> => {
     const { data } = await apiClient.get<Workout[]>('/workouts', { params: { from, to }, signal });
-    return data;
+    return applyPendingToWindow(data, rangeWindow(from, to));
   },
 
   get: async (id: number): Promise<Workout> => {
     const { data } = await apiClient.get<Workout>(`/workouts/${id}`);
-    return data;
+    return applyPendingWorkoutDates([data])[0];
   },
 
   // Free workout log: local-first too. No server-side dedupe key exists for it,
@@ -117,12 +130,12 @@ export const workoutsApi = {
 
   stats: async (): Promise<WorkoutStats> => {
     const { data } = await apiClient.get<WorkoutStats>('/workouts/stats');
-    return data;
+    return applyPendingToStats(data);
   },
 
   calendar: async (month: string): Promise<WorkoutCalendarData> => {
     const { data } = await apiClient.get<WorkoutCalendarData>('/workouts/calendar', { params: { month } });
-    return data;
+    return applyPendingToCalendar(data, month);
   },
 
   // Guided session — every write below is LOCAL-FIRST. The effect lands on the

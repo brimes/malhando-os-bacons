@@ -17,6 +17,7 @@ import { pendingCompletedWorkouts, useOfflineStore } from '../lib/offline';
 import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import { listWorkouts, pullWorkouts, workoutsCache } from '../lib/local/repo/workouts';
 import { todayLocalDate } from '../lib/date';
+import { applyPendingToPlan, applyPendingWorkoutDates, usePendingDateChanges } from '../lib/pendingWorkoutDates';
 import type { TrainingPlan, Workout } from '../types';
 
 // Mesmo intervalo/prazo para ajuste e para gerar o dia de um plano dinâmico:
@@ -93,9 +94,16 @@ export function TrainingPlanDetailPage() {
   // The week and the day that is due are derived here instead of read from the
   // dashboard: that endpoint computes them on the server and is unreachable
   // exactly when they matter most.
+  const dateChanges = usePendingDateChanges();
   const progress = useMemo(
-    () => (plan ? computePlanWeekProgress({ plan, workouts: history, pending: pendingCompletedWorkouts(queue) }) : null),
-    [plan, history, queue],
+    () => (plan
+      ? computePlanWeekProgress({
+        plan: applyPendingToPlan(plan, dateChanges),
+        workouts: applyPendingWorkoutDates(history, dateChanges),
+        pending: pendingCompletedWorkouts(queue),
+      })
+      : null),
+    [plan, history, queue, dateChanges],
   );
 
   if (isLoading) {
