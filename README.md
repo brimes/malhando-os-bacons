@@ -136,6 +136,11 @@ O `watch` sincroniza o código de `frontend/` com o container e o Vite recarrega
 ### Watch App
 Abra `/home/picoclaw/mob/watch/` no Android Studio e conecte um Galaxy Watch 7 (ou emulador Wear OS).
 
+### Teste offline (e2e)
+
+`cd frontend && CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" npm run test:offline` sobe o Vite numa porta livre, mocka a API e roda iniciar treino → 3 séries → finalizar com a rede cortada, a API pendurada e a API em 503 (mais uma escrita genérica com `enqueueWrite`).
+Precisa do `playwright` (global ou local); deve passar antes de qualquer release.
+
 ## Banco de Dados
 
 ### Schema

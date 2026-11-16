@@ -29,6 +29,8 @@ const fullMutation: Required<PendingMutation> = {
   localEntityId: -7,
   trainingPlanDayId: 42,
   userId: 3,
+  dedupeKey: 'perfil',
+  idempotent: true,
 };
 
 const secondMutation: PendingMutation = {

@@ -10,7 +10,6 @@
 import type { ActiveWorkout, CompleteWorkoutExercise, TrainingPlan, TrainingPlanDay, Workout, WorkoutSet } from '../types';
 import type { PendingMutation } from '../types/offline';
 import {
-  dropQueuedMutations,
   getQueue,
   isLocalId,
   readLocalActiveSession,

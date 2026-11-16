@@ -10,7 +10,7 @@ import { WorkoutChecklist, type ChecklistState } from '../components/WorkoutChec
 import { trainingPlansApi } from '../api/trainingPlans';
 import { workoutsApi } from '../api/workouts';
 import { getErrorMessage } from '../api/client';
-import { applyChecklistLocally, findCachedPlanDay, isNetworkOnline, onWorkoutIdRemap, storeLocalActiveWorkout } from '../lib/offline';
+import { findCachedPlanDay, onWorkoutIdRemap } from '../lib/offline';
 import { getPlan, rememberPlan, trainingPlansCache } from '../lib/local/repo/trainingPlans';
 import type { ActiveWorkout, TrainingPlan, TrainingPlanDay } from '../types';
 
@@ -45,30 +45,35 @@ export function TrainingPlanDayPage() {
       await trainingPlansCache.ensureLoaded();
       const local = getPlan(Number(planId));
       const localDay = local?.days?.find((item) => item.id === numericDayId) ?? null;
+      const applySession = (dayData: TrainingPlanDay, session: ActiveWorkout | null) => {
+        const openHere = session && session.workout.training_plan_day_id === numericDayId ? session : null;
+        setSession(openHere);
+        if (!openHere) return;
+        setChecklist(Object.fromEntries(
+          dayData.exercises.filter((exercise) => exercise.id).map((exercise) => {
+            const done = openHere.workout.sets?.filter((set) => set.training_plan_exercise_id === exercise.id).length ?? 0;
+            return [exercise.id as number, { setsDone: done, weight: exercise.last_weight_kg ? String(exercise.last_weight_kg) : '' }];
+          }),
+        ));
+      };
+      // A session on this device is known at once (local slot), so the button
+      // and the checklist never wait for the plan request below.
+      const active = await workoutsApi.active().catch(() => null);
       if (!cancelled && local && localDay) {
         setPlan(local);
         setDay(localDay);
+        applySession(localDay, active);
       }
 
-      // Both requests fire together — neither waits on the other. `active()`
-      // pre-fills the checklist for an open session on this same day, entirely
-      // independent of the plan fetch, and with the client's default timeout a
-      // wifi that hangs instead of failing fast would otherwise double the
-      // wait by making one queue behind the other.
-      const [active, planResult] = await Promise.all([
-        workoutsApi.active().catch(() => null),
-        trainingPlansApi.get(Number(planId))
-          .then(async (result) => {
-            // Guarda para a próxima visita — é o que faz abrir um plano uma vez
-            // com internet deixá-lo disponível offline depois.
-            await rememberPlan(result);
-            const found = result.days?.find((item) => item.id === numericDayId) ?? null;
-            return found ? { plan: result, day: found } : null;
-          })
-          // Offline, and this plan's generic cache entry was never written or
-          // has since been pruned. Fall through to the durable per-day snapshot.
-          .catch(() => null),
-      ]);
+      const planResult = await trainingPlansApi.get(Number(planId))
+        .then(async (result) => {
+          // Guarda para a próxima visita — é o que faz abrir um plano uma vez
+          // com internet deixá-lo disponível offline depois.
+          await rememberPlan(result);
+          const found = result.days?.find((item) => item.id === numericDayId) ?? null;
+          return found ? { plan: result, day: found } : null;
+        })
+        .catch(() => null);
 
       let planData: TrainingPlan | null = planResult?.plan ?? local ?? null;
       let dayData: TrainingPlanDay | null = planResult?.day ?? localDay ?? null;
@@ -89,16 +94,7 @@ export function TrainingPlanDayPage() {
 
       setPlan(planData);
       setDay(dayData);
-      const openHere = active && active.workout.training_plan_day_id === numericDayId ? active : null;
-      setSession(openHere);
-      if (openHere) {
-        setChecklist(Object.fromEntries(
-          dayData.exercises.filter((exercise) => exercise.id).map((exercise) => {
-            const done = openHere.workout.sets?.filter((set) => set.training_plan_exercise_id === exercise.id).length ?? 0;
-            return [exercise.id as number, { setsDone: done, weight: exercise.last_weight_kg ? String(exercise.last_weight_kg) : '' }];
-          }),
-        ));
-      }
+      applySession(dayData, active);
     })();
 
     return () => {
@@ -173,23 +169,17 @@ export function TrainingPlanDayPage() {
     setIsBusy(true);
     setError(null);
     try {
-      const active = session ?? await workoutsApi.start(day.id);
+      const active = session ?? await workoutsApi.start(day.id, { plan, day });
       if (mode === 'start') {
         navigate('/workouts/session');
         return;
       }
       if (mode === 'finish') {
         await workoutsApi.complete(active.workout.id, { exercises: payload() });
-        // Offline the server cannot close the session, so the local snapshot has
-        // to — otherwise the next screen reopens a workout that is already done.
-        if (!isNetworkOnline()) storeLocalActiveWorkout(null);
         navigate(`/training-plans/${plan.id}`);
         return;
       }
       await workoutsApi.progress(active.workout.id, { exercises: payload() });
-      // Same reason: queued, the call answers with an echo instead of the updated
-      // session, and the guided screen reads the session back from the cache.
-      if (!isNetworkOnline()) applyChecklistLocally(active.workout.id, payload());
       navigate('/workouts/session');
     } catch (requestError) {
       setError(getErrorMessage(requestError));
